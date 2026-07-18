@@ -1,0 +1,756 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<style>
+  :root{
+    --void-deep:#081210;
+    --void:#0d1a17;
+    --panel:#0f211d;
+    --panel-line:#1f4a3f;
+    --teal:#2ee6ab;
+    --teal-dim:#1a7a5c;
+    --fel:#a875e8;
+    --amber:#e8a33d;
+    --text:#dff5ee;
+    --text-dim:#7fa89c;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  .app{
+    background:
+      radial-gradient(ellipse at 50% -10%, #123a30 0%, transparent 60%),
+      linear-gradient(180deg, var(--void-deep), var(--void) 40%);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    padding:28px 20px 60px;
+    min-height:100vh;
+  }
+  .wrap{max-width:1080px;margin:0 auto;}
+
+  h1{
+    font-family:'Cinzel',serif;
+    font-weight:700;
+    font-size:28px;
+    letter-spacing:.5px;
+    margin:0 0 2px;
+    color:#eafff6;
+    text-shadow:0 0 18px rgba(46,230,171,.35);
+  }
+  .eyebrow{
+    font-size:11px;
+    letter-spacing:2.5px;
+    text-transform:uppercase;
+    color:var(--teal);
+    font-weight:600;
+    margin-bottom:6px;
+    display:block;
+  }
+  .subtitle{color:var(--text-dim);font-size:13.5px;margin:0 0 22px;}
+
+  .toolbar{
+    display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;
+    background:var(--panel);
+    border:1px solid var(--panel-line);
+    border-radius:10px;
+    padding:16px 18px;
+    margin-bottom:16px;
+  }
+  .field label{
+    display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:1.2px;
+    color:var(--text-dim);margin-bottom:5px;font-weight:600;
+  }
+  .field input[type=text]{
+    background:#0a1815;border:1px solid var(--panel-line);color:var(--text);
+    border-radius:6px;padding:7px 10px;font-size:13.5px;font-family:'Inter';width:220px;
+  }
+  .stepper{display:flex;align-items:center;gap:8px;}
+  .stepper button{
+    width:26px;height:26px;border-radius:6px;border:1px solid var(--panel-line);
+    background:#0a1815;color:var(--teal);font-size:15px;cursor:pointer;line-height:1;
+  }
+  .stepper button:hover{background:#123a30;}
+  .stepper span{min-width:16px;text-align:center;font-weight:600;font-size:14px;}
+  .spacer{flex:1;}
+  .btn-primary{
+    background:linear-gradient(180deg,#38f0b4,#1fae7f);
+    color:#04140f;border:none;border-radius:7px;padding:10px 18px;
+    font-weight:700;font-size:13px;cursor:pointer;letter-spacing:.3px;
+  }
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-ghost{
+    background:transparent;border:1px solid var(--panel-line);color:var(--text-dim);
+    border-radius:7px;padding:9px 14px;font-size:12.5px;cursor:pointer;
+  }
+  .btn-ghost:hover{color:var(--text);border-color:var(--teal-dim);}
+
+  .roster-panel{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
+    padding:14px 16px;margin-bottom:20px;
+  }
+  .roster-panel textarea{
+    width:100%;min-height:64px;background:#0a1815;border:1px solid var(--panel-line);
+    color:var(--text);border-radius:6px;padding:8px 10px;font-family:'Inter';font-size:12.5px;
+    resize:vertical;margin-bottom:8px;
+  }
+  .roster-pool{display:flex;flex-wrap:wrap;gap:8px;min-height:38px;}
+  .priest-strip{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;}
+  .priest-strip .hint{font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;color:var(--text-dim);font-weight:600;}
+  .spec-toggle{
+    background:#132824;border:1px solid var(--panel-line);color:var(--text);
+    border-radius:20px;padding:4px 11px;font-size:12px;cursor:pointer;font-family:'Inter';
+  }
+  .spec-toggle.shadow{background:#3a2a52;border-color:#6b4fa0;color:#d6c4f5;}
+  .pool-empty{color:var(--text-dim);font-size:12.5px;font-style:italic;}
+
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    background:#132824;border:1px solid var(--panel-line);
+    border-left:4px solid var(--class-color, var(--teal));
+    padding:5px 10px 5px 8px;border-radius:20px;font-size:12.5px;font-weight:500;
+    cursor:grab;user-select:none;white-space:nowrap;
+  }
+  .chip:active{cursor:grabbing;}
+  .chip .cls{color:var(--text-dim);font-size:10.5px;}
+  .chip .num{
+    background:rgba(0,0,0,.35);color:var(--teal);border-radius:4px;
+    padding:1px 5px;font-size:10.5px;font-weight:700;margin-right:1px;
+  }
+
+  #capture{
+    background:radial-gradient(ellipse at 50% 40%, #0e2622 0%, #081310 75%);
+    border:1px solid var(--panel-line);border-radius:14px;padding:24px 20px 28px;
+  }
+  .capture-head{text-align:center;margin-bottom:6px;}
+  .capture-head .guild{font-family:'Cinzel',serif;font-size:17px;color:var(--teal);letter-spacing:.5px;}
+  .capture-head .fight{font-size:11px;color:var(--text-dim);letter-spacing:1.5px;text-transform:uppercase;}
+
+  .arena-area{position:relative;width:100%;max-width:640px;height:440px;margin:10px auto 0;overflow:visible;}
+  svg.arena-bg{position:absolute;inset:0;width:100%;height:100%;}
+  .slot{
+    position:absolute;transform:translate(-50%,-50%);
+    width:96px;text-align:center;overflow:visible;
+  }
+  .slot .name-wrap{
+    display:flex;justify-content:center;width:0;margin:0 auto;overflow:visible;
+  }
+  .slot .ring{
+    width:52px;height:52px;border-radius:50%;
+    border:2px dashed #5c7a72;
+    background:rgba(255,255,255,.55);
+    display:flex;align-items:center;justify-content:center;
+    margin:0 auto 4px;font-size:10px;color:#4a5c57;
+    transition:border-color .15s, background .15s;
+  }
+  .slot.healer .ring{border-color:#3d6fb8;background:rgba(255,255,255,.6);}
+  .slot .ring.filled{border-style:solid;}
+  .slot .ring.drag-over{background:rgba(46,230,171,.18);}
+  .slot .label{font-size:10px;color:#31403d;font-weight:600;text-shadow:0 1px 2px rgba(255,255,255,.55);letter-spacing:.5px;text-transform:uppercase;}
+  .slot .name-chip{
+    font-size:11.5px;font-weight:600;color:var(--void-deep);
+    background:var(--teal);border-radius:5px;padding:2px 6px;cursor:grab;
+    white-space:nowrap;position:relative;z-index:3;
+    box-shadow:0 1px 3px rgba(0,0,0,.35);
+  }
+  .slot.healer .name-chip{background:#7fb0f2;}
+  .slot .name-chip.class-tinted{color:#0a1512;}
+
+  .chase-panel{
+    max-width:640px;margin:22px auto 0;
+    border:1px solid #4a3a1f;border-radius:10px;
+    background:rgba(232,163,61,.06);
+    padding:12px 16px 14px;
+  }
+  .chase-title{
+    font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--amber);
+    font-weight:700;margin-bottom:9px;text-align:center;
+  }
+  .chase-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+  .chase-slot{
+    width:88px;height:52px;border-radius:8px;border:2px dashed #8a6a2f;
+    background:rgba(10,24,21,.75);display:flex;align-items:center;justify-content:center;
+    font-size:10.5px;color:var(--text-dim);text-align:center;padding:4px;
+  }
+  .chase-slot.filled{border-style:solid;border-color:var(--amber);}
+  .chase-slot .name-chip{background:var(--amber);color:#241300;font-weight:700;font-size:11.5px;border-radius:5px;padding:2px 6px;cursor:grab;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.35);}
+  .chase-slot{overflow:visible;}
+  .name-chip:active{cursor:grabbing;}
+  .slot .ring.swap-target{background:rgba(46,230,171,.3);border-color:#2ee6ab;}
+
+  .clear-x{
+    display:inline-block;margin-left:5px;font-size:10px;color:var(--void-deep);
+    background:rgba(0,0,0,.25);border-radius:50%;width:14px;height:14px;line-height:14px;text-align:center;cursor:pointer;
+  }
+
+  .legend{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:16px;font-size:10.5px;color:var(--text-dim);}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+
+  footer{text-align:center;color:var(--text-dim);font-size:11px;margin-top:22px;}
+</style>
+
+<div class="app">
+  <div class="wrap">
+    <span class="eyebrow">Serpentshrine Cavern</span>
+    <h1>Lady Vashj — Phase 2 Assignments</h1>
+    <p class="subtitle">Drag raiders between the pool and any slot. Drop onto a filled slot to swap; double-click a name to send it back. Export when it's set.</p>
+
+    <div class="toolbar">
+      <div class="field">
+        <label>Guild / Raid name</label>
+        <input type="text" id="guildName" placeholder="e.g. Ascendant — SSC Clear" value="Ascendant">
+      </div>
+      <div class="field">
+        <label>Range spots</label>
+        <div class="stepper">
+          <button onclick="changeCount('range',-1)">−</button>
+          <span id="countRange">6</span>
+          <button onclick="changeCount('range',1)">+</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Healer spots</label>
+        <div class="stepper">
+          <button onclick="changeCount('healer',-1)">−</button>
+          <span id="countHealer">5</span>
+          <button onclick="changeCount('healer',1)">+</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Strider chasers</label>
+        <div class="stepper">
+          <button onclick="changeCount('chaser',-1)">−</button>
+          <span id="countChaser">3</span>
+          <button onclick="changeCount('chaser',1)">+</button>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn-ghost" onclick="clearAll()">Clear board</button>
+      <button class="btn-primary" onclick="exportImage()">Export PNG</button>
+    </div>
+
+    <div class="roster-panel">
+      <label style="font-size:10.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-dim);font-weight:600;display:block;margin-bottom:6px;">Paste roster — supports raid-helper style lists or plain "Name Class" lines</label>
+      <textarea id="rosterInput" placeholder="Tank (2)  `1` Tero  `10` Gravycannon&#10;Warrior (3)  `13` Chankles  `25` Sammyp  `22` Tyno&#10;Priest (4)  `7` Nightbrew  `3` Youngjoe ..."></textarea>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button class="btn-primary" onclick="parseRoster()">Load roster</button>
+        <button class="btn-ghost" onclick="autoFill()">Re-run auto-fill</button>
+        <button class="btn-ghost" onclick="unassignAll()">Send all back to pool</button>
+      </div>
+      <div class="roster-pool" id="rosterPool"><span class="pool-empty">No one loaded yet — paste a roster above.</span></div>
+    </div>
+
+    <div id="capture">
+      <div class="capture-head">
+        <div class="guild" id="captureGuild">Ascendant</div>
+        <div class="fight">Lady Vashj · Phase 2 · Elemental Adds</div>
+      </div>
+
+      <div class="arena-area">
+        <svg class="arena-bg" viewBox="0 0 640 440" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <radialGradient id="aWater" cx="50%" cy="47%" r="70%">
+              <stop offset="0%" stop-color="#b9cdc9"/>
+              <stop offset="55%" stop-color="#9db5b4"/>
+              <stop offset="100%" stop-color="#7d9a9c"/>
+            </radialGradient>
+            <radialGradient id="aRock" cx="40%" cy="35%" r="75%">
+              <stop offset="0%" stop-color="#c8a878"/>
+              <stop offset="100%" stop-color="#9d8154"/>
+            </radialGradient>
+            <radialGradient id="aDais" cx="42%" cy="36%" r="70%">
+              <stop offset="0%" stop-color="#e4bfc4"/>
+              <stop offset="70%" stop-color="#cfa0a9"/>
+              <stop offset="100%" stop-color="#b8848f"/>
+            </radialGradient>
+            <filter id="aSoft"><feGaussianBlur stdDeviation="4"/></filter>
+            <filter id="aSoftLite"><feGaussianBlur stdDeviation="2"/></filter>
+          </defs>
+
+          <rect width="640" height="440" fill="url(#aWater)"/>
+
+          <!-- rock border wrapping all four edges -->
+          <g fill="url(#aRock)" filter="url(#aSoft)">
+            <path d="M-10,-10 L232,-10 Q196,34 232,60 Q166,84 112,52 Q56,72 -10,44 Z"/>
+            <path d="M414,-10 L650,-10 L650,108 Q584,98 546,62 Q480,52 414,-10 Z"/>
+            <path d="M650,168 Q604,208 642,258 L650,450 L432,450 Q480,392 548,382 Q616,362 650,168 Z"/>
+            <path d="M-10,450 L188,450 Q140,402 84,394 Q26,386 -10,346 Z"/>
+            <path d="M-10,52 Q60,74 98,130 Q134,162 168,180 Q132,204 92,196 Q54,230 30,300 Q6,368 -10,384 Z"/>
+          </g>
+
+          <!-- isolated islets in the water -->
+          <g fill="url(#aRock)" filter="url(#aSoftLite)">
+            <ellipse cx="186" cy="58" rx="20" ry="14"/>
+            <ellipse cx="452" cy="336" rx="18" ry="13"/>
+            <ellipse cx="308" cy="410" rx="15" ry="11"/>
+            <ellipse cx="492" cy="140" rx="12" ry="9"/>
+          </g>
+
+          <!-- central 12-sided dais -->
+          <g transform="translate(320,214)">
+            <polygon points="0.0,-150.0 75.0,-129.9 129.9,-75.0 150.0,0.0 129.9,75.0 75.0,129.9 0.0,150.0 -75.0,129.9 -129.9,75.0 -150.0,0.0 -129.9,-75.0 -75.0,-129.9"
+                     fill="url(#aDais)" stroke="#a3717c" stroke-width="2.5"/>
+            <g fill="none" stroke="#b9868f" stroke-width="1.2" opacity="0.75">
+              <polygon points="0.0,-140.0 70.0,-121.2 121.2,-70.0 140.0,0.0 121.2,70.0 70.0,121.2 0.0,140.0 -70.0,121.2 -121.2,70.0 -140.0,0.0 -121.2,-70.0 -70.0,-121.2"/>
+              <polygon points="0.0,-129.0 64.5,-111.7 111.7,-64.5 129.0,0.0 111.7,64.5 64.5,111.7 0.0,129.0 -64.5,111.7 -111.7,64.5 -129.0,0.0 -111.7,-64.5 -64.5,-111.7"/>
+              <polygon points="0.0,-115.0 57.5,-99.6 99.6,-57.5 115.0,0.0 99.6,57.5 57.5,99.6 0.0,115.0 -57.5,99.6 -99.6,57.5 -115.0,0.0 -99.6,-57.5 -57.5,-99.6"/>
+            </g>
+            <g stroke="#b9868f" stroke-width="1" opacity="0.6">
+              <line x1="0.0" y1="-150.0" x2="0.0" y2="-100.0"/>
+              <line x1="75.0" y1="-129.9" x2="50.0" y2="-86.6"/>
+              <line x1="129.9" y1="-75.0" x2="86.6" y2="-50.0"/>
+              <line x1="150.0" y1="0.0" x2="100.0" y2="0.0"/>
+              <line x1="129.9" y1="75.0" x2="86.6" y2="50.0"/>
+              <line x1="75.0" y1="129.9" x2="50.0" y2="86.6"/>
+              <line x1="0.0" y1="150.0" x2="0.0" y2="100.0"/>
+              <line x1="-75.0" y1="129.9" x2="-50.0" y2="86.6"/>
+              <line x1="-129.9" y1="75.0" x2="-86.6" y2="50.0"/>
+              <line x1="-150.0" y1="0.0" x2="-100.0" y2="0.0"/>
+              <line x1="-129.9" y1="-75.0" x2="-86.6" y2="-50.0"/>
+              <line x1="-75.0" y1="-129.9" x2="-50.0" y2="-86.6"/>
+            </g>
+            <circle cx="0" cy="0" r="100" fill="#e0c3b4" stroke="#a3717c" stroke-width="2.5"/>
+            <circle cx="0" cy="0" r="91" fill="none" stroke="#cbab99" stroke-width="1.2" opacity="0.7"/>
+            <g fill="#9a7a45">
+              <ellipse cx="0" cy="-5" rx="26" ry="22"/>
+              <rect x="-18" y="13" width="36" height="13" rx="3.5"/>
+              <circle cx="-10" cy="-7" r="5" fill="#42301a"/>
+              <circle cx="10" cy="-7" r="5" fill="#42301a"/>
+              <ellipse cx="0" cy="6" rx="4" ry="5" fill="#42301a"/>
+            </g>
+          </g>
+
+          <!-- rock outcrop confined to segments 12 and 1 -->
+          <g fill="url(#aRock)" filter="url(#aSoftLite)">
+            <path d="M247,86 Q262,58 292,46 Q320,36 348,46 Q378,58 393,86
+                     Q396,110 374,124 Q348,140 320,142 Q292,140 266,124 Q244,110 247,86 Z"/>
+            <path d="M330,44 Q344,16 364,12 Q375,34 366,58 Q349,66 334,58 Z"/>
+          </g>
+
+          <!-- rock chunk off the lower-left edge -->
+          <g fill="url(#aRock)" filter="url(#aSoftLite)">
+            <path d="M182,306 Q208,290 232,304 Q238,330 214,344 Q188,340 178,324 Z"/>
+          </g>
+        </svg>
+        <div id="rangeSlots"></div>
+        <div id="healerSlots"></div>
+      </div>
+
+      <div class="chase-panel">
+        <div class="chase-title">⚡ Strider Chase Team — roams full arena, kill on sight</div>
+        <div class="chase-row" id="chaseSlots"></div>
+      </div>
+
+      <div class="legend">
+        <span><i style="background:#2ee6ab"></i> Range platform</span>
+        <span><i style="background:#7fb0f2"></i> Healer ground</span>
+        <span><i style="background:#e8a33d"></i> Strider chaser</span>
+      </div>
+    </div>
+
+    <footer>Built for raid night — drag, load new rosters, export fresh each pull.</footer>
+  </div>
+</div>
+
+<script>
+const CLASS_COLORS = {
+  warrior:'#C79C6E', paladin:'#F58CBA', hunter:'#ABD473', rogue:'#FFF569',
+  priest:'#FFFFFF', shaman:'#0070DE', mage:'#69CCF0', warlock:'#9482C9', druid:'#FF7D0A'
+};
+const ROLE_FALLBACK = {
+  tank:'#8f9ba8'
+};
+
+let roster = [];          // {id, name, cls}
+let counts = { range: 6, healer: 5, chaser: 3 };
+let assignments = { range: [], healer: [], chaser: [] };
+let idCounter = 0;
+
+function parseRoster(){
+  const raw = document.getElementById('rosterInput').value;
+  if(!raw.trim()) return;
+  const CLASS_NAMES = ['warrior','paladin','hunter','rogue','priest','shaman','mage','warlock','druid','tank'];
+  const found = [];
+  const seen = new Set();
+  let currentClass = null;
+
+  raw.split('\n').forEach(rawLine=>{
+    // strip invisible separators and emoji-style tag punctuation
+    let line = rawLine.replace(/[\u200b-\u200f\u202a-\u202e\ufeff]/g,'')
+                      .replace(/\u00a0/g,' ').trim();
+    if(!line) return;
+
+    // class header:  ":Priest: Priest (4)"  or  "Priest (4)"
+    const hdr = line.match(/^(?::[\w+-]+:\s*)?([A-Za-z]+)\s*\(\d+\)\s*(.*)$/);
+    if(hdr && CLASS_NAMES.includes(hdr[1].toLowerCase())){
+      currentClass = hdr[1].toLowerCase();
+      // inline members on the same line (old backtick format)
+      const rest = hdr[2] || '';
+      const re = /`\s*(\d+)\s*`\s*([^`]+)/g;
+      let m;
+      while((m = re.exec(rest)) !== null){
+        addMember(m[2], currentClass, '', parseInt(m[1],10));
+      }
+      return;
+    }
+
+    // count/summary row: ":Ranged: Ranged 8 :Ranged:"
+    const stripped = line.replace(/:[\w+-]+:/g,'').trim();
+    if(/^[\d\s]*(melee|ranged|healers?|tanks?|dps)[\d\s]*$/i.test(stripped)) return;
+
+    // member with spec tag:  ":Holy: 3 Youngjoe"
+    const mem = line.match(/^:([\w+-]+?)\d*:\s*(\d+)?\s*(.+)$/);
+    if(mem && currentClass){
+      addMember(mem[3], currentClass, mem[1].toLowerCase(), mem[2] ? parseInt(mem[2],10) : null);
+      return;
+    }
+
+    // bare "12 Name" under a class header
+    const bare = line.match(/^(\d+)?\s*([A-Za-zÀ-ÿ0-9'’_-]+)$/);
+    if(bare && currentClass){
+      addMember(bare[2], currentClass, '', bare[1] ? parseInt(bare[1],10) : null);
+      return;
+    }
+
+    // fallback "Name Class"
+    const parts = stripped.split(/[,\t]+|\s+/).filter(Boolean);
+    if(parts.length > 1){
+      const last = parts[parts.length-1].toLowerCase();
+      if(CLASS_COLORS[last]) addMember(parts.slice(0,-1).join(' '), last, '', null);
+    }
+  });
+
+  function addMember(name, cls, spec, num){
+    name = String(name).replace(/[`:]/g,'').trim();
+    if(!name) return;
+    const key = name.toLowerCase();
+    if(seen.has(key)) return;
+    seen.add(key);
+    found.push({
+      id: 'r'+(idCounter++),
+      name: name,
+      cls: CLASS_COLORS[cls] ? cls : '',
+      role: cls,
+      spec: spec || '',
+      num: (num == null ? null : num)
+    });
+  }
+
+  if(!found.length){
+    alert('Could not read any names.\n\nExpected either:\n  :Priest: Priest (4)\n  :Holy: 3 Youngjoe\n\nor:\n  Priest (4)  `7` Nightbrew  `3` Youngjoe');
+    return;
+  }
+
+  found.sort((a,b)=> (a.num ?? 999) - (b.num ?? 999));
+  roster = found;
+  autoFill();
+}
+
+// Specs decide the role when the roster provides them; otherwise fall back to class.
+const HEALING_SPECS = ['holy','restoration','discipline'];
+const HEALER_CLASSES = ['priest','paladin','druid','shaman'];
+const RANGED_SPECS = ['shadow','elemental','balance','arcane','fire','frost',
+                      'affliction','demonology','destruction','beastmastery',
+                      'marksmanship','survival'];
+const PURE_RANGE = ['mage','warlock','hunter'];
+
+function isTank(m){
+  return m.role === 'tank' || m.spec === 'protection' || m.spec === 'guardian';
+}
+function isHealer(m){
+  if(isTank(m)) return false;
+  if(m.spec) return HEALING_SPECS.includes(m.spec);
+  return HEALER_CLASSES.includes(m.cls);
+}
+function isRanged(m){
+  if(isTank(m) || isHealer(m)) return false;
+  if(m.spec) return RANGED_SPECS.includes(m.spec);
+  return PURE_RANGE.includes(m.cls);
+}
+
+function autoFill(){
+  const healers = roster.filter(isHealer);
+  const ranged  = roster.filter(isRanged);
+
+  // chase team: 1 elemental shaman, 1 mage, 1 shadow priest
+  // (+1 healer when the raid is running more than 6 healers)
+  const chasers = [];
+  const takeFirst = pred => {
+    const pick = roster.find(m => !chasers.includes(m.id) && pred(m));
+    if(pick) chasers.push(pick.id);
+    return !!pick;
+  };
+  takeFirst(m => m.cls === 'shaman' && m.spec === 'elemental');
+  takeFirst(m => m.cls === 'mage' && !isHealer(m));
+  takeFirst(m => m.cls === 'priest' && m.spec === 'shadow');
+
+  if(healers.length > 6){
+    const extra = healers.find(m => !chasers.includes(m.id));
+    if(extra) chasers.push(extra.id);
+  }
+
+  counts.chaser = Math.max(1, chasers.length || 3);
+  const chaseSet = new Set(chasers);
+  const freeHealers = healers.filter(m => !chaseSet.has(m.id));
+  const freeRanged  = ranged.filter(m => !chaseSet.has(m.id));
+
+  counts.healer = Math.max(1, freeHealers.length);
+  counts.range  = Math.max(1, freeRanged.length);
+
+  assignments = {
+    range:  new Array(counts.range).fill(null),
+    healer: new Array(counts.healer).fill(null),
+    chaser: new Array(counts.chaser).fill(null)
+  };
+  chasers.forEach((id,i)=>{ assignments.chaser[i] = id; });
+  freeHealers.forEach((m,i)=>{ if(i < counts.healer) assignments.healer[i] = m.id; });
+  freeRanged.forEach((m,i)=>{ if(i < counts.range) assignments.range[i] = m.id; });
+
+  renderAll();
+}
+
+function changeCount(type, delta){
+  counts[type] = Math.max(1, Math.min(12, counts[type] + delta));
+  document.getElementById('count'+type[0].toUpperCase()+type.slice(1)).textContent = counts[type];
+  const arr = assignments[type];
+  if(counts[type] > arr.length){
+    while(arr.length < counts[type]) arr.push(null);
+  } else {
+    const removed = arr.splice(counts[type]);
+    removed.forEach(id=>{ if(id) unassignId(id, false); });
+  }
+  renderAll();
+}
+
+function assignedIds(){
+  return new Set([...assignments.range, ...assignments.healer, ...assignments.chaser].filter(Boolean));
+}
+
+function unassignId(id, rerender=true){
+  ['range','healer','chaser'].forEach(type=>{
+    const i = assignments[type].indexOf(id);
+    if(i!==-1) assignments[type][i] = null;
+  });
+  if(rerender) renderAll();
+}
+
+function unassignAll(){
+  assignments.range = assignments.range.map(()=>null);
+  assignments.healer = assignments.healer.map(()=>null);
+  assignments.chaser = assignments.chaser.map(()=>null);
+  renderAll();
+}
+
+function clearAll(){
+  roster = [];
+  assignments = { range: new Array(counts.range).fill(null), healer: new Array(counts.healer).fill(null), chaser: new Array(counts.chaser).fill(null) };
+  document.getElementById('rosterInput').value = '';
+  renderAll();
+}
+
+function memberById(id){ return roster.find(m=>m.id===id); }
+
+function chipHTML(member, withClear){
+  const color = CLASS_COLORS[member.cls] || ROLE_FALLBACK[member.role] || '#2ee6ab';
+  const clearBtn = '';
+  const num = member.num!=null ? `<span class="num">${member.num}</span>` : '';
+  const roleTag = member.cls ? member.cls.slice(0,3).toUpperCase() : (member.role ? member.role.slice(0,3).toUpperCase() : '');
+  return `<span class="chip" draggable="true" data-id="${member.id}" style="--class-color:${color}">
+            ${num}${member.name}${roleTag?`<span class="cls">${roleTag}</span>`:''}${clearBtn}
+          </span>`;
+}
+
+function renderPool(){
+  const used = assignedIds();
+  const pool = roster.filter(m=>!used.has(m.id));
+  const el = document.getElementById('rosterPool');
+  el.innerHTML = pool.length ? pool.map(m=>chipHTML(m,false)).join('') : '<span class="pool-empty">Everyone is assigned. Nice.</span>';
+  el.querySelectorAll('.chip').forEach(c=>{
+    c.addEventListener('dragstart', e=>{
+      e.dataTransfer.setData('text/plain', c.dataset.id);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+  });
+  el.ondragover = e=>{ e.preventDefault(); el.style.background='rgba(46,230,171,.08)'; };
+  el.ondragleave = ()=>{ el.style.background=''; };
+  el.ondrop = e=>{
+    e.preventDefault();
+    el.style.background='';
+    const id = e.dataTransfer.getData('text/plain');
+    if(id) unassignId(id);
+  };
+}
+
+function circlePositions(n, cx, cy, rx, ry, startDeg){
+  const pts = [];
+  for(let i=0;i<n;i++){
+    const angle = (startDeg + (360/n)*i) * Math.PI/180;
+    pts.push({ x: cx + rx*Math.cos(angle), y: cy + ry*Math.sin(angle) });
+  }
+  return pts;
+}
+
+// Rock blocks segments 1, 8 and 12, leaving two open arcs: segments 2-7 and 9-11.
+// Range spreads evenly along those arcs — spots need not sit on a segment centre.
+const OPEN_ARCS = [
+  { from: -90 + 30*1,  to: -90 + 30*7  },   // start of seg 2 -> end of seg 7
+  { from: -90 + 30*8,  to: -90 + 30*11 }    // start of seg 9 -> end of seg 11
+];
+function segmentPositions(n, cx, cy, r){
+  const spans = OPEN_ARCS.map(a => a.to - a.from);
+  const total = spans.reduce((s,v)=>s+v, 0);
+  // share the raiders between arcs in proportion to their length
+  const counts = spans.map(s => Math.max(1, Math.round(n * s / total)));
+  let drift = n - counts.reduce((s,v)=>s+v, 0);
+  for(let i=0; drift !== 0; i=(i+1)%counts.length){
+    if(drift > 0){ counts[i]++; drift--; }
+    else if(counts[i] > 1){ counts[i]--; drift++; }
+  }
+
+  const pts = [];
+  OPEN_ARCS.forEach((arc, ai)=>{
+    const k = counts[ai];
+    const span = arc.to - arc.from;
+    // inset from the arc ends so nobody hugs the rock edge
+    const pad = Math.min(12, span / (k + 1));
+    const lo = arc.from + pad, hi = arc.to - pad;
+    for(let i=0;i<k;i++){
+      const deg = k === 1 ? (lo + hi)/2 : lo + (hi - lo) * (i / (k - 1));
+      const a = deg * Math.PI/180;
+      pts.push({ x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) });
+    }
+  });
+  return pts;
+}
+
+function renderSlotGroup(containerId, type, positions, extraClass){
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  assignments[type].forEach((id, i)=>{
+    const pos = positions[i] || {x:320,y:220};
+    const member = id ? memberById(id) : null;
+    const div = document.createElement('div');
+    div.className = 'slot' + (extraClass?' '+extraClass:'');
+    div.style.left = pos.x+'px';
+    div.style.top = pos.y+'px';
+    const color = member ? (CLASS_COLORS[member.cls] || ROLE_FALLBACK[member.role] || '') : '';
+    div.innerHTML = `<div class="ring ${member?'filled':''}" style="${member?`border-color:${color||'var(--teal)'}`:''}">
+        ${member ? `<span class="name-wrap"><span class="name-chip" draggable="true" data-id="${member.id}" style="background:${color||'#2ee6ab'}">${member.name}</span></span>` : (type==='healer'?'heal':'range')}
+      </div>
+      <div class="label">${type==='healer'?'Healer':'Range'} ${i+1}</div>`;
+
+    const ring = div.querySelector('.ring');
+
+    if(member){
+      const chip = div.querySelector('.name-chip');
+      chip.title = member.name + ' — drag to move, double-click to remove';
+      chip.addEventListener('dragstart', e=>{
+        e.stopPropagation();
+        e.dataTransfer.setData('text/plain', member.id);
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      chip.addEventListener('dblclick', e=>{ e.stopPropagation(); unassignId(member.id); });
+    }
+
+    ring.addEventListener('dragover', e=>{ e.preventDefault(); ring.classList.add(member?'swap-target':'drag-over'); });
+    ring.addEventListener('dragleave', ()=> ring.classList.remove('drag-over','swap-target'));
+    ring.addEventListener('drop', e=>{
+      e.preventDefault();
+      ring.classList.remove('drag-over','swap-target');
+      const draggedId = e.dataTransfer.getData('text/plain');
+      if(!draggedId || draggedId === id) return;
+      dropInto(type, i, draggedId);
+    });
+    el.appendChild(div);
+  });
+}
+
+// Place a raider in a slot. If they came from another slot and the target is
+// taken, the two swap instead of one being sent back to the pool.
+function dropInto(type, index, draggedId){
+  const origin = findSlot(draggedId);
+  const occupant = assignments[type][index];
+  if(origin){
+    assignments[origin.type][origin.index] = occupant || null;
+  } else if(occupant){
+    // dragged in from the pool — displaced raider returns to the pool
+    unassignId(occupant, false);
+  }
+  assignments[type][index] = draggedId;
+  renderAll();
+}
+
+function findSlot(id){
+  for(const type of ['range','healer','chaser']){
+    const index = assignments[type].indexOf(id);
+    if(index !== -1) return { type, index };
+  }
+  return null;
+}
+
+function renderChase(){
+  const el = document.getElementById('chaseSlots');
+  el.innerHTML = '';
+  assignments.chaser.forEach((id,i)=>{
+    const member = id ? memberById(id) : null;
+    const div = document.createElement('div');
+    div.className = 'chase-slot' + (member?' filled':'');
+    div.innerHTML = member
+      ? `<span class="name-chip" draggable="true" data-id="${member.id}">${member.name}</span>`
+      : `Chaser ${i+1}`;
+
+    if(member){
+      const chip = div.querySelector('.name-chip');
+      chip.title = member.name + ' — drag to move, double-click to remove';
+      chip.addEventListener('dragstart', e=>{
+        e.stopPropagation();
+        e.dataTransfer.setData('text/plain', member.id);
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      chip.addEventListener('dblclick', e=>{ e.stopPropagation(); unassignId(member.id); });
+    }
+
+    div.addEventListener('dragover', e=>{ e.preventDefault(); div.style.background='rgba(232,163,61,.22)'; });
+    div.addEventListener('dragleave', ()=>{ div.style.background=''; });
+    div.addEventListener('drop', e=>{
+      e.preventDefault();
+      div.style.background='';
+      const draggedId = e.dataTransfer.getData('text/plain');
+      if(!draggedId || draggedId === id) return;
+      dropInto('chaser', i, draggedId);
+    });
+    el.appendChild(div);
+  });
+}
+
+function renderAll(){
+  document.getElementById('countRange').textContent = counts.range;
+  document.getElementById('countHealer').textContent = counts.healer;
+  document.getElementById('countChaser').textContent = counts.chaser;
+  document.getElementById('captureGuild').textContent = document.getElementById('guildName').value || 'Raid';
+
+  const rangePos = segmentPositions(counts.range, 320, 214, 134);
+  const healerPos = circlePositions(counts.healer, 320, 214, 61, 61, -90);
+
+  renderSlotGroup('rangeSlots', 'range', rangePos, '');
+  renderSlotGroup('healerSlots', 'healer', healerPos, 'healer');
+  renderChase();
+  renderPool();
+}
+
+document.getElementById('guildName').addEventListener('input', ()=>{
+  document.getElementById('captureGuild').textContent = document.getElementById('guildName').value || 'Raid';
+});
+
+function exportImage(){
+  html2canvas(document.getElementById('capture'), { backgroundColor: '#081210', scale: 2 }).then(canvas=>{
+    const link = document.createElement('a');
+    const guild = (document.getElementById('guildName').value || 'raid').replace(/\s+/g,'_');
+    link.download = `vashj-p2-${guild}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+}
+
+renderAll();
+</script>

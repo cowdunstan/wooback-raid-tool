@@ -1,3 +1,28 @@
+/* ───────────────────────── Officer session ─────────────────────────
+   The board.html guard already redirected non-officers to the landing page.
+   Here we just read the stored session token to authorize Raid-Helper calls
+   (the Worker verifies its signature) and to show who's signed in. */
+function sessionToken(){
+  try{ return localStorage.getItem('vashj_session') || ''; }catch(e){ return ''; }
+}
+function rhHeaders(){
+  const t = sessionToken();
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+function logout(){
+  try{ localStorage.removeItem('vashj_session'); }catch(e){}
+  location.replace('index.html');
+}
+function sessionName(){
+  const t = sessionToken();
+  if(!t) return '';
+  try{
+    let p = t.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+    while(p.length % 4) p += '=';
+    return JSON.parse(atob(p)).name || '';
+  }catch(e){ return ''; }
+}
+
 const CLASS_COLORS = {
   warrior:'#C79C6E', paladin:'#F58CBA', hunter:'#ABD473', rogue:'#FFF569',
   priest:'#FFFFFF', shaman:'#0070DE', mage:'#69CCF0', warlock:'#9482C9', druid:'#FF7D0A'
@@ -575,8 +600,9 @@ async function loadServerEvents(){
 
   let data;
   try {
-    const res = await fetch(`${rhApiBase()}/v4/servers/${encodeURIComponent(RH_SERVER_ID)}/events`);
-    if(res.status === 401 || res.status === 403){ setRhStatus('Unauthorized — set the RH_TOKEN secret on the proxy Worker.', true); return; }
+    const res = await fetch(`${rhApiBase()}/v4/servers/${encodeURIComponent(RH_SERVER_ID)}/events`, { headers: rhHeaders() });
+    if(res.status === 401){ setRhStatus('Session expired — signing you out…', true); setTimeout(logout, 1200); return; }
+    if(res.status === 403){ setRhStatus('Unauthorized — set the RH_TOKEN secret on the proxy Worker.', true); return; }
     if(res.status === 404){ setRhStatus('Server not found — check RH_SERVER_ID.', true); return; }
     if(!res.ok){ setRhStatus('Raid-Helper returned HTTP ' + res.status + '.', true); return; }
     data = await res.json();
@@ -635,8 +661,9 @@ async function fetchEventById(eventId){
 
   let data;
   try {
-    const res = await fetch(`${rhApiBase()}/v4/events/${encodeURIComponent(eventId)}`);
-    if(res.status === 401 || res.status === 403){ setRhStatus('Unauthorized — set the RH_TOKEN secret on the proxy Worker.', true); return; }
+    const res = await fetch(`${rhApiBase()}/v4/events/${encodeURIComponent(eventId)}`, { headers: rhHeaders() });
+    if(res.status === 401){ setRhStatus('Session expired — signing you out…', true); setTimeout(logout, 1200); return; }
+    if(res.status === 403){ setRhStatus('Unauthorized — set the RH_TOKEN secret on the proxy Worker.', true); return; }
     if(res.status === 404){ setRhStatus('Event not found (it may have been deleted).', true); return; }
     if(!res.ok){ setRhStatus('Raid-Helper returned HTTP ' + res.status + '.', true); return; }
     data = await res.json();
@@ -655,5 +682,12 @@ async function fetchEventById(eventId){
   autoFill();
   setRhStatus(`Loaded ${members.length} signups from “${data.title || 'event ' + eventId}”.`);
 }
+
+(function showSignedIn(){
+  const el = document.getElementById('authWho');
+  if(!el) return;
+  const name = sessionName();
+  el.textContent = name ? 'Signed in as ' + name : '';
+})();
 
 renderAll();

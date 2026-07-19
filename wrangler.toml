@@ -1,9 +1,9 @@
-# Config for deploying the Raid-Helper CORS proxy with Wrangler:
+# Config for deploying the Raid-Helper proxy + Discord officer gate with Wrangler:
 #   npx wrangler deploy
 # (first run opens a browser to log in to Cloudflare)
 #
-# After deploy, Wrangler prints the Worker URL (…workers.dev). Paste that into
-# the "CORS proxy base URL" field in index.html.
+# Before it works you must set the Worker secrets and fill in the Discord config
+# constants — see README.md ("One-time setup").
 name = "rh-proxy"
 main = "raidhelper-proxy.worker.js"
 compatibility_date = "2026-07-19"

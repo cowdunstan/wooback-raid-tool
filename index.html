@@ -1,189 +1,65 @@
+<meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <link rel="stylesheet" href="styles.css">
 
 <div class="app">
   <div class="wrap">
-    <span class="eyebrow">Serpentshrine Cavern</span>
-    <h1>Lady Vashj — Phase 2 Assignments</h1>
-    <p class="subtitle">Drag raiders between the pool and any slot. Drop onto a filled slot to swap; double-click a name to send it back. Export when it's set.</p>
+    <div class="landing">
+      <span class="eyebrow">Guild Tools</span>
+      <h1>wooback</h1>
+      <p class="subtitle">Sign in with Discord to access the guild's apps.</p>
 
-    <div class="toolbar">
-      <div class="field">
-        <label>Guild / Raid name</label>
-        <input type="text" id="guildName" placeholder="e.g. wooback — SSC Clear" value="wooback">
-      </div>
-      <div class="field">
-        <label>Range spots</label>
-        <div class="stepper">
-          <button onclick="changeCount('range',-1)">−</button>
-          <span id="countRange">6</span>
-          <button onclick="changeCount('range',1)">+</button>
-        </div>
-      </div>
-      <div class="field">
-        <label>Healer spots</label>
-        <div class="stepper">
-          <button onclick="changeCount('healer',-1)">−</button>
-          <span id="countHealer">5</span>
-          <button onclick="changeCount('healer',1)">+</button>
-        </div>
-      </div>
-      <div class="field">
-        <label>Strider chasers</label>
-        <div class="stepper">
-          <button onclick="changeCount('chaser',-1)">−</button>
-          <span id="countChaser">3</span>
-          <button onclick="changeCount('chaser',1)">+</button>
-        </div>
-      </div>
-      <div class="spacer"></div>
-      <button class="btn-ghost" onclick="clearAll()">Clear board</button>
-      <button class="btn-primary" onclick="exportImage()">Export PNG</button>
+      <button class="discord-btn" id="signin">
+        <svg viewBox="0 0 127.14 96.36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0a105.89 105.89 0 0 0-26.25 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15ZM42.45 65.69C36.18 65.69 31 60 31 53s5-12.74 11.43-12.74S54 46 53.89 53s-5.05 12.69-11.44 12.69Zm42.24 0C78.41 65.69 73.25 60 73.25 53s5-12.74 11.44-12.74S96.23 46 96.12 53s-5.04 12.69-11.43 12.69Z"/></svg>
+        Sign in with Discord
+      </button>
+
+      <div class="landing-msg" id="msg"></div>
+      <p class="landing-note">Some apps require an officer rank on the wooback Discord server.</p>
     </div>
-
-    <div class="roster-panel">
-      <div class="api-block">
-        <label style="font-size:10.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-dim);font-weight:600;display:block;margin-bottom:8px;">
-          Import from Raid-Helper
-        </label>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-          <button class="btn-primary" onclick="loadServerEvents()">Load events</button>
-          <span style="font-size:11px;color:var(--text-dim);">Pulls this server's events via the proxy (token lives in the Worker).</span>
-        </div>
-        <div id="rhEventPickRow" style="display:none;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;">
-          <select id="rhEventSelect" onchange="loadSelectedEvent()"
-                  style="background:#0a1815;border:1px solid var(--panel-line);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px;font-family:'Inter';min-width:340px;flex:1;"></select>
-          <button class="btn-ghost" onclick="loadSelectedEvent()">Load selected</button>
-        </div>
-        <div id="rhStatus" style="font-size:11.5px;color:var(--text-dim);margin-top:7px;min-height:15px;"></div>
-        <div style="border-top:1px solid var(--panel-line);margin:14px 0 12px;"></div>
-      </div>
-      <label style="font-size:10.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-dim);font-weight:600;display:block;margin-bottom:6px;">Or paste roster — supports raid-helper style lists or plain "Name Class" lines</label>
-      <textarea id="rosterInput" placeholder="Tank (2)  `1` Tero  `10` Gravycannon&#10;Warrior (3)  `13` Chankles  `25` Sammyp  `22` Tyno&#10;Priest (4)  `7` Nightbrew  `3` Youngjoe ..."></textarea>
-      <div style="display:flex;gap:8px;margin-bottom:10px;">
-        <button class="btn-primary" onclick="parseRoster()">Load roster</button>
-        <button class="btn-ghost" onclick="autoFill()">Re-run auto-fill</button>
-        <button class="btn-ghost" onclick="unassignAll()">Send all back to pool</button>
-      </div>
-      <div id="reserveWrap" style="display:none;margin-bottom:12px;">
-        <div class="reserve-hint">Tentative / Bench — drag onto the board to slot them in</div>
-        <div class="roster-pool" id="reservePool"></div>
-      </div>
-      <div class="roster-pool" id="rosterPool"><span class="pool-empty">No one loaded yet — paste a roster above.</span></div>
-    </div>
-
-    <div id="capture">
-      <div class="capture-head">
-        <div class="guild" id="captureGuild">wooback</div>
-        <div class="fight">Lady Vashj · Phase 2 · Elemental Adds</div>
-      </div>
-
-      <div class="arena-area">
-        <svg class="arena-bg" viewBox="0 0 640 440" preserveAspectRatio="xMidYMid meet">
-          <defs>
-            <radialGradient id="aWater" cx="50%" cy="47%" r="70%">
-              <stop offset="0%" stop-color="#b9cdc9"/>
-              <stop offset="55%" stop-color="#9db5b4"/>
-              <stop offset="100%" stop-color="#7d9a9c"/>
-            </radialGradient>
-            <radialGradient id="aRock" cx="40%" cy="35%" r="75%">
-              <stop offset="0%" stop-color="#c8a878"/>
-              <stop offset="100%" stop-color="#9d8154"/>
-            </radialGradient>
-            <radialGradient id="aDais" cx="42%" cy="36%" r="70%">
-              <stop offset="0%" stop-color="#e4bfc4"/>
-              <stop offset="70%" stop-color="#cfa0a9"/>
-              <stop offset="100%" stop-color="#b8848f"/>
-            </radialGradient>
-            <filter id="aSoft"><feGaussianBlur stdDeviation="4"/></filter>
-            <filter id="aSoftLite"><feGaussianBlur stdDeviation="2"/></filter>
-          </defs>
-
-          <rect width="640" height="440" fill="url(#aWater)"/>
-
-          <!-- rock border wrapping all four edges -->
-          <g fill="url(#aRock)" filter="url(#aSoft)">
-            <path d="M-10,-10 L232,-10 Q196,34 232,60 Q166,84 112,52 Q56,72 -10,44 Z"/>
-            <path d="M414,-10 L650,-10 L650,108 Q584,98 546,62 Q480,52 414,-10 Z"/>
-            <path d="M650,168 Q604,208 642,258 L650,450 L432,450 Q480,392 548,382 Q616,362 650,168 Z"/>
-            <path d="M-10,450 L188,450 Q140,402 84,394 Q26,386 -10,346 Z"/>
-            <path d="M-10,52 Q60,74 98,130 Q134,162 168,180 Q132,204 92,196 Q54,230 30,300 Q6,368 -10,384 Z"/>
-          </g>
-
-          <!-- isolated islets in the water -->
-          <g fill="url(#aRock)" filter="url(#aSoftLite)">
-            <ellipse cx="186" cy="58" rx="20" ry="14"/>
-            <ellipse cx="452" cy="336" rx="18" ry="13"/>
-            <ellipse cx="308" cy="410" rx="15" ry="11"/>
-            <ellipse cx="492" cy="140" rx="12" ry="9"/>
-          </g>
-
-          <!-- central 12-sided dais -->
-          <g transform="translate(320,214)">
-            <polygon points="0.0,-150.0 75.0,-129.9 129.9,-75.0 150.0,0.0 129.9,75.0 75.0,129.9 0.0,150.0 -75.0,129.9 -129.9,75.0 -150.0,0.0 -129.9,-75.0 -75.0,-129.9"
-                     fill="url(#aDais)" stroke="#a3717c" stroke-width="2.5"/>
-            <g fill="none" stroke="#b9868f" stroke-width="1.2" opacity="0.75">
-              <polygon points="0.0,-140.0 70.0,-121.2 121.2,-70.0 140.0,0.0 121.2,70.0 70.0,121.2 0.0,140.0 -70.0,121.2 -121.2,70.0 -140.0,0.0 -121.2,-70.0 -70.0,-121.2"/>
-              <polygon points="0.0,-129.0 64.5,-111.7 111.7,-64.5 129.0,0.0 111.7,64.5 64.5,111.7 0.0,129.0 -64.5,111.7 -111.7,64.5 -129.0,0.0 -111.7,-64.5 -64.5,-111.7"/>
-              <polygon points="0.0,-115.0 57.5,-99.6 99.6,-57.5 115.0,0.0 99.6,57.5 57.5,99.6 0.0,115.0 -57.5,99.6 -99.6,57.5 -115.0,0.0 -99.6,-57.5 -57.5,-99.6"/>
-            </g>
-            <g stroke="#b9868f" stroke-width="1" opacity="0.6">
-              <line x1="0.0" y1="-150.0" x2="0.0" y2="-100.0"/>
-              <line x1="75.0" y1="-129.9" x2="50.0" y2="-86.6"/>
-              <line x1="129.9" y1="-75.0" x2="86.6" y2="-50.0"/>
-              <line x1="150.0" y1="0.0" x2="100.0" y2="0.0"/>
-              <line x1="129.9" y1="75.0" x2="86.6" y2="50.0"/>
-              <line x1="75.0" y1="129.9" x2="50.0" y2="86.6"/>
-              <line x1="0.0" y1="150.0" x2="0.0" y2="100.0"/>
-              <line x1="-75.0" y1="129.9" x2="-50.0" y2="86.6"/>
-              <line x1="-129.9" y1="75.0" x2="-86.6" y2="50.0"/>
-              <line x1="-150.0" y1="0.0" x2="-100.0" y2="0.0"/>
-              <line x1="-129.9" y1="-75.0" x2="-86.6" y2="-50.0"/>
-              <line x1="-75.0" y1="-129.9" x2="-50.0" y2="-86.6"/>
-            </g>
-            <circle cx="0" cy="0" r="100" fill="#e0c3b4" stroke="#a3717c" stroke-width="2.5"/>
-            <circle cx="0" cy="0" r="91" fill="none" stroke="#cbab99" stroke-width="1.2" opacity="0.7"/>
-            <g fill="#9a7a45">
-              <ellipse cx="0" cy="-5" rx="26" ry="22"/>
-              <rect x="-18" y="13" width="36" height="13" rx="3.5"/>
-              <circle cx="-10" cy="-7" r="5" fill="#42301a"/>
-              <circle cx="10" cy="-7" r="5" fill="#42301a"/>
-              <ellipse cx="0" cy="6" rx="4" ry="5" fill="#42301a"/>
-            </g>
-          </g>
-
-          <!-- rock outcrop confined to segments 12 and 1 -->
-          <g fill="url(#aRock)" filter="url(#aSoftLite)">
-            <path d="M247,86 Q262,58 292,46 Q320,36 348,46 Q378,58 393,86
-                     Q396,110 374,124 Q348,140 320,142 Q292,140 266,124 Q244,110 247,86 Z"/>
-            <path d="M330,44 Q344,16 364,12 Q375,34 366,58 Q349,66 334,58 Z"/>
-          </g>
-
-          <!-- rock chunk off the lower-left edge -->
-          <g fill="url(#aRock)" filter="url(#aSoftLite)">
-            <path d="M182,306 Q208,290 232,304 Q238,330 214,344 Q188,340 178,324 Z"/>
-          </g>
-        </svg>
-        <div id="rangeSlots"></div>
-        <div id="healerSlots"></div>
-      </div>
-
-      <div class="chase-panel">
-        <div class="chase-title">⚡ Strider Chase Team — roams full arena, kill on sight</div>
-        <div class="chase-row" id="chaseSlots"></div>
-      </div>
-
-      <div class="legend">
-        <span><i style="background:#2ee6ab"></i> Range platform</span>
-        <span><i style="background:#7fb0f2"></i> Healer ground</span>
-        <span><i style="background:#e8a33d"></i> Strider chaser</span>
-      </div>
-    </div>
-
-    <footer>Built for raid night — drag, load new rosters, export fresh each pull.</footer>
   </div>
 </div>
 
-<script src="app.js"></script>
+<script>
+  // The auth Worker that handles Discord OAuth (see raidhelper-proxy.worker.js).
+  const AUTH_BASE = 'https://wooback-vash.cowdunstan.workers.dev';
+
+  document.getElementById('signin').addEventListener('click', function(){
+    location.href = AUTH_BASE + '/auth/login';
+  });
+
+  function validSession(tok){
+    if(!tok) return false;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      var payload = JSON.parse(atob(p));
+      return payload.exp && payload.exp > Math.floor(Date.now()/1000);
+    }catch(e){ return false; }
+  }
+
+  // Surface a denial / error passed back from the Worker in the URL fragment.
+  (function(){
+    var params = new URLSearchParams(location.hash.slice(1));
+    var msg = document.getElementById('msg');
+    if(params.has('denied')){
+      var why = params.get('denied');
+      msg.textContent = why === 'not_officer'
+        ? 'That Discord account isn’t an officer on the server.'
+        : why === 'not_in_server'
+        ? 'That Discord account isn’t a member of the wooback server.'
+        : 'Access denied.';
+      msg.className = 'landing-msg err';
+    } else if(params.has('error')){
+      msg.textContent = 'Sign-in failed (' + params.get('error') + '). Please try again.';
+      msg.className = 'landing-msg err';
+    }
+    if(location.hash) history.replaceState(null, '', location.pathname);
+  })();
+
+  // Already signed in? Skip straight to the board.
+  try{
+    if(validSession(localStorage.getItem('vashj_session'))) location.replace('board.html');
+  }catch(e){}
+</script>

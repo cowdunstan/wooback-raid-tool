@@ -253,11 +253,6 @@
                   style="background:#0a1815;border:1px solid var(--panel-line);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px;font-family:'Inter';min-width:340px;flex:1;"></select>
           <button class="btn-ghost" onclick="loadSelectedEvent()">Load selected</button>
         </div>
-        <input type="text" id="rhProxy" autocomplete="off" placeholder="CORS proxy base URL — required when this page is hosted (e.g. https://rh-proxy.you.workers.dev)"
-               style="background:#0a1815;border:1px solid var(--panel-line);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px;font-family:'Inter';width:100%;margin-top:8px;">
-        <div style="font-size:10.5px;color:var(--text-dim);margin-top:5px;line-height:1.5;">
-          Raid-Helper blocks direct browser calls (CORS). Leave blank only on <code>localhost</code>; when hosted, point this at your own proxy — see <code>raidhelper-proxy.worker.js</code> in the repo.
-        </div>
         <div id="rhStatus" style="font-size:11.5px;color:var(--text-dim);margin-top:7px;min-height:15px;"></div>
         <div style="border-top:1px solid var(--panel-line);margin:14px 0 12px;"></div>
       </div>
@@ -887,18 +882,12 @@ function exportImage(){
    convenience, not a secret vault. */
 const RH_KEY_STORE    = 'wooback.raidhelper.apikey';
 const RH_SERVER_STORE = 'wooback.raidhelper.serverid';
-const RH_PROXY_STORE  = 'wooback.raidhelper.proxy';
 
-// Base for API calls. Raid-Helper rejects cross-origin browser requests, so on a
-// hosted page you must route through your own CORS proxy (see raidhelper-proxy.worker.js).
-// The proxy forwards the path unchanged, so both branches use the same /vN/... suffix.
-function rhApiBase(){
-  let proxy = (document.getElementById('rhProxy').value || '').trim().replace(/\/+$/,'');
-  // A bare host (no scheme) would be treated as a relative path and glued onto
-  // the page's URL, so normalise it to an absolute https:// URL.
-  if(proxy && !/^https?:\/\//i.test(proxy)) proxy = 'https://' + proxy;
-  return proxy || 'https://raid-helper.xyz/api';
-}
+// Raid-Helper rejects cross-origin browser requests, so every call routes through
+// our own CORS proxy Worker (see raidhelper-proxy.worker.js), which forwards the
+// path unchanged to https://raid-helper.xyz/api and adds the CORS header back.
+const RH_PROXY = 'https://wooback-vash.cowdunstan.workers.dev';
+function rhApiBase(){ return RH_PROXY; }
 
 // Raid-Helper signup buttons that represent a status rather than a class.
 const RH_STATUS_MAP = {
@@ -926,8 +915,6 @@ function loadApiKeyUI(){
     if(k) document.getElementById('rhApiKey').value = k;
     const s = localStorage.getItem(RH_SERVER_STORE);
     if(s) document.getElementById('rhServerId').value = s;
-    const p = localStorage.getItem(RH_PROXY_STORE);
-    if(p) document.getElementById('rhProxy').value = p;
   } catch(err){}
   reflectKeyState();
 }
@@ -982,20 +969,10 @@ function mapRaidHelperSignups(signups){
   return out;
 }
 
-// Persist the proxy field before any network call (it's not secret, unlike the key).
-function persistProxy(){
-  const proxy = document.getElementById('rhProxy').value.trim();
-  try {
-    if(proxy) localStorage.setItem(RH_PROXY_STORE, proxy);
-    else localStorage.removeItem(RH_PROXY_STORE);
-  } catch(err){}
-}
-
-// Friendly hint for a failed fetch — the usual culprit is CORS / a missing proxy.
+// Friendly hint for a failed fetch — the usual culprit is the proxy Worker being
+// down or not allowing this origin (ALLOWED_ORIGIN in raidhelper-proxy.worker.js).
 function rhNetworkHint(){
-  return document.getElementById('rhProxy').value.trim()
-    ? 'Proxy unreachable — check the proxy URL is deployed and allows this origin.'
-    : 'Blocked by CORS — set a proxy URL above (see raidhelper-proxy.worker.js).';
+  return 'Could not reach the proxy — is the Worker deployed and is this origin allowed?';
 }
 
 // Human-readable date for an event, for the picker labels.
@@ -1018,7 +995,6 @@ async function loadServerEvents(){
   if(!serverId){ setRhStatus('Enter a Discord server ID first.', true); return; }
   if(!key){ setRhStatus('An API token is required to list a server’s events.', true); return; }
   try { localStorage.setItem(RH_SERVER_STORE, serverId); } catch(err){}
-  persistProxy();
   setRhStatus('Loading events…');
 
   let data;
@@ -1070,7 +1046,6 @@ function loadSelectedEvent(){
 // Fetch one event's signups and drop them onto the board.
 async function fetchEventById(eventId){
   if(!eventId){ setRhStatus('No event id given.', true); return; }
-  persistProxy();
   const key = document.getElementById('rhApiKey').value.trim();
   setRhStatus('Loading signups…');
 

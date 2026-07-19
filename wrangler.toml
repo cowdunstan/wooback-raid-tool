@@ -4,6 +4,6 @@
 #
 # Before it works you must set the Worker secrets and fill in the Discord config
 # constants — see README.md ("One-time setup").
-name = "rh-proxy"
+name = "wooback-vash"
 main = "raidhelper-proxy.worker.js"
 compatibility_date = "2026-07-19"

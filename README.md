@@ -1,4 +1,4 @@
-# wooback-vash
+# wooback-raid-tools
 
 Guild tools for the wooback Discord server, gated behind Discord access in **two
 tiers**: a **home** hub open to any member with the home role, and the Lady Vashj
@@ -68,7 +68,7 @@ valid officer signature.
 - `HOME_ROLE_ID` — the broader role that unlocks the home page (already filled in).
 - `WORKER_BASE` — this Worker's public URL.
 - `APP_BASE` — where GitHub Pages serves the site (currently
-  `https://cowdunstan.github.io/wooback-vash`). **Confirm this matches your Pages
+  `https://cowdunstan.github.io/wooback-raid-tools`). **Confirm this matches your Pages
   URL** — a project page lives under `/<repo>/`.
 
 ### 3. Set the Worker secrets (never commit these)

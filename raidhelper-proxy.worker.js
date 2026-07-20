@@ -87,7 +87,7 @@ const REDIRECT_URI = WORKER_BASE + '/auth/callback';
 
 // The static site. Landing page = <APP_BASE>/  (index.html), board = board.html.
 // Served from the custom domain wooback.info (root). GitHub Pages redirects the
-// old cowdunstan.github.io/wooback-vash URL here, so this is the canonical home.
+// old cowdunstan.github.io/wooback-raid-tools URL here, so this is the canonical home.
 const APP_BASE = 'https://wooback.info';
 
 // Session lifetime, seconds.

@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using WoobackVash.Api.Auth;
+using WoobackVash.Api.Config;
 using WoobackVash.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,6 +21,12 @@ if (haveDb)
 {
     builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(connString));
 }
+
+// Auth: Discord OAuth options + session-token signing + an HttpClient for Discord.
+builder.Services.Configure<DiscordOptions>(builder.Configuration.GetSection(DiscordOptions.SectionName));
+builder.Services.Configure<SessionSigningOptions>(builder.Configuration.GetSection(SessionSigningOptions.SectionName));
+builder.Services.AddSingleton<SessionTokenService>();
+builder.Services.AddHttpClient();
 
 // CORS: only the app's own origins may call the API from a browser. Kept in sync
 // with the origins the old Worker allowed (see raidhelper-proxy.worker.js).
@@ -74,7 +82,10 @@ app.MapGet("/readyz", async (IServiceProvider sp) =>
     }
 });
 
-app.MapGet("/", () => Results.Ok(new { service = "wooback-vash-api", phase = 0 }));
+app.MapGet("/", () => Results.Ok(new { service = "wooback-vash-api", phase = 1 }));
+
+// Discord OAuth login/callback (Phase 1).
+app.MapAuthEndpoints();
 
 app.Run();
 
@@ -91,8 +102,7 @@ static string ConnectionStringFromUrl(string url)
         Username = Uri.UnescapeDataString(userInfo[0]),
         Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "",
         Database = uri.AbsolutePath.TrimStart('/'),
-        SslMode = SslMode.Prefer,
-        TrustServerCertificate = true
+        SslMode = SslMode.Prefer
     };
     return csb.ConnectionString;
 }

@@ -7,10 +7,12 @@ using WoobackVash.Api.Services;
 namespace WoobackVash.Api.Proxy;
 
 /// <summary>
-/// The two gated proxies ported from raidhelper-proxy.worker.js:
-///  • /v4/*        Raid-Helper API — officer session required; the RH token is
-///                 attached server-side so it never reaches the browser.
-///  • /wcl/reports Warcraft Logs report list — any signed-in tier (logs are public).
+/// The gated proxies ported from raidhelper-proxy.worker.js:
+///  • /v4/*          Raid-Helper API — officer session required; the RH token is
+///                   attached server-side so it never reaches the browser.
+///  • /wcl/reports   Warcraft Logs report list — any signed-in tier (logs are
+///                   public). ?fresh=1 forces a live refresh (officers only).
+///  • /wcl/ratelimit Warcraft Logs points budget — officer-only diagnostics.
 /// </summary>
 public static class ProxyEndpoints
 {
@@ -70,6 +72,23 @@ public static class ProxyEndpoints
                         (f == "1" || f == "true");
 
             var (status, body) = await wcl.GetReportsAsync(force);
+            return Results.Text(body, "application/json", statusCode: status);
+        });
+
+        // Warcraft Logs points budget — officer-only diagnostics. Each call hits
+        // WCL live and costs a point or two, so it is not open to every tier.
+        app.MapGet("/wcl/ratelimit", async (
+            HttpContext ctx,
+            SessionTokenService tokens,
+            WarcraftLogsService wcl) =>
+        {
+            var session = ctx.GetSession(tokens);
+            if (session is null)
+                return Results.Json(new { error = "unauthorized", detail = "Sign-in required." }, statusCode: 401);
+            if (!session.Officer)
+                return Results.Json(new { error = "forbidden", detail = "Officer access required." }, statusCode: 403);
+
+            var (status, body) = await wcl.GetRateLimitAsync();
             return Results.Text(body, "application/json", statusCode: status);
         });
     }

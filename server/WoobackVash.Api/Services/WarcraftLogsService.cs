@@ -153,6 +153,68 @@ public class WarcraftLogsService
         }
     }
 
+    /// <summary>Officer diagnostics: the guild's current v2 points budget
+    /// ({ limitPerHour, pointsSpentThisHour, pointsResetIn }). Always live — the
+    /// whole point is to see the budget right now — but the query itself costs a
+    /// point or two, so it is officer-gated at the endpoint.</summary>
+    public async Task<(int Status, string Body)> GetRateLimitAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_opt.ClientId) || string.IsNullOrWhiteSpace(_opt.ClientSecret))
+            return (501, Err("not_configured", "Warcraft Logs API credentials are not set on the server yet."));
+
+        try
+        {
+            var token = await GetTokenAsync();
+            if (token is null)
+                return (501, Err("not_configured", "Warcraft Logs API credentials are not set on the server yet."));
+
+            const string query = "query{rateLimitData{limitPerHour pointsSpentThisHour pointsResetIn}}";
+
+            var http = _httpFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(_opt.RequestTimeoutSeconds);
+
+            using var req = new HttpRequestMessage(HttpMethod.Post, _opt.GraphQlUrl);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            req.Content = new StringContent(JsonSerializer.Serialize(new { query }), Encoding.UTF8, "application/json");
+
+            HttpResponseMessage r;
+            try { r = await http.SendAsync(req); }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                _log.LogWarning(ex, "Warcraft Logs rate-limit query failed/timed out");
+                return (504, Err("upstream_timeout", "Warcraft Logs is not responding right now."));
+            }
+
+            if (r.StatusCode == (HttpStatusCode)429)
+                return (429, Err("rate_limited",
+                    "Warcraft Logs is rate-limiting this IP right now (too many requests). Try again shortly."));
+            if (!r.IsSuccessStatusCode)
+                return (502, Err("upstream", "Warcraft Logs API returned " + (int)r.StatusCode));
+
+            using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+            if (!doc.RootElement.TryGetProperty("data", out var d) ||
+                !d.TryGetProperty("rateLimitData", out var rl) ||
+                rl.ValueKind != JsonValueKind.Object)
+            {
+                var gqlErr = TryGetGqlError(doc.RootElement);
+                return (502, Err("upstream", gqlErr ?? "Unexpected Warcraft Logs response."));
+            }
+
+            var body = JsonSerializer.Serialize(new
+            {
+                limitPerHour = GetLong(rl, "limitPerHour"),
+                pointsSpentThisHour = GetDouble(rl, "pointsSpentThisHour"),
+                pointsResetIn = GetLong(rl, "pointsResetIn")
+            });
+            return (200, body);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Warcraft Logs rate-limit fetch failed");
+            return (502, Err("upstream fetch failed", ex.Message));
+        }
+    }
+
     private async Task<string?> GetTokenAsync()
     {
         var now = NowUnix();
@@ -211,6 +273,9 @@ public class WarcraftLogsService
 
     private static long GetLong(JsonElement e, string prop) =>
         e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var n) ? n : 0;
+
+    private static double GetDouble(JsonElement e, string prop) =>
+        e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var n) ? n : 0;
 
     private static string GetNestedName(JsonElement e, string prop) =>
         e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Object ? GetString(v, "name") : "";

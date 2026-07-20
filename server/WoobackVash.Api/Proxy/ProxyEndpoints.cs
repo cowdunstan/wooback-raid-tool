@@ -62,7 +62,14 @@ public static class ProxyEndpoints
             if (session is null)
                 return Results.Json(new { error = "unauthorized", detail = "Sign-in required." }, statusCode: 401);
 
-            var (status, body) = await wcl.GetReportsAsync();
+            // A forced refresh bypasses the cache TTL and hits Warcraft Logs live.
+            // Only officers may trigger it — otherwise anyone could spend the points
+            // budget by hitting ?fresh=1 directly, which is what the TTL guards.
+            var force = session.Officer &&
+                        ctx.Request.Query.TryGetValue("fresh", out var f) &&
+                        (f == "1" || f == "true");
+
+            var (status, body) = await wcl.GetReportsAsync(force);
             return Results.Text(body, "application/json", statusCode: status);
         });
     }

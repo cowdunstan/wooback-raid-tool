@@ -20,11 +20,20 @@ public class WarcraftLogsOptions
     public string GuildServer { get; set; } = "dreamscythe";
     public string GuildRegion { get; set; } = "US";
 
-    /// <summary>How long an assembled report list stays fresh (seconds).</summary>
-    public int CacheTtlSeconds { get; set; } = 300;
+    /// <summary>How long an assembled report list stays fresh (seconds). The list
+    /// only changes when a raid is logged (a few times a week), so a long window
+    /// is safe and keeps us well under the v2 hourly points budget. Default 30 min.</summary>
+    public int CacheTtlSeconds { get; set; } = 1800;
 
-    /// <summary>Cap the page walk so a huge history can't blow the request budget.</summary>
-    public int MaxPages { get; set; } = 15;
+    /// <summary>How many reports to show (newest-first). Fetched in a single page,
+    /// so this is also the whole per-refresh cost against the v2 points budget.</summary>
+    public int ReportLimit { get; set; } = 25;
+
+    /// <summary>Per-request timeout (seconds) for each call to Warcraft Logs. When
+    /// WCL throttles us it stalls connections rather than replying fast, so without
+    /// this a page walk can hang for minutes; keep it short so we fail over to the
+    /// cached copy quickly instead of leaving the browser spinning.</summary>
+    public int RequestTimeoutSeconds { get; set; } = 12;
 
     public string GraphQlUrl => Host.TrimEnd('/') + "/api/v2/client";
 }

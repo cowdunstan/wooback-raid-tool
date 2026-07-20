@@ -55,11 +55,12 @@
     <div class="home-hero">
       <span class="eyebrow">Guild Tools</span>
       <h1>Warcraft Logs</h1>
-      <p class="subtitle">Every log the wooback guild has uploaded, newest first. Click any raid to open it on Warcraft Logs.</p>
+      <p class="subtitle">The wooback guild's 25 most recent logs, newest first. Click any raid to open it on Warcraft Logs.</p>
     </div>
 
     <div class="logs-toolbar">
       <button class="btn-primary" id="refreshBtn" onclick="loadLogs()">Refresh</button>
+      <button class="btn-ghost" id="forceRefreshBtn" onclick="loadLogs(true)" data-officer-only title="Bypass the server cache and pull live from Warcraft Logs">Force refresh</button>
       <a class="btn-ghost" id="guildLink" href="#" target="_blank" rel="noopener" style="display:none;">Open guild on Warcraft Logs →</a>
       <span class="spacer"></span>
       <span id="logStatus" class="logs-status"></span>
@@ -126,14 +127,19 @@
     setStatus(reports.length + (reports.length === 1 ? ' log' : ' logs'));
   }
 
-  async function loadLogs(){
+  async function loadLogs(force){
     const btn = document.getElementById('refreshBtn');
+    const forceBtn = document.getElementById('forceRefreshBtn');
     const list = document.getElementById('logList');
     btn.disabled = true;
-    setStatus('Loading…');
+    if(forceBtn) forceBtn.disabled = true;
+    setStatus(force ? 'Pulling live from Warcraft Logs…' : 'Loading…');
     list.innerHTML = '<div class="log-empty">Loading logs…</div>';
     try{
-      const res = await fetch(WCL_BASE + '/wcl/reports', {
+      // Officers can force a live pull past the 30-min server cache (?fresh=1);
+      // the server ignores the flag for non-officers, so this stays a safe no-op.
+      const url = WCL_BASE + '/wcl/reports' + (force ? '?fresh=1' : '');
+      const res = await fetch(url, {
         headers: { 'Authorization': 'Bearer ' + sessionToken() }
       });
       let data = {};
@@ -151,6 +157,7 @@
       setStatus(msg, true);
     }finally{
       btn.disabled = false;
+      if(forceBtn) forceBtn.disabled = false;
     }
   }
 

@@ -10,9 +10,10 @@ namespace WoobackVash.Api.Services;
 /// <summary>
 /// Pulls the guild's Warcraft Logs report list, keeping the API credentials
 /// server-side. Ported from handleWclReports in raidhelper-proxy.worker.js:
-/// client-credentials OAuth (token cached to expiry), paged report fetch, a
-/// 5-minute freshness window to stay under the v2 hourly points budget, and a
-/// stale-copy fallback when Warcraft Logs rate-limits us (429).
+/// client-credentials OAuth (token cached to expiry), a single-page fetch of the
+/// newest reports, a long freshness window (CacheTtlSeconds, default 30 min) to
+/// stay under the v2 hourly points budget, and a stale-copy fallback when
+/// Warcraft Logs rate-limits us (429). Officers can force a refresh past the TTL.
 /// </summary>
 public class WarcraftLogsService
 {
@@ -42,10 +43,13 @@ public class WarcraftLogsService
         _cachedBody is not null && (DateTimeOffset.UtcNow - _cachedAt).TotalSeconds < _opt.CacheTtlSeconds;
 
     /// <summary>Returns (httpStatus, jsonBody). Body is always JSON — either the
-    /// report list or an { error, detail } object matching the Worker's shape.</summary>
-    public async Task<(int Status, string Body)> GetReportsAsync()
+    /// report list or an { error, detail } object matching the Worker's shape.
+    /// The page shows only the newest logs, so we fetch a single page of
+    /// ReportLimit reports (newest-first) — one upstream call per refresh.
+    /// <paramref name="forceRefresh"/> (officers only) bypasses the cache TTL.</summary>
+    public async Task<(int Status, string Body)> GetReportsAsync(bool forceRefresh = false)
     {
-        if (CacheFresh()) return (200, _cachedBody!);
+        if (!forceRefresh && CacheFresh()) return (200, _cachedBody!);
 
         if (string.IsNullOrWhiteSpace(_opt.GuildServer) || string.IsNullOrWhiteSpace(_opt.GuildRegion))
             return (501, Err("not_configured", "Warcraft Logs guild is not set on the server yet."));
@@ -53,75 +57,81 @@ public class WarcraftLogsService
         await _gate.WaitAsync();
         try
         {
-            // Another caller may have refreshed while we waited.
-            if (CacheFresh()) return (200, _cachedBody!);
+            // Another caller may have refreshed while we waited (a forced refresh
+            // always goes to the network, so it never short-circuits here).
+            if (!forceRefresh && CacheFresh()) return (200, _cachedBody!);
 
             var token = await GetTokenAsync();
             if (token is null)
                 return (501, Err("not_configured", "Warcraft Logs API credentials are not set on the server yet."));
 
             const string query =
-                "query($name:String!,$server:String!,$region:String!,$page:Int!){" +
-                "reportData{reports(guildName:$name,guildServerSlug:$server,guildServerRegion:$region,limit:100,page:$page){" +
-                "has_more_pages data{code title startTime endTime zone{name} owner{name}}}}}";
+                "query($name:String!,$server:String!,$region:String!,$limit:Int!){" +
+                "reportData{reports(guildName:$name,guildServerSlug:$server,guildServerRegion:$region,limit:$limit,page:1){" +
+                "data{code title startTime endTime zone{name} owner{name}}}}}";
 
             var http = _httpFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(_opt.RequestTimeoutSeconds);
             var reports = new List<object>();
-            var page = 1;
 
-            while (page <= _opt.MaxPages)
+            using var req = new HttpRequestMessage(HttpMethod.Post, _opt.GraphQlUrl);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var payload = JsonSerializer.Serialize(new
             {
-                using var req = new HttpRequestMessage(HttpMethod.Post, _opt.GraphQlUrl);
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-                var payload = JsonSerializer.Serialize(new
-                {
-                    query,
-                    variables = new { name = _opt.GuildName, server = _opt.GuildServer, region = _opt.GuildRegion, page }
-                });
-                req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+                query,
+                variables = new { name = _opt.GuildName, server = _opt.GuildServer, region = _opt.GuildRegion, limit = _opt.ReportLimit }
+            });
+            req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-                var r = await http.SendAsync(req);
+            HttpResponseMessage r;
+            try
+            {
+                r = await http.SendAsync(req);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                // Upstream stalled or hit our per-request timeout — fall back to a
+                // prior cached copy rather than leaving the browser spinning.
+                _log.LogWarning(ex, "Warcraft Logs request failed/timed out");
+                if (_cachedBody is not null) return (200, _cachedBody);
+                return (504, Err("upstream_timeout",
+                    "Warcraft Logs is not responding right now. Try again in a minute."));
+            }
 
-                // Rate limited — the hourly points budget is spent. Serve a stale
-                // cached copy if we have one, else ask the caller to wait it out.
-                if (r.StatusCode == (HttpStatusCode)429)
-                {
-                    if (_cachedBody is not null) return (200, _cachedBody);
-                    return (429, Err("rate_limited",
-                        "Warcraft Logs is rate-limiting the guild tools right now. Try again in a minute."));
-                }
-                if (!r.IsSuccessStatusCode)
-                    return (502, Err("upstream", "Warcraft Logs API returned " + (int)r.StatusCode));
+            // Rate limited — the hourly points budget is spent. Serve a stale
+            // cached copy if we have one, else ask the caller to wait it out.
+            if (r.StatusCode == (HttpStatusCode)429)
+            {
+                if (_cachedBody is not null) return (200, _cachedBody);
+                return (429, Err("rate_limited",
+                    "Warcraft Logs is rate-limiting the guild tools right now. Try again in a minute."));
+            }
+            if (!r.IsSuccessStatusCode)
+                return (502, Err("upstream", "Warcraft Logs API returned " + (int)r.StatusCode));
 
-                using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
-                if (!TryGetReportsNode(doc.RootElement, out var node))
-                {
-                    var gqlErr = TryGetGqlError(doc.RootElement);
-                    return (502, Err("upstream", gqlErr ?? "Unexpected Warcraft Logs response."));
-                }
+            using var doc = JsonDocument.Parse(await r.Content.ReadAsStringAsync());
+            if (!TryGetReportsNode(doc.RootElement, out var node))
+            {
+                var gqlErr = TryGetGqlError(doc.RootElement);
+                return (502, Err("upstream", gqlErr ?? "Unexpected Warcraft Logs response."));
+            }
 
-                if (node.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+            if (node.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var rep in data.EnumerateArray())
                 {
-                    foreach (var rep in data.EnumerateArray())
+                    var code = GetString(rep, "code");
+                    reports.Add(new
                     {
-                        var code = GetString(rep, "code");
-                        reports.Add(new
-                        {
-                            code,
-                            title = GetString(rep, "title"),
-                            startTime = GetLong(rep, "startTime"),
-                            endTime = GetLong(rep, "endTime"),
-                            zone = GetNestedName(rep, "zone"),
-                            owner = GetNestedName(rep, "owner"),
-                            url = _opt.Host.TrimEnd('/') + "/reports/" + code
-                        });
-                    }
+                        code,
+                        title = GetString(rep, "title"),
+                        startTime = GetLong(rep, "startTime"),
+                        endTime = GetLong(rep, "endTime"),
+                        zone = GetNestedName(rep, "zone"),
+                        owner = GetNestedName(rep, "owner"),
+                        url = _opt.Host.TrimEnd('/') + "/reports/" + code
+                    });
                 }
-
-                var hasMore = node.TryGetProperty("has_more_pages", out var hm) &&
-                              hm.ValueKind == JsonValueKind.True;
-                if (!hasMore) break;
-                page++;
             }
 
             var guildUrl = $"{_opt.Host.TrimEnd('/')}/guild/{_opt.GuildRegion.ToLowerInvariant()}/" +

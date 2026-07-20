@@ -3,6 +3,8 @@ using Npgsql;
 using WoobackVash.Api.Auth;
 using WoobackVash.Api.Config;
 using WoobackVash.Api.Data;
+using WoobackVash.Api.Proxy;
+using WoobackVash.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +29,11 @@ builder.Services.Configure<DiscordOptions>(builder.Configuration.GetSection(Disc
 builder.Services.Configure<SessionSigningOptions>(builder.Configuration.GetSection(SessionSigningOptions.SectionName));
 builder.Services.AddSingleton<SessionTokenService>();
 builder.Services.AddHttpClient();
+
+// Gated proxies (Phase 2): Raid-Helper + Warcraft Logs.
+builder.Services.Configure<RaidHelperOptions>(builder.Configuration.GetSection(RaidHelperOptions.SectionName));
+builder.Services.Configure<WarcraftLogsOptions>(builder.Configuration.GetSection(WarcraftLogsOptions.SectionName));
+builder.Services.AddSingleton<WarcraftLogsService>();
 
 // CORS: only the app's own origins may call the API from a browser. Kept in sync
 // with the origins the old Worker allowed (see raidhelper-proxy.worker.js).
@@ -82,10 +89,13 @@ app.MapGet("/readyz", async (IServiceProvider sp) =>
     }
 });
 
-app.MapGet("/", () => Results.Ok(new { service = "wooback-vash-api", phase = 1 }));
+app.MapGet("/", () => Results.Ok(new { service = "wooback-vash-api", phase = 2 }));
 
 // Discord OAuth login/callback (Phase 1).
 app.MapAuthEndpoints();
+
+// Gated Raid-Helper + Warcraft Logs proxies (Phase 2).
+app.MapProxyEndpoints();
 
 app.Run();
 

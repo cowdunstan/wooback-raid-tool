@@ -1,0 +1,32 @@
+name: Deploy API to Fly
+
+# Deploys server/ (the .NET API) to Fly.io on merge to main. The frontend is
+# hosted separately (GitHub Pages), so only backend changes trigger a deploy.
+# Needs a FLY_API_TOKEN repo secret: `fly tokens create deploy` → add under
+# Settings → Secrets and variables → Actions.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/fly-deploy.yml'
+  workflow_dispatch: {}
+
+# Never let two deploys race; queue them instead of cancelling a rollout midway.
+concurrency:
+  group: fly-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # Dockerfile COPY paths are relative to server/, so build from there.
+      - name: Deploy
+        working-directory: server
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

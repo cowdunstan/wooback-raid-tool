@@ -13,6 +13,15 @@ public class DiscordOptions
     public string ClientSecret { get; set; } = "";
     public string GuildId { get; set; } = "";
 
+    /// <summary>
+    /// Bot token (secret) used to enumerate the guild's members for the roster
+    /// import. Unlike the per-user OAuth token (which only reads the signed-in
+    /// user's own membership), listing every member needs a bot token with the
+    /// privileged GUILD_MEMBERS intent enabled. Optional — the import endpoint
+    /// returns a clear error when it isn't set.
+    /// </summary>
+    public string BotToken { get; set; } = "";
+
     /// <summary>Any one of these Discord role ids grants officer access.</summary>
     public string[] OfficerRoleIds { get; set; } = Array.Empty<string>();
 

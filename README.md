@@ -30,12 +30,18 @@ board, identity links, loot, and attendance.
   to the guild database.
 - **`members.html`** — **roster & alts** (**officers only**): the Discord↔main↔alts
   identity links; set mains, add/reassign characters, and **claim** the unclaimed
-  characters that attendance & loot create.
+  characters that attendance & loot create. **Import from Discord** seeds the roster
+  by creating a link row for every Discord member holding the member or officer role
+  (needs the bot token below), so officers don't have to wait for each raider to
+  sign in first.
 - **`sheet.html`** — a read-only `<iframe>` of the guild's loot / BIS sheet
   (`SHEET_EMBED_URL`), open to any signed-in tier. Reads the live sheet via its
   "anyone with the link" share setting, so the sign-in gate here is for the app's
   flow, not a data barrier.
-- **`menu.js`** — shared session helpers + hamburger menu, used by every page.
+- **`menu.js`** — shared session helpers, the `API_BASE` constant, and the
+  hamburger menu, used by every page. Every page loads it as `menu.js?v=N`; because
+  pages hard-depend on its `API_BASE`/`renderNav`, **bump that `?v=` on every page
+  when you change `menu.js`** so browsers can't serve a stale copy against new HTML.
 
 Each page points at the backend through a single constant: `AUTH_BASE`
 (`index.html`), `RH_PROXY` + `API_BASE` (`app.js`), `WCL_BASE` (`logs.html`),
@@ -57,7 +63,9 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   force a refresh), and an officer-only `/wcl/ratelimit` budget check.
 - **Persistence** (officer-gated) — `/api/board` (save/load the board snapshot as
   jsonb), `/api/members` + `/api/characters` (Discord↔main↔alts identity links,
-  incl. `?linked=false` for unclaimed characters), `/api/loot` (per-raid awards),
+  incl. `?linked=false` for unclaimed characters, and `POST /api/members/import-discord`
+  to seed link rows from the guild's member/officer roster via a bot token),
+  `/api/loot` (per-raid awards),
   and `/api/attendance` — `POST /import` pulls a WCL report's guild-tagged roster
   into present rows (creating unclaimed characters), with `GET /events` and
   `GET ?code=` to browse it.
@@ -109,11 +117,16 @@ boot against a reachable database.
 ```
 fly secrets set -a wooback-vash-api `
   "Discord__ClientSecret=<discord client secret>" `
+  "Discord__BotToken=<discord bot token>" `
   "Session__Secret=<any long random string>" `
   "RaidHelper__Token=<raid-helper API token>" `
   "WarcraftLogs__ClientId=<wcl v2 client id>" `
   "WarcraftLogs__ClientSecret=<wcl v2 client secret>"
 ```
+`Discord__BotToken` powers **Import from Discord** on the roster page. Create a bot
+under the same Discord application (**Bot → Reset Token**), enable the **Server
+Members Intent** (Bot → Privileged Gateway Intents), and add the bot to the guild.
+It's only used to list members server-side; OAuth login itself needs no bot.
 `DATABASE_URL` is set by `fly postgres attach`. Setting secrets restarts the app.
 Verify with `curl https://wooback-vash-api.fly.dev/readyz` → `{"db":"ok"}`.
 

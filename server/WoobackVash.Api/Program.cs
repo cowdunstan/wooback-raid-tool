@@ -60,7 +60,15 @@ if (app.Environment.IsDevelopment())
     var siteRoot = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", ".."));
     var siteFiles = new PhysicalFileProvider(siteRoot);
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = siteFiles });
-    app.UseStaticFiles(new StaticFileOptions { FileProvider = siteFiles });
+    // Force revalidation on every asset in dev. Without this the static-file
+    // middleware sends no Cache-Control, so browsers heuristically cache JS/CSS
+    // (e.g. menu.js) and quietly serve a stale copy after an edit — "no-cache"
+    // means "always revalidate", so a 304 stays cheap but the body is never stale.
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = siteFiles,
+        OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
+    });
 }
 
 // ── Startup migration (guarded) ────────────────────────────────────────────

@@ -29,6 +29,7 @@ public static class AuthEndpoints
 
     private record GuildMember(
         [property: JsonPropertyName("roles")] string[]? Roles,
+        [property: JsonPropertyName("nick")] string? Nick,
         [property: JsonPropertyName("user")] DiscordUser? User);
 
     public static void MapAuthEndpoints(this IEndpointRouteBuilder app)
@@ -138,6 +139,7 @@ public static class AuthEndpoints
             var user = member?.User;
             var uid = user?.Id ?? "";
             var name = user?.GlobalName ?? user?.Username ?? "Raider";
+            var nick = string.IsNullOrWhiteSpace(member?.Nick) ? null : member!.Nick;
 
             // Upsert the Member row when a database is available. The DbContext is
             // registered only when a connection string is set, so resolve optionally
@@ -154,13 +156,16 @@ public static class AuthEndpoints
                         {
                             DiscordUserId = uid,
                             DiscordUsername = user?.Username,
-                            DisplayName = name
+                            DisplayName = name,
+                            Nickname = nick,
+                            LastSeenAt = DateTimeOffset.UtcNow
                         });
                     }
                     else
                     {
                         existing.DiscordUsername = user?.Username;
                         existing.DisplayName = name;
+                        existing.Nickname = nick;
                         existing.LastSeenAt = DateTimeOffset.UtcNow;
                     }
                     await db.SaveChangesAsync();

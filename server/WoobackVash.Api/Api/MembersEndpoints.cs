@@ -1,6 +1,9 @@
+using System.Net.Http.Headers;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using WoobackVash.Api.Auth;
+using WoobackVash.Api.Config;
 using WoobackVash.Api.Data;
 using WoobackVash.Api.Models;
 
@@ -22,6 +25,17 @@ public static class MembersEndpoints
         bool? IsMain,
         string? Notes);
 
+    // Shape of a guild-member object from GET /guilds/{id}/members.
+    private record DiscordUser(
+        [property: JsonPropertyName("id")] string? Id,
+        [property: JsonPropertyName("username")] string? Username,
+        [property: JsonPropertyName("global_name")] string? GlobalName);
+
+    private record GuildMember(
+        [property: JsonPropertyName("roles")] string[]? Roles,
+        [property: JsonPropertyName("nick")] string? Nick,
+        [property: JsonPropertyName("user")] DiscordUser? User);
+
     public static void MapMembersEndpoints(this IEndpointRouteBuilder app)
     {
         // All members with their linked characters.
@@ -40,6 +54,7 @@ public static class MembersEndpoints
                     discordUserId = m.DiscordUserId,
                     discordUsername = m.DiscordUsername,
                     displayName = m.DisplayName,
+                    nickname = m.Nickname,
                     lastSeenAt = m.LastSeenAt,
                     characters = m.Characters
                         .OrderByDescending(c => c.IsMain).ThenBy(c => c.Name)
@@ -47,6 +62,115 @@ public static class MembersEndpoints
                 })
                 .ToListAsync();
             return Results.Json(members);
+        });
+
+        // Pull the guild's Discord roster and create an identity-link (Member) row
+        // for everyone holding the member (home) role or an officer role. Lets
+        // officers seed the roster from Discord instead of waiting for each raider
+        // to sign in. Upsert keyed on Discord user id: creates missing members and
+        // refreshes usernames on existing ones. Needs a bot token (privileged
+        // GUILD_MEMBERS intent) — the per-user OAuth token can't list the guild.
+        app.MapPost("/api/members/import-discord", async (
+            HttpContext ctx,
+            SessionTokenService tokens,
+            IOptions<DiscordOptions> opt,
+            IHttpClientFactory httpFactory,
+            ILoggerFactory logFactory) =>
+        {
+            var (_, error) = ctx.RequireOfficer(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            var d = opt.Value;
+            if (string.IsNullOrWhiteSpace(d.BotToken))
+                return Results.Json(new { error = "not_configured", detail = "Discord bot token is not configured on the server." }, statusCode: 503);
+            if (string.IsNullOrWhiteSpace(d.GuildId))
+                return Results.Json(new { error = "not_configured", detail = "Discord guild id is not configured." }, statusCode: 503);
+
+            var log = logFactory.CreateLogger("ImportDiscord");
+            var http = httpFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(20);
+
+            // Roles that qualify: the home ("member") role, plus any officer role.
+            var qualifying = new HashSet<string>(d.OfficerRoleIds, StringComparer.Ordinal);
+            if (!string.IsNullOrWhiteSpace(d.HomeRoleId)) qualifying.Add(d.HomeRoleId);
+
+            // Page through the guild members (max 1000 per page, sorted by user id
+            // ascending; keep going with ?after=<last id> until a short page).
+            var matched = new List<GuildMember>();
+            var scanned = 0;
+            string? after = null;
+            try
+            {
+                for (var page = 0; page < 50; page++) // safety cap: 50k members
+                {
+                    var url = $"https://discord.com/api/guilds/{d.GuildId}/members?limit=1000"
+                              + (after is null ? "" : "&after=" + Uri.EscapeDataString(after));
+                    using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                    req.Headers.Authorization = new AuthenticationHeaderValue("Bot", d.BotToken);
+                    var r = await http.SendAsync(req);
+                    if (r.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                        return Results.Json(new { error = "discord_forbidden", detail = "The bot can't list members. Enable the Server Members Intent and make sure it's in the guild." }, statusCode: 502);
+                    if (!r.IsSuccessStatusCode)
+                        return Results.Json(new { error = "discord_http", detail = "Discord returned HTTP " + (int)r.StatusCode + "." }, statusCode: 502);
+
+                    var batch = await r.Content.ReadFromJsonAsync<List<GuildMember>>() ?? new();
+                    if (batch.Count == 0) break;
+                    scanned += batch.Count;
+
+                    foreach (var gm in batch)
+                    {
+                        if (gm.User?.Id is { Length: > 0 } && (gm.Roles ?? Array.Empty<string>()).Any(qualifying.Contains))
+                            matched.Add(gm);
+                    }
+
+                    if (batch.Count < 1000) break;
+                    after = batch[^1].User?.Id;
+                    if (string.IsNullOrEmpty(after)) break;
+                }
+            }
+            catch (Exception ex)
+            {
+                log.LogWarning(ex, "Discord member listing failed");
+                return Results.Json(new { error = "discord_unreachable", detail = "Could not reach Discord." }, statusCode: 502);
+            }
+
+            // Upsert. Load the members we might touch in one query, then create or
+            // refresh. New members are linked (a Discord↔member row) with no
+            // characters yet, ready for officers to attach mains/alts.
+            var ids = matched.Select(m => m.User!.Id!).Distinct().ToList();
+            var existing = await db.Members.Where(m => ids.Contains(m.DiscordUserId))
+                .ToDictionaryAsync(m => m.DiscordUserId, m => m);
+
+            int created = 0, updated = 0;
+            foreach (var gm in matched)
+            {
+                var uid = gm.User!.Id!;
+                var username = gm.User.Username;
+                var display = gm.User.GlobalName ?? gm.User.Username ?? uid;
+                var nick = string.IsNullOrWhiteSpace(gm.Nick) ? null : gm.Nick;
+                if (existing.TryGetValue(uid, out var m))
+                {
+                    if (m.DiscordUsername != username || m.DisplayName != display || m.Nickname != nick)
+                    {
+                        m.DiscordUsername = username;
+                        m.DisplayName = display;
+                        m.Nickname = nick;
+                        updated++;
+                    }
+                }
+                else
+                {
+                    var row = new Member { DiscordUserId = uid, DiscordUsername = username, DisplayName = display, Nickname = nick };
+                    db.Members.Add(row);
+                    existing[uid] = row; // guard against duplicate ids within a page
+                    created++;
+                }
+            }
+            await db.SaveChangesAsync();
+
+            return Results.Json(new { scanned, matched = matched.Count, created, updated });
         });
 
         var chars = app.MapGroup("/api/characters");

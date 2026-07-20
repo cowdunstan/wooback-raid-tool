@@ -87,6 +87,7 @@
 
     <div class="rl-toolbar">
       <button class="btn-primary" onclick="loadAll()">Reload</button>
+      <button class="btn-ghost" data-officer-only onclick="importDiscord()" title="Create identity-link rows for every Discord member holding the member or officer role">Import from Discord</button>
       <span id="rlStatus" style="font-size:11.5px;color:var(--text-dim);min-height:15px;"></span>
     </div>
 
@@ -104,7 +105,7 @@
   </div>
 </div>
 
-<script src="menu.js"></script>
+<script src="menu.js?v=2"></script>
 <script>
 // API_BASE (the shared .NET backend host) is provided by menu.js.
 function authHeaders(extra){ return Object.assign({ 'Authorization': 'Bearer ' + sessionToken() }, extra || {}); }
@@ -149,7 +150,7 @@ function memberSelect(selectedId, onchange){
   html += '<option value="">— unassigned —</option>';
   for(const m of MEMBERS){
     const sel = m.id === selectedId ? ' selected' : '';
-    const label = m.displayName || m.discordUsername || m.id;
+    const label = m.nickname || m.displayName || m.discordUsername || m.id;
     html += '<option value="' + esc(m.id) + '"' + sel + '>' + esc(label) + '</option>';
   }
   return html + '</select>';
@@ -165,7 +166,7 @@ function renderMembers(members){
   const root = document.getElementById('members');
   if(!members.length){ root.innerHTML = '<div class="rl-card"><p class="rl-empty">No members yet. Members are created automatically when someone signs in.</p></div>'; return; }
   root.innerHTML = members.map(m => {
-    const label = esc(m.displayName || m.discordUsername || '(unknown)');
+    const label = esc(m.nickname || m.displayName || m.discordUsername || '(unknown)');
     const user = m.discordUsername ? '@' + esc(m.discordUsername) : '';
     const seen = m.lastSeenAt ? 'Last seen ' + esc(fmtWhen(m.lastSeenAt)) : '';
     let rows;
@@ -233,6 +234,27 @@ async function loadAll(){
     renderMembers(await mRes.json());
     if(oRes.ok){ renderOrphans(await oRes.json()); }
     setStatus('Loaded ' + MEMBERS.length + ' member' + (MEMBERS.length === 1 ? '' : 's') + '.');
+  }catch(err){ if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true); }
+}
+
+// Officer tool: seed the roster from Discord. Pulls everyone in the guild holding
+// the member (home) or officer role and creates their Discord↔member link rows,
+// so officers can attach characters before a raider ever signs in.
+async function importDiscord(){
+  if(!confirm('Pull the Discord roster and create identity links for every member/officer? Existing members are left in place (usernames refreshed).')) return;
+  setStatus('Importing from Discord…');
+  try{
+    const res = await api('/api/members/import-discord', { method:'POST' });
+    if(!res.ok){
+      let detail = 'HTTP ' + res.status;
+      try{ const j = await res.json(); if(j && j.detail) detail = j.detail; }catch(e){}
+      setStatus('Import failed: ' + detail, true);
+      return;
+    }
+    const r = await res.json();
+    setStatus('Imported ' + r.matched + ' member/officer' + (r.matched === 1 ? '' : 's') +
+      ' — ' + r.created + ' new, ' + r.updated + ' updated.');
+    loadAll();
   }catch(err){ if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true); }
 }
 

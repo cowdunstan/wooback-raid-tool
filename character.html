@@ -425,10 +425,13 @@ function renderRolls(rolls, s){
     + '<th>Item</th><th class="num">Roll</th><th>Result</th><th>Date</th>'
     + '</tr></thead><tbody>'
     + rolls.map(function(r){
+        // The winner's name carries their class colour, as names do everywhere else.
+        const winnerCol = classColor(r.lostToClass);
         const result = r.won ? '<span class="cs-won">Won</span>'
                      : r.disenchanted ? '<span class="cs-lost">Disenchanted</span>'
                      : r.lostTo
-                       ? '<span class="cs-lost">Lost to </span><a href="character.html?id=' + esc(r.lostToId) + '">' + esc(r.lostTo) + '</a>'
+                       ? '<span class="cs-lost">Lost to </span><a href="character.html?id=' + esc(r.lostToId) + '"'
+                         + (winnerCol ? ' style="color:' + winnerCol + '"' : '') + '>' + esc(r.lostTo) + '</a>'
                        : '<span class="cs-lost">Lost</span>';
         return '<tr><td>' + (r.itemId ? itemLink(r.itemId, r.itemName) : esc(r.itemName))
              + (r.classification ? '<span class="cs-tag">' + esc(r.classification) + '</span>' : '') + '</td>'

@@ -89,7 +89,14 @@
     text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.9px;
     color:var(--text-dim);font-weight:600;padding:0 10px 6px 0;
   }
-  .cs-table td{padding:5px 10px 5px 0;border-top:1px solid rgba(31,74,63,.4);vertical-align:top}
+  /* Explicit colour: the page runs in quirks mode (no doctype, like every page
+     here), where a <table> drops colour inheritance and cells fall back to black. */
+  .cs-table td{padding:5px 10px 5px 0;border-top:1px solid rgba(31,74,63,.4);vertical-align:top;color:var(--text)}
+  /* Same for links: nothing sets a global anchor colour, so an unstyled one lands
+     on the browser's default blue. Wowhead's quality colours sit on an inner span
+     and still win. */
+  .cs-table a,.cs-item a{color:var(--text)}
+  .cs-table a:hover,.cs-item a:hover{color:var(--teal)}
   .cs-table td.num{text-align:right;padding-right:16px;font-variant-numeric:tabular-nums}
   .cs-tag{
     font-size:9px;font-weight:700;letter-spacing:.5px;border-radius:3px;padding:1px 4px;

@@ -61,6 +61,7 @@ const NAV_LINKS = [
   { href:'attendance.html', label:'Attendance',       officer:true },
   { href:'loot.html',       label:'Loot log',         officer:true },
   { href:'members.html',    label:'Roster & alts',    officer:true },
+  { href:'loot-history.html', label:'Loot history' },
   { href:'sheet.html',      label:'Loot sheet' }
 ];
 

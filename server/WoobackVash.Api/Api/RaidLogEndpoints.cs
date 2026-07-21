@@ -39,15 +39,10 @@ public static class RaidLogEndpoints
     {
         var loot = app.MapGroup("/api/loot");
 
-        loot.MapGet("", async (HttpContext ctx, SessionTokenService tokens) =>
+        // The award list, newest first, with every bid. Shared by the officer log
+        // (which may filter to one event key) and the read-only history page.
+        static async Task<IResult> LootRows(AppDbContext db, string? eventRaw)
         {
-            var (_, error) = ctx.RequireOfficer(tokens);
-            if (error is not null) return error;
-            var db = ctx.RequestServices.GetService<AppDbContext>();
-            if (db is null) return DbUnavailable();
-
-            // event= filters to one event key (manual path); omitted → all awards.
-            var eventRaw = ctx.Request.Query["event"].ToString();
             var query = db.LootAwards.AsNoTracking().AsQueryable();
             if (!string.IsNullOrWhiteSpace(eventRaw))
             {
@@ -81,6 +76,29 @@ public static class RaidLogEndpoints
                 })
                 .ToListAsync();
             return Results.Json(rows);
+        }
+
+        loot.MapGet("", async (HttpContext ctx, SessionTokenService tokens) =>
+        {
+            var (_, error) = ctx.RequireOfficer(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            // event= filters to one event key (manual path); omitted → all awards.
+            return await LootRows(db, ctx.Request.Query["event"].ToString());
+        });
+
+        // Read-only loot history for every signed-in member (loot-history.html).
+        // Same rows as the officer log, minus the event filter and the write verbs.
+        loot.MapGet("/history", async (HttpContext ctx, SessionTokenService tokens) =>
+        {
+            var (_, error) = ctx.RequireSession(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            return await LootRows(db, null);
         });
 
         loot.MapPost("", async (HttpContext ctx, SessionTokenService tokens, LootInput input) =>

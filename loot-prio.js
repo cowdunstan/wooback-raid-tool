@@ -843,8 +843,15 @@ function tierCandidates(tier, taken){
    The same walk drives the page, so what an officer reads is exactly what Gargul
    will be told. `settled` is the tier that ended up reserving; the ones above it
    are greyed out with their names struck, so it is obvious why prio moved down. */
+// The sheet ranked nobody for this item: it said MS > OS outright, or gave the
+// row no chain to walk (P2's "Ashes of Al'ar: Epic Flying Trained Only"). There
+// is no plan to make — the export hands these to OPEN_ROLL_NAME instead.
+function isOpenItem(item){
+  return item.openRoll || !item.tiers.length;
+}
+
 function reservePlan(item, keys){
-  if(item.openRoll || !item.tiers.length) return null;
+  if(isOpenItem(item)) return null;
 
   const hasAlready = c => keys.some(k => c.has.has(k) || c.won.has(k));
   const taken = new Set();
@@ -972,6 +979,14 @@ function toggleHideEmpty(el){
 
 const SR_METADATA_ID = 'wooback-loot-prio';
 
+/* An item the sheet gives no prio at all — "MS > OS" in the Bias column, or no
+   chain on the row — has no reserver to name, and Gargul only shows an item at
+   all if somebody reserved it. So they are reserved by a raider who doesn't
+   exist: the list then carries every item that drops, and the ones free to roll
+   on say so in the reserver's own name. Nobody is called this in game, so it
+   can't collide with a real signup. */
+const OPEN_ROLL_NAME = 'MS>OS';
+
 // Item ids, which the sheet doesn't carry. The backend resolves names against
 // Blizzard's TBC item table and caches them; anything it can't place comes back
 // listed so the export can say so instead of quietly dropping an item.
@@ -1011,32 +1026,47 @@ async function zlibBase64(text){
 function buildReserves(itemIds){
   const lookup = annotate(equipped, awards);
   const byName = new Map();
-  let items = 0;
+  let items = 0, open = 0;
   const unpriced = [];        // reserved by someone, but no id to reserve with
+
+  function reserve(name, cls, id, note){
+    if(!byName.has(name)) byName.set(name, { cls, notes:new Set(), ids:new Set() });
+    const entry = byName.get(name);
+    entry.ids.add(id);
+    entry.notes.add(note);
+  }
 
   sections.forEach(section => section.items.forEach(item => {
     const row = lookup(item.name);
     const keys = [item.name.toLowerCase()];
     if(row) keys.push(String(row.name).toLowerCase());
 
+    // Null exactly when isOpenItem(item) — the sheet ranked nobody, so the
+    // placeholder holds it. An item that *is* ranked but whose tiers are all
+    // people who aren't here (settled < 0) is a different thing and stays out:
+    // it has a prio, and saying otherwise in the export would be a lie.
     const plan = reservePlan(item, keys);
-    if(!plan || plan.settled < 0) return;
+    if(plan && plan.settled < 0) return;
 
-    const tier = plan.tiers[plan.settled];
     const id = itemIds[item.name] || (row && row.id) || 0;
     if(!id){ unpriced.push(item.name); return; }
 
     items++;
-    tier.groups.forEach(g => g.hits.forEach(c => {
+    if(!plan){
+      open++;
+      // No class of its own — Gargul rewrites anything it doesn't know to
+      // priest, so naming that outright is the same result, said honestly.
+      reserve(OPEN_ROLL_NAME, 'priest', id, 'MS > OS');
+      return;
+    }
+
+    plan.tiers[plan.settled].groups.forEach(g => g.hits.forEach(c => {
       if(plan.hasAlready(c)) return;
-      if(!byName.has(c.name)) byName.set(c.name, { cls:c.cls, notes:new Set(), ids:new Set() });
-      const entry = byName.get(c.name);
-      entry.ids.add(id);
-      entry.notes.add(g.label);
+      reserve(c.name, c.cls, id, g.label);
     }));
   }));
 
-  return { byName, items, unpriced };
+  return { byName, items, open, unpriced };
 }
 
 async function copyGargulSR(){
@@ -1044,7 +1074,8 @@ async function copyGargulSR(){
 
   setStatus(`Looking up item ids for ${raidTab(picked.raid).label}…`);
 
-  // Only the items that actually have a reserver need an id.
+  // Only the items that actually have a reserver need an id — someone off the
+  // sheet's chain, or the MS > OS placeholder for the ones it never ranked.
   const wanted = [];
   const lookup = annotate(equipped, awards);
   sections.forEach(s => s.items.forEach(item => {
@@ -1052,7 +1083,7 @@ async function copyGargulSR(){
     const keys = [item.name.toLowerCase()];
     if(row) keys.push(String(row.name).toLowerCase());
     const plan = reservePlan(item, keys);
-    if(plan && plan.settled >= 0 && !wanted.includes(item.name)) wanted.push(item.name);
+    if((!plan || plan.settled >= 0) && !wanted.includes(item.name)) wanted.push(item.name);
   }));
   if(!wanted.length){ setStatus('Nothing to reserve — no item has anyone on prio.', true); return; }
 
@@ -1064,7 +1095,7 @@ async function copyGargulSR(){
     return;
   }
 
-  const { byName, items, unpriced } = buildReserves(resolved.resolved || {});
+  const { byName, items, open, unpriced } = buildReserves(resolved.resolved || {});
   if(!byName.size){ setStatus('Nothing to reserve — no item resolved to an id.', true); return; }
 
   const now = Math.floor(Date.now() / 1000);
@@ -1099,7 +1130,7 @@ async function copyGargulSR(){
     return;
   }
 
-  showSrExport(str, { raiders: byName.size, items, unpriced,
+  showSrExport(str, { raiders: byName.size, items, open, unpriced,
                       unresolved: (resolved.unresolved || []).concat(unpriced) });
 }
 
@@ -1108,6 +1139,9 @@ async function copyGargulSR(){
 function showSrExport(str, stats){
   const box = document.getElementById('srExport');
   const unresolved = [...new Set(stats.unresolved)];
+  const open = stats.open
+    ? ` ${stats.open} item${stats.open===1?'':'s'} the sheet ranks nobody for are held by <b>${OPEN_ROLL_NAME}</b>, who is not a real raider — they are free to roll on.`
+    : '';
   const warn = unresolved.length
     ? `<div class="prio-note">${unresolved.length} item${unresolved.length===1?'':'s'} left out — no item id could be found for ${whEsc(unresolved.slice(0,6).join(', '))}${unresolved.length>6?', …':''}. Fix the spelling on the sheet and rebuild.</div>`
     : '';
@@ -1115,6 +1149,7 @@ function showSrExport(str, stats){
   box.innerHTML =
     `<label>Gargul soft-reserve import</label>
      <p class="prio-note">${stats.items} item${stats.items===1?'':'s'} reserved by ${stats.raiders} raider${stats.raiders===1?'':'s'} — the top tier of each, skipping anyone who already has it.
+${open}
         Paste into Gargul: <b>/gl softreserves</b> → Import. Gargul will ask before overwriting any PlusOne values it already has; this export carries none, so answer <b>No</b> to keep yours.</p>
      ${warn}
      <textarea id="srExportText" class="sr-text" readonly rows="4"></textarea>

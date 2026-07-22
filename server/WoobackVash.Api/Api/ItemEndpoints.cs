@@ -130,7 +130,7 @@ public static class ItemEndpoints
             var db = ctx.RequestServices.GetService<AppDbContext>();
             if (db is null) return DbUnavailable();
 
-            var snapshots = await LatestSnapshots(db).ToListAsync();
+            var snapshots = await LatestSnapshots(db);
 
             // Keyed by item id. Gems are skipped: the log carries them as bare ids
             // with no name, so they would list as "Item 32211" and never match a
@@ -155,6 +155,7 @@ public static class ItemEndpoints
                     row.Ilvl ??= Num(entry, "ilvl");
 
                     var c = s.Character!;
+                    if (!row.Wearers.Add(c.Id)) continue;
                     row.Equipped.Add((c.Name, new
                     {
                         characterId = c.Id,
@@ -210,18 +211,39 @@ public static class ItemEndpoints
         public double? Quality;
         public double? Ilvl;
         public List<(string Name, object Row)> Equipped = new();
+        /// <summary>Characters already listed, so nobody wears the same item twice.</summary>
+        public HashSet<Guid> Wearers = new();
     }
 
     /// <summary>
     /// The most recent gear snapshot of every guild character — the one definition of
-    /// "what people are wearing", shared by the item page and the item list.
+    /// "what people are wearing", shared by the item page and the item list. Exactly
+    /// one snapshot per character, always.
     /// </summary>
-    private static IQueryable<CharacterGearSnapshot> LatestSnapshots(AppDbContext db) =>
-        db.GearSnapshots.AsNoTracking()
+    private static async Task<List<CharacterGearSnapshot>> LatestSnapshots(AppDbContext db)
+    {
+        var recent = await db.GearSnapshots.AsNoTracking()
             .Include(s => s.Character!).ThenInclude(c => c.Member)
             .Where(s => s.Character != null && !s.Character.Ignored)
-            // The latest snapshot per character: none newer exists for the same one.
-            .Where(s => !db.GearSnapshots.Any(o => o.CharacterId == s.CharacterId && o.RecordedAt > s.RecordedAt));
+            // Narrow to the latest per character in SQL: none newer exists for the same
+            // one. Snapshots are keyed on (character, report), so two report codes over
+            // the same pull window — a re-upload, or two raiders logging one night —
+            // give a character two rows with the identical report start time. Neither is
+            // newer than the other, so both survive this and the tie is broken below.
+            .Where(s => !db.GearSnapshots.Any(o => o.CharacterId == s.CharacterId && o.RecordedAt > s.RecordedAt))
+            .ToListAsync();
+
+        return recent
+            .OrderBy(s => s.CharacterId)
+            .ThenByDescending(s => s.RecordedAt)
+            // Most recently imported wins, then the report code for a total order — so
+            // the same snapshot is chosen on every request rather than whichever the
+            // database happened to return first.
+            .ThenByDescending(s => s.ImportedAt)
+            .ThenByDescending(s => s.WclReportCode, StringComparer.Ordinal)
+            .DistinctBy(s => s.CharacterId)
+            .ToList();
+    }
 
     /// <summary>
     /// Who is wearing the item now: each character's most recent gear snapshot only.
@@ -232,7 +254,7 @@ public static class ItemEndpoints
     /// </summary>
     private static async Task<(List<object> Equipped, JsonElement? Item)> Equipped(AppDbContext db, long itemId)
     {
-        var snapshots = await LatestSnapshots(db).ToListAsync();
+        var snapshots = await LatestSnapshots(db);
 
         var rows = new List<(string Name, object Row)>();
         JsonElement? found = null;
@@ -265,7 +287,9 @@ public static class ItemEndpoints
                     reportCode = s.WclReportCode,
                     recordedAt = s.RecordedAt
                 }));
-                break; // one row per character, even if the night recorded a swap
+                // One row per snapshot, even if the night recorded a swap — and
+                // LatestSnapshots gives one snapshot per character, so one row each.
+                break;
             }
         }
 

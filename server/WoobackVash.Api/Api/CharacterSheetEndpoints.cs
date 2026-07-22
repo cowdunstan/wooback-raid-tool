@@ -220,7 +220,10 @@ public static class CharacterSheetEndpoints
     private static IQueryable<CharacterGearSnapshot> Snapshots(AppDbContext db, Guid characterId) =>
         db.GearSnapshots.AsNoTracking()
             .Where(s => s.CharacterId == characterId)
-            .OrderByDescending(s => s.RecordedAt);
+            // Two reports over one night share a start time, so the import time breaks
+            // the tie — the same snapshot every request, matching the item pages.
+            .OrderByDescending(s => s.RecordedAt)
+            .ThenByDescending(s => s.ImportedAt);
 
     private static async Task<object?> LatestGear(AppDbContext db, Guid characterId)
     {

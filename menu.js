@@ -57,7 +57,9 @@ const API_BASE = (location.hostname === 'localhost' || location.hostname === '12
    exactly like an external one.
 
    WOWHEAD_DOMAIN is the expansion the Anniversary realms are on: 'classic'
-   (vanilla), 'tbc', 'wotlk'. One line to flip when the guild progresses. */
+   (vanilla), 'tbc', 'wotlk'. One line to flip when the guild progresses. It has
+   to ride along in `data-wowhead` too: without it the widget reads the link as
+   retail — retail tooltip data, and a retail href once it rewrites the link. */
 const WOWHEAD_DOMAIN = 'tbc';
 var whTooltips = { colorLinks:true, iconizeLinks:true, renameLinks:true };
 
@@ -76,7 +78,7 @@ function itemHref(id, name){
    is the gear list's `&ench=…&gems=…` suffix, which rides along on the tooltip. */
 function itemLink(id, name, extra, html){
   const inner = html != null ? html : whEsc(name || (id ? 'Item ' + id : ''));
-  const tip = id ? ' data-wowhead="' + whEsc('item=' + id + (extra || '')) + '"' : '';
+  const tip = id ? ' data-wowhead="' + whEsc(wowheadTip(id, extra)) + '"' : '';
   if(!id && !name) return inner;
   return '<a href="' + whEsc(itemHref(id, name)) + '"' + tip + ' class="item-link">' + inner + '</a>';
 }
@@ -98,6 +100,12 @@ function slotLabel(key){
 
 /* The item on Wowhead itself — only the item page links out. */
 function wowheadHref(id){ return 'https://www.wowhead.com/' + WOWHEAD_DOMAIN + '/item=' + id; }
+
+/* The `data-wowhead` payload the widget reads. `extra` is the gear list's
+   `&ench=…&gems=…` suffix. */
+function wowheadTip(id, extra){
+  return 'domain=' + WOWHEAD_DOMAIN + '&item=' + id + (extra || '');
+}
 
 /* Wowhead's widget rewrites the links it finds when it loads. Re-running it after
    a re-render is what attaches tooltips to the new links. */

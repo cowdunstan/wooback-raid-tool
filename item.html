@@ -135,7 +135,7 @@
 
 <script src="menu.js"></script>
 <script>
-// API_BASE, WOWHEAD_DOMAIN, wowheadHref() and loadWowhead() come from menu.js.
+// API_BASE, WOWHEAD_DOMAIN, wowheadHref(), wowheadTip() and loadWowhead() come from menu.js.
 
 /* The item's name is itself the Wowhead link, so renameLinks stays on: the widget
    replaces our text with the real name in its quality colour. That is what names a
@@ -216,7 +216,7 @@ function renderHead(it){
     ? '<img class="it-icon" src="' + ICON_HOST + esc(it.icon) + '.jpg" alt="">'
     : '';
   const name = it.id
-    ? '<a href="' + esc(wowheadHref(it.id)) + '" data-wowhead="item=' + esc(it.id) + '"'
+    ? '<a href="' + esc(wowheadHref(it.id)) + '" data-wowhead="' + esc(wowheadTip(it.id)) + '"'
       + ' target="_blank" rel="noopener">' + esc(it.name) + '</a>'
     : esc(it.name);
   const bits = [];

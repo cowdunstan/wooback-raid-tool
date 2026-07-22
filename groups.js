@@ -93,6 +93,7 @@ function startOver(){
   pool = [];
   groups = { 1: [], 2: [] };
   picked = { a: null, b: null };
+  itemCheck = [];
   try{ localStorage.removeItem(STORE_KEY); }catch(e){}
   setStatus('Cleared. Load two signups to start again.');
   renderAll();
@@ -205,6 +206,7 @@ function buildPool(signupsA, signupsB, members){
 
   pool = chips;
   groups = { 1: [], 2: [] };
+  itemCheck = [];        // the old results point at chips that no longer exist
 
   const notes = [];
   if(bothCount) notes.push(`${bothCount} signed up to both`);
@@ -309,6 +311,135 @@ async function fetchMembers(){
   return res.json();
 }
 
+/* ───────────────────────── Item check ─────────────────────────
+   "Who has Dragonspine Trophy, and which group are they in?" — the question an
+   officer asks while balancing two raids. GET /api/items/list is every item the
+   guild is currently wearing, each with its wearers, drawn from each character's
+   latest gear snapshot. We ask for the whole list once and match the wanted
+   names in the browser: the single-item route resolves a name through the loot
+   log, so an item nobody was ever *awarded* through the log wouldn't be found
+   that way even when half the raid is wearing it.
+
+   Matches are stored on the chips themselves, so they survive a refresh and
+   follow a raider as they're dragged between groups. */
+
+let itemCheck = [];   // [{ id, name, wearers:[chipId], others:n }]
+
+// A short pill for a chip: initials, so "Dragonspine Trophy" reads "DT".
+function itemAbbrev(name){
+  const initials = String(name).split(/\s+/).filter(Boolean).map(w => w[0].toUpperCase()).join('');
+  return initials.slice(0, 3) || '?';
+}
+
+async function checkItems(){
+  const raw = document.getElementById('itemCheckInput').value || '';
+  const wanted = raw.split(',').map(s => s.trim()).filter(Boolean);
+  if(!wanted.length){ setStatus('Type one or more item names to check.', true); return; }
+  if(!pool.length){ setStatus('Load the two signups first — there is nobody to check.', true); return; }
+
+  setStatus('Checking who has ' + wanted.join(', ') + '…');
+  let rows;
+  try {
+    rows = await fetchEquippedItems();
+  } catch(err){
+    reportError(err, 'The item list is empty — has an attendance import run yet?');
+    return;
+  }
+
+  // Character name → the wanted items they're wearing.
+  const byCharacter = new Map();
+  const missing = [];
+  itemCheck = [];
+
+  wanted.forEach(want => {
+    const lower = want.toLowerCase();
+    // Exact name first; a substring match is the forgiving fallback for a
+    // half-remembered name ("dragonspine").
+    const row = rows.find(r => String(r.name || '').toLowerCase() === lower)
+             || rows.find(r => String(r.name || '').toLowerCase().includes(lower));
+    if(!row){ missing.push(want); return; }
+
+    const wearers = [];
+    let others = 0;
+    (row.equipped || []).forEach(e => {
+      const key = String(e.name || '').toLowerCase();
+      const chip = pool.find(c => c.name.toLowerCase() === key);
+      if(!chip){ others++; return; }
+      wearers.push(chip.id);
+      if(!byCharacter.has(key)) byCharacter.set(key, []);
+      byCharacter.get(key).push(row.name);
+    });
+    itemCheck.push({ id: row.id, name: row.name, wearers, others });
+  });
+
+  pool.forEach(c => { c.items = byCharacter.get(c.name.toLowerCase()) || []; });
+
+  const found = itemCheck.reduce((n, i) => n + i.wearers.length, 0);
+  setStatus(`${found} raider${found===1?'':'s'} in these signups ${found===1?'has':'have'} one of those items` +
+            (missing.length ? ` — nothing found for ${missing.join(', ')}.` : '.'),
+            !!missing.length && !found);
+  save();
+  renderAll();
+}
+
+// Every item the guild is wearing. Session-gated (not officer-gated) like the
+// rest of the item pages, so this is the same call items.html makes.
+async function fetchEquippedItems(){
+  let res;
+  try {
+    res = await fetch(API_BASE + '/api/items/list', { headers: RH.headers() });
+  } catch(err){
+    const e = new Error('Could not reach the API — is the backend up and is this origin allowed?');
+    e.cause = err;
+    throw e;
+  }
+  if(!res.ok){
+    const e = new Error('The item list returned HTTP ' + res.status + '.');
+    e.status = res.status;
+    throw e;
+  }
+  return res.json();
+}
+
+// Where a chip currently sits, in words.
+function whereIs(id){
+  if(groups[1].includes(id)) return 'Group 1';
+  if(groups[2].includes(id)) return 'Group 2';
+  return 'Pool';
+}
+
+function renderItemCheck(){
+  const el = document.getElementById('itemCheckResult');
+  if(!itemCheck.length){ el.innerHTML = ''; return; }
+
+  el.innerHTML = itemCheck.map(item => {
+    const buckets = { 'Group 1': [], 'Group 2': [], 'Pool': [] };
+    item.wearers.forEach(id => {
+      const chip = chipById(id);
+      if(chip) buckets[whereIs(id)].push(chip);
+    });
+    const lines = Object.keys(buckets).map(where => {
+      const chips = buckets[where];
+      if(!chips.length) return '';
+      const names = chips.map(c => {
+        // Whose alt it is, unless the raider is known by that character's name anyway.
+        const who = c.personName && c.personName !== c.name
+          ? `<span class="item-check-who">${whEsc(c.personName)}</span>` : '';
+        return `<span style="color:${RH.CLASS_COLORS[c.cls] || 'var(--text)'}">${whEsc(c.name)}</span>${who}`;
+      }).join(', ');
+      return `<div class="item-check-row"><span class="item-check-where">${where}</span> <b>${chips.length}</b> ${names}</div>`;
+    }).join('');
+
+    const none = item.wearers.length ? '' : '<div class="item-check-row"><span class="item-check-where">—</span> nobody in these signups has it.</div>';
+    const others = item.others
+      ? `<div class="item-check-row item-check-others">${item.others} other guild character${item.others===1?'':'s'} ${item.others===1?'has':'have'} it, not signed up to either raid.</div>`
+      : '';
+    return `<div class="item-check-item"><div class="item-check-name">${itemLink(item.id, item.name)}</div>${lines}${none}${others}</div>`;
+  }).join('');
+
+  loadWowhead();   // tooltips on the item names we just wrote
+}
+
 /* ───────────────────────── Auto-allocate ─────────────────────────
    Deal the confirmed raiders across both groups so the two raids look alike:
    tanks first, then healers, ranged and melee, and inside each of those the
@@ -394,6 +525,18 @@ function wireDragFeedback(el){
     c.addEventListener('dblclick', () => sendToPool(c.dataset.id));
   });
 }
+// Pin an item pill onto every chip whose character is wearing one. Done after
+// the markup is written rather than inside RH.chipHTML: the item check is this
+// page's concern, not the board's.
+function decorateItems(el){
+  el.querySelectorAll('.chip').forEach(c => {
+    const chip = chipById(c.dataset.id);
+    if(!chip || !chip.items || !chip.items.length) return;
+    c.insertAdjacentHTML('beforeend', chip.items.map(name =>
+      `<span class="stag item" title="${whEsc(name)}">${whEsc(itemAbbrev(name))}</span>`).join(''));
+  });
+}
+
 function clearDragFeedback(){
   draggingId = '';
   [1,2].forEach(g => {
@@ -415,6 +558,7 @@ function renderPool(){
     rEl.innerHTML = reserve.map(RH.chipHTML).join('');
     RH.wirePoolDrag(rEl, sendToPool);
     wireDragFeedback(rEl);
+    decorateItems(rEl);
   } else {
     wrap.style.display = 'none';
     rEl.innerHTML = '';
@@ -426,6 +570,7 @@ function renderPool(){
     : '<span class="pool-empty">' + (pool.length ? 'Everyone is in a group.' : 'No signups loaded yet — load the two events above.') + '</span>';
   RH.wirePoolDrag(el, sendToPool);
   wireDragFeedback(el);
+  decorateItems(el);
 }
 
 function renderGroup(g){
@@ -443,6 +588,7 @@ function renderGroup(g){
     : '<span class="pool-empty">Drag raiders here.</span>';
   RH.wirePoolDrag(list, id => place(id, g));
   wireDragFeedback(list);
+  decorateItems(list);
 }
 
 function renderAll(){
@@ -454,6 +600,7 @@ function renderAll(){
   renderPool();
   renderGroup(1);
   renderGroup(2);
+  renderItemCheck();   // last: the summary reads where everyone ended up
 }
 
 /* ───────────────────────── Persistence ─────────────────────────
@@ -461,7 +608,7 @@ function renderAll(){
    it isn't shared with anyone else. */
 function save(){
   try{
-    localStorage.setItem(STORE_KEY, JSON.stringify({ pool, groups, groupSize, picked, chipSeq }));
+    localStorage.setItem(STORE_KEY, JSON.stringify({ pool, groups, groupSize, picked, chipSeq, itemCheck }));
   }catch(e){}
 }
 
@@ -474,6 +621,7 @@ function restore(){
   groupSize = saved.groupSize || 25;
   picked = saved.picked || { a: null, b: null };
   chipSeq = saved.chipSeq || pool.length;
+  itemCheck = Array.isArray(saved.itemCheck) ? saved.itemCheck : [];
   return true;
 }
 

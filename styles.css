@@ -344,3 +344,14 @@
     .group-grid{grid-template-columns:1fr;}
     .picker{min-width:0;width:100%;}
   }
+  .item-check{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
+  .item-check-item{border-left:2px solid var(--panel-line);padding-left:10px;}
+  .item-check-name{font-size:13px;font-weight:600;margin-bottom:4px;}
+  .item-check-row{font-size:12px;color:var(--text);line-height:1.7;}
+  .item-check-where{
+    display:inline-block;min-width:58px;font-size:9.5px;font-weight:700;letter-spacing:1px;
+    text-transform:uppercase;color:var(--text-dim);
+  }
+  .item-check-who{color:var(--text-dim);font-size:10.5px;margin-left:4px;}
+  .item-check-others{color:var(--text-dim);font-size:11px;font-style:italic;}
+  .stag.item{background:rgba(105,204,240,.18);color:#69ccf0;}

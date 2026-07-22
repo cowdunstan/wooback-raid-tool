@@ -90,6 +90,16 @@
     <div id="groupsStatus" style="font-size:11.5px;color:var(--text-dim);margin:-4px 0 10px;min-height:15px;"></div>
 
     <div class="roster-panel">
+      <label style="font-size:10.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--text-dim);font-weight:600;display:block;margin-bottom:8px;">Item check</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <input type="text" id="itemCheckInput" class="picker" value="Dragonspine Trophy, Magus Blade">
+        <button class="btn-ghost" onclick="checkItems()">Check items</button>
+        <span style="font-size:11px;color:var(--text-dim);">Comma-separated. Marks every raider wearing one in their latest logged raid, and says which group they're in.</span>
+      </div>
+      <div id="itemCheckResult" class="item-check"></div>
+    </div>
+
+    <div class="roster-panel">
       <div id="reserveWrap" style="display:none;margin-bottom:12px;">
         <div class="reserve-hint">Tentative / Bench — drag them in to fill a gap</div>
         <div class="roster-pool" id="reservePool"></div>

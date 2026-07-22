@@ -32,8 +32,12 @@ board, identity links, loot, and attendance.
   both raids contributes a chip per character they own and takes a slot in each
   group, never two in the same one — identity comes from `/api/members`, not the
   character name, and a signup with no roster link is flagged `UNLINKED` on its
-  chip. Someone signed up to only one raid appears as their main. The arrangement
-  is saved in the browser (`localStorage`), not on the server.
+  chip. Someone signed up to only one raid appears as their main. An **item
+  check** answers "who has Dragonspine Trophy, and which group are they in?":
+  type any comma-separated item names and every wearer is pilled on their chip
+  and listed by group, read from each character's latest gear snapshot via
+  `/api/items/list`. The arrangement is saved in the browser (`localStorage`),
+  not on the server.
 - **`attendance.html`** — **attendance** app (**officers only**): imports a
   Warcraft Logs report and marks its guild-tagged players present. Characters not
   yet linked to a member are created **unclaimed** for the roster to adopt.

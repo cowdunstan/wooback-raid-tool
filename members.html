@@ -1,8 +1,9 @@
 <meta charset="utf-8">
 <script>
-/* Officer gate — same as loot.html. Identity-link management is an officer tool;
-   the .NET API enforces it on every call, this just decides whether to show the
-   page (redirect to index.html if not signed in, home.html if not an officer). */
+/* Access gate (home tier) — same as logs.html. Any signed-in tier may read the
+   roster; managing the identity links is officers only, and the .NET API enforces
+   that on every write. This just bounces anyone without a session to the landing
+   page; the read-only trim for non-officers happens further down. */
 (function(){
   var m = location.hash.match(/(?:^#|&)session=([^&]+)/);
   if(m){
@@ -24,7 +25,9 @@
     try{ localStorage.removeItem('vashj_session'); }catch(e){}
     location.replace('index.html');
   } else if(!pl.officer){
-    location.replace('home.html');
+    // Every control that writes is hidden by the .read-only rules below. Set on
+    // <html> because the gate runs before <body> exists.
+    document.documentElement.className += ' read-only';
   }
 })();
 </script>
@@ -77,6 +80,12 @@
   .pill-unknown{background:rgba(127,154,146,.14);color:#7f9a92}
   table.rl td strong{font-weight:600}
   .cls{color:#aecabf}
+  /* Read-only view for non-officers: same lists, minus every control that writes.
+     Cosmetic only — the API is what actually refuses the writes. */
+  html.read-only .chr-actions,
+  html.read-only .acts,
+  html.read-only .officer-copy{display:none}
+  html:not(.read-only) .ro-copy{display:none}
 </style>
 
 <div class="app">
@@ -98,7 +107,7 @@
     </div>
 
     <h1>Roster &amp; Alts</h1>
-    <p class="subtitle">Manage the Discord &#8596; WoW main &#8596; alts links. Characters arrive on their own &#8212; from the Blizzard roster, loot logs and raid attendance &#8212; so there's nothing to type in here. Set each member's main, edit a character's details, reassign one to another member, and claim the unlinked &#8212; members with nothing attached are listed below the unlinked characters. Sync the Blizzard roster to see who is still in the guild, and ignore the characters that aren't.</p>
+    <p class="subtitle"><span class="ro-copy">Who plays what: every member's Discord name alongside their main and alts, the characters nobody has claimed yet, and the ones the guild ignores. Officers keep these links up to date &#8212; for everyone else this page is read-only.</span><span class="officer-copy">Manage the Discord &#8596; WoW main &#8596; alts links. Characters arrive on their own &#8212; from the Blizzard roster, loot logs and raid attendance &#8212; so there's nothing to type in here. Set each member's main, edit a character's details, reassign one to another member, and claim the unlinked &#8212; members with nothing attached are listed below the unlinked characters. Sync the Blizzard roster to see who is still in the guild, and ignore the characters that aren't.</span></p>
 
     <div class="rl-toolbar">
       <button class="btn-primary" onclick="loadAll()">Reload</button>
@@ -112,15 +121,15 @@
 
     <div class="rl-card">
       <h2>Unlinked characters</h2>
-      <p class="card-sub">Characters created by loot &amp; attendance that aren't attached to any member yet. Assign one to claim it onto a member.</p>
-      <table class="rl"><thead><tr><th>Character</th><th>Class / spec</th><th>Realm</th><th style="width:38%">Assign to member</th></tr></thead>
+      <p class="card-sub">Characters created by loot &amp; attendance that aren't attached to any member yet.<span class="officer-copy"> Assign one to claim it onto a member.</span></p>
+      <table class="rl"><thead><tr><th>Character</th><th>Class / spec</th><th>Realm</th><th class="acts" style="width:38%">Assign to member</th></tr></thead>
         <tbody id="orphanBody"><tr><td colspan="4" class="rl-empty">Nothing loaded.</td></tr></tbody>
       </table>
     </div>
 
     <div class="rl-card">
       <h2>Members without characters</h2>
-      <p class="card-sub">Identity links with nothing attached &#8212; imported from Discord, or everything they had is ignored. Claim a character onto them from the unlinked list above.</p>
+      <p class="card-sub">Identity links with nothing attached &#8212; imported from Discord, or everything they had is ignored.<span class="officer-copy"> Claim a character onto them from the unlinked list above.</span></p>
       <table class="rl"><thead><tr><th>Member</th><th>Discord</th><th>Last seen</th></tr></thead>
         <tbody id="emptyMemberBody"><tr><td colspan="3" class="rl-empty">Nothing loaded.</td></tr></tbody>
       </table>
@@ -128,8 +137,8 @@
 
     <div class="rl-card">
       <h2>Ignored characters</h2>
-      <p class="card-sub">Characters marked as not part of the guild &#8212; bank alts, transfers, ex-guildies. They're hidden from the roster above and their loot &amp; attendance are left out of the history and stats pages. Nothing is deleted: un-ignore to bring it all back.</p>
-      <table class="rl"><thead><tr><th>Character</th><th>Class / spec</th><th>Guild</th><th>Was on</th><th style="width:1%"></th></tr></thead>
+      <p class="card-sub">Characters marked as not part of the guild &#8212; bank alts, transfers, ex-guildies. They're hidden from the roster above and their loot &amp; attendance are left out of the history and stats pages. Nothing is deleted<span class="officer-copy">: un-ignore to bring it all back</span>.</p>
+      <table class="rl"><thead><tr><th>Character</th><th>Class / spec</th><th>Guild</th><th>Was on</th><th class="acts" style="width:1%"></th></tr></thead>
         <tbody id="ignoredBody"><tr><td colspan="5" class="rl-empty">Nothing loaded.</td></tr></tbody>
       </table>
     </div>
@@ -288,7 +297,7 @@ function renderOrphans(rows){
       '<td>' + charName(c.name, c.cls, c.id) + ' ' + guildBadge(c) + '</td>' +
       '<td>' + clsSpec(c) + '</td>' +
       '<td class="muted">' + (c.realm ? esc(c.realm) : '—') + '</td>' +
-      '<td><div class="row-actions">' + memberSelect('', 'reassign(\'' + c.id + '\', this.value)') +
+      '<td class="acts"><div class="row-actions">' + memberSelect('', 'reassign(\'' + c.id + '\', this.value)') +
         '<button class="lnk" onclick="ignoreChar(\'' + c.id + '\',\'' + esc(c.name).replace(/'/g,"\\'") + '\')">Ignore</button>' +
       '</div></td>' +
     '</tr>'
@@ -307,7 +316,7 @@ function renderIgnored(rows){
       '<td>' + clsSpec(c) + '</td>' +
       '<td>' + guildBadge(c) + '</td>' +
       '<td class="muted">' + (c.member ? esc(c.member) : '<span class="muted">unlinked</span>') + '</td>' +
-      '<td><div class="row-actions">' +
+      '<td class="acts"><div class="row-actions">' +
         '<button class="lnk" onclick="unignoreChar(\'' + c.id + '\',\'' + quoted + '\')">Un-ignore</button>' +
         '<button class="rl-del" title="Delete" onclick="delChar(\'' + c.id + '\',\'' + quoted + '\')">✕</button>' +
       '</div></td>' +

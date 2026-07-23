@@ -199,7 +199,7 @@ public static class RaidLogEndpoints
                 if (!isDe && !string.IsNullOrWhiteSpace(a.AwardedTo))
                 {
                     var (name, realm) = SplitNameRealm(a.AwardedTo!);
-                    (winner, var wasNew) = await ResolveRoller(db, charCache, name, realm, ClassName(a.WinnerClass));
+                    (winner, var wasNew) = await ResolveRoller(db, charCache, name, realm, WowClass.Name(a.WinnerClass));
                     if (wasNew) newCharacters++;
                 }
                 else if (isDe)
@@ -475,15 +475,6 @@ public static class RaidLogEndpoints
         if (s.StartsWith('[') && s.EndsWith(']') && s.Length >= 2) s = s[1..^1];
         return NullIfBlank(s);
     }
-
-    // WoW class id → class string (matches the roster's lower-case class names).
-    private static string? ClassName(int id) => id switch
-    {
-        1 => "warrior", 2 => "paladin", 3 => "hunter", 4 => "rogue",
-        5 => "priest", 6 => "deathknight", 7 => "shaman", 8 => "mage",
-        9 => "warlock", 10 => "monk", 11 => "druid", 12 => "demonhunter",
-        _ => null
-    };
 
     private static async Task<RaidEvent> ResolveEvent(AppDbContext db, string? key, string? title)
     {

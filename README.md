@@ -219,8 +219,13 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   force a refresh), and an officer-only `/wcl/ratelimit` budget check.
 - **Persistence** (officer-gated) — `/api/board` (save/load the board snapshot as
   jsonb), `/api/members` + `/api/characters` (Discord↔main↔alts identity links,
-  incl. `?linked=false` for unclaimed characters, and `POST /api/members/import-discord`
-  to seed link rows from the guild's member/officer roster via a bot token),
+  incl. `?linked=false` for unclaimed characters, `POST /api/members/import-discord`
+  to seed link rows from the guild's member/officer roster via a bot token, and the
+  guild-roster import — `POST /api/characters/sync-guild` stamps each character's guild
+  and stages the roster names we hold no character for into a scratch table, which
+  `GET /api/characters/import-candidates` lists and `POST /api/characters/import-guild`
+  turns into unclaimed characters (guild fields stamped, gear pulled per the sheet's
+  refresh) for the ones an officer selects),
   `/api/loot` (awards; `POST /import` bulk-loads a Gargul export, deduped on checksum),
   and `/api/attendance` — `POST /import` pulls a WCL report's guild-tagged roster
   into present rows (creating unclaimed characters), with `GET /events` and
@@ -348,7 +353,11 @@ on `www.warcraftlogs.com` (shared across game versions).
 ### 5. Blizzard credentials
 **Sync guild from Blizzard** on the roster page pulls the wooback guild roster from
 the Blizzard Game Data API and stamps each character with the guild it's in, so
-officers can see who has left and ignore them. The same credentials power the
+officers can see who has left and ignore them. The same sync also stages every roster
+character we hold no record of into a scratch table; the **On the Blizzard roster, not
+imported** card lets an officer tick which of those to import, creating each as an
+unclaimed character (guild rank stamped) and pulling its gear the way Refresh gear does.
+The same credentials power the
 character sheet's **Refresh gear** button, which reads a character's live equipment
 from the Blizzard character-profile API (falling back to Warcraft Logs when that
 profile route comes up empty on the Anniversary realm). Create a client at
@@ -358,8 +367,9 @@ identity lives in `appsettings.json` (`Blizzard` section): wooback on **Dreamscy
 (US)** via the `profile-classicann-us` namespace. Dreamscythe is a Classic
 **Anniversary** realm and only that namespace can see it — retail (`profile-us`) and
 Classic Era (`profile-classic1x-us`) both 404 on the guild, and the realm is missing
-from their realm indexes entirely. Officer-gated, and the sync only updates guild
-fields: it never creates, deletes, or ignores a character.
+from their realm indexes entirely. Officer-gated. The sync itself never creates,
+deletes, or ignores a character — it only updates guild fields and refills the import
+scratch table; characters are created solely by the explicit **Import selected** step.
 
 ### 6. Loot sheets
 - One document per phase: **P3** (Black Temple, Hyjal) and **P2** (SSC, Tempest

@@ -209,39 +209,11 @@ public static class CharacterSheetEndpoints
             var ch = await db.Characters.FirstOrDefaultAsync(x => x.Id == character!.Id);
             if (ch is null) return NotFound("No such character.");
 
-            // 1) Blizzard live gear — whatever they're wearing right now, no raid needed.
-            var (bStatus, bGear, bErr) = await blizzard.GetCharacterEquipmentAsync(ch.Name);
-            if (bStatus == 200 && bGear is not null && bGear.Items.Count > 0)
-            {
-                await GearSnapshotStore.UpsertAsync(db, ch, "blizzard", "blizzard", null,
-                    DateTimeOffset.UtcNow, bGear, refreshSetup: false);
-                await db.SaveChangesAsync();
-                return Results.Json(new { source = "blizzard", note = "Refreshed live gear from Blizzard." });
-            }
-
-            // 2) Fall back to the character's most recent Warcraft Logs report (a pug or
-            // another guild's night counts — still fresher than our last import of them).
-            var (_, report, rErr) = await wcl.GetLatestReportCodeForCharacterAsync(ch.Name);
-            if (report is not null)
-            {
-                var (_, players, _) = await wcl.GetReportGearAsync(report.Value.Code);
-                var p = players?.FirstOrDefault(x => string.Equals(x.Name, ch.Name, StringComparison.OrdinalIgnoreCase));
-                if (p is not null && p.Items.Count > 0)
-                {
-                    // Link the snapshot to a raid we already know, when the report is one.
-                    var evId = await db.RaidEvents.Where(e => e.WclReportCode == report.Value.Code)
-                        .Select(e => (Guid?)e.Id).FirstOrDefaultAsync();
-                    await GearSnapshotStore.UpsertAsync(db, ch, "wcl", report.Value.Code, evId,
-                        report.Value.StartsAt, p, refreshSetup: true);
-                    await db.SaveChangesAsync();
-                    return Results.Json(new { source = "wcl",
-                        note = "Blizzard had nothing usable — pulled the latest Warcraft Logs report instead." });
-                }
-            }
-
-            // Neither source had gear. Surface the more actionable of the two reasons.
-            var detail = bErr ?? rErr ?? "No gear could be fetched from Blizzard or Warcraft Logs.";
-            return Results.Json(new { error = "upstream", detail }, statusCode: 502);
+            // Blizzard live gear first, WCL fallback — shared with the guild-roster import.
+            var r = await CharacterGearRefresh.RefreshAsync(db, blizzard, wcl, ch);
+            return r.Ok
+                ? Results.Json(new { source = r.Source, note = r.Note })
+                : Results.Json(new { error = "upstream", detail = r.Error }, statusCode: r.Status);
         });
     }
 

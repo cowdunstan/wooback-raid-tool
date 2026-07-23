@@ -30,7 +30,12 @@ const STORE_KEY = 'vashj_loot_prio';
        sources) aren't boss/item grids, so they aren't offered.
      • P2 (?doc=p2) is a tab per boss with no banner row, so every tab carries the
        `section` it should be filed under. Trash is a tab like any other, and the
-       Tier Sets tab is appended to both raids because tokens drop in both. */
+       Tier Sets tab is appended to both raids because tokens drop in both.
+
+   A P2 boss tab names its tier drop by the bare token set ("Vanquished Defender")
+   and leaves the slot implicit — the boss is the slot. `tierSlot` is that slot, so
+   the boss row can read the real item ("Gloves of the Vanquished Defender") rather
+   than the token. The Tier Sets tab needs none: it banners the slot itself. */
 const RAID_TABS = [
   { key:'bt', label:'Black Temple (P3)', doc:'p3', tabs:[{ gid:'1226096003' }] },
   { key:'mh', label:'Mount Hyjal (P3)',  doc:'p3', tabs:[{ gid:'1714599159' }] },
@@ -38,18 +43,18 @@ const RAID_TABS = [
   { key:'ssc', label:'Serpentshrine Cavern (P2)', doc:'p2', tabs:[
       { gid:'324929599',  section:'Hydross the Unstable' },
       { gid:'8551419',    section:'The Lurker Below' },
-      { gid:'420793116',  section:'Leotheras the Blind' },
-      { gid:'152003569',  section:'Fathom-Lord Karathress' },
+      { gid:'420793116',  section:'Leotheras the Blind',       tierSlot:'Gloves' },
+      { gid:'152003569',  section:'Fathom-Lord Karathress',    tierSlot:'Leggings' },
       { gid:'821616370',  section:'Morogrim Tidewalker' },
-      { gid:'1241401949', section:'Lady Vashj' },
+      { gid:'1241401949', section:'Lady Vashj',                tierSlot:'Helm' },
       { gid:'1405398559', section:'Serpentshrine Cavern trash' },
       { gid:'649478556',  section:'Tier sets' }
   ] },
   { key:'tk', label:'Tempest Keep (P2)', doc:'p2', tabs:[
       { gid:'1032392127', section:'Al’ar' },
-      { gid:'1216905087', section:'Void Reaver' },
+      { gid:'1216905087', section:'Void Reaver',               tierSlot:'Pauldrons' },
       { gid:'2111072609', section:'High Astromancer Solarian' },
-      { gid:'1959598972', section:'Kael’thas Sunstrider' },
+      { gid:'1959598972', section:'Kael’thas Sunstrider',      tierSlot:'Chestguard' },
       { gid:'1626986966', section:'Tempest Keep trash' },
       { gid:'649478556',  section:'Tier sets' }
   ] }
@@ -229,13 +234,21 @@ const TIER_SLOT_NOUNS = {
   'pants':'Leggings', 'gloves':'Gloves'
 };
 
-// The canonical token item name for a P2 slot banner + token label, when the two
-// name a token the table knows; null otherwise, so only real tokens are rewritten.
-function tierItemName(slotWord, label){
-  const noun = TIER_SLOT_NOUNS[String(slotWord || '').toLowerCase()];
+// The canonical token item name for a slot noun ("Helm") + bare token label
+// ("Vanquished Champion"), when the two name a token the table knows; null
+// otherwise, so only real tokens are rewritten. A boss tab already has the noun in
+// its `tierSlot`; the Tier sets tab has only the banner word, which tierItemName
+// translates first.
+function tierItemForSlot(noun, label){
   if(!noun) return null;
   const full = `${noun} of the ${String(label || '').trim()}`;
   return tierToken(full) ? full : null;
+}
+
+// As above, but from the Tier sets tab's slot banner ("Helms", "Pants", …), whose
+// word differs from the noun the item name uses.
+function tierItemName(slotWord, label){
+  return tierItemForSlot(TIER_SLOT_NOUNS[String(slotWord || '').toLowerCase()], label);
 }
 
 let picked = { eventId:'', eventTitle:'', raid:RAID_TABS[0].key };
@@ -522,8 +535,9 @@ function walkChain(row, item, legend, unknown){
 /* One tab, as sections of items. `forcedSection` is the boss the whole tab is
    about — P2's shape, where the tab is the boss and nothing inside it says so.
    Given one, banner rows read as subdivisions of it ("Tier sets — Helms") rather
-   than as bosses in their own right. */
-function parseRaidTab(grid, forcedSection){
+   than as bosses in their own right. `tierSlot`, when set, is the slot this boss's
+   tier token drops in, so a bare token gains its real item name. */
+function parseRaidTab(grid, forcedSection, tierSlot){
   const rows = grid;
   const out = [];
   const unknown = [];
@@ -577,11 +591,15 @@ function parseRaidTab(grid, forcedSection){
 
     if(!section){ section = { name:'Loot', items:[] }; out.push(section); }
 
-    // P2's Tier sets tab writes the token slot-first: banner "Helms", row
-    // "Vanquished Champion". Rejoin them into the real item name ("Helm of the
-    // Vanquished Champion") so WON, the id resolver and the redeemed-piece HAS all
-    // key on a token they know, and the five slots stop collapsing to one lookup.
-    const item = { name: (slotWord && tierItemName(slotWord, a)) || a,
+    // Both P2 shapes name a tier token bare and leave the slot elsewhere: the Tier
+    // sets tab banners it ("Helms" over "Vanquished Champion"), a boss tab implies
+    // it (the boss is the slot, its tab's `tierSlot`). Rejoin either into the real
+    // item name ("Helm of the Vanquished Champion") so WON, the id resolver and the
+    // redeemed-piece HAS all key on a token they know, and the five slots stop
+    // collapsing to one lookup.
+    const item = { name: (slotWord && tierItemName(slotWord, a))
+                      || (tierSlot && tierItemForSlot(tierSlot, a))
+                      || a,
                    tiers:[], openRoll:false, openTail:false, notes:[] };
 
     if(OPEN_ROLL.test(b)){
@@ -889,7 +907,7 @@ async function build(){
   const rosterNotes = buildCandidates(signups, members);
   unknownTokens = [];
   sections = tabs.reduce(
-    (all, tab, i) => all.concat(parseRaidTab(tab.grid, raid.tabs[i].section)), []);
+    (all, tab, i) => all.concat(parseRaidTab(tab.grid, raid.tabs[i].section, raid.tabs[i].tierSlot)), []);
   picked = { eventId, eventTitle: ev.title || 'event ' + eventId, raid: raidKey };
 
   const items = sections.reduce((n, s) => n + s.items.length, 0);

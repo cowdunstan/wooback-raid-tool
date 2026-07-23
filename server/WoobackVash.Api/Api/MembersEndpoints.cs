@@ -27,6 +27,9 @@ public static class MembersEndpoints
         string? Notes,
         bool? Ignored);
 
+    // The roster candidate names an officer chose to import, by character name.
+    public record ImportGuildInput(List<string>? Names);
+
     // Shape of a guild-member object from GET /guilds/{id}/members.
     private record DiscordUser(
         [property: JsonPropertyName("id")] string? Id,
@@ -226,7 +229,9 @@ public static class MembersEndpoints
         // Pull the Blizzard guild roster and record, per character, whether it is
         // currently in the guild (plus its rank). A character missing from the roster
         // has its guild cleared — that's the signal officers use to decide what to
-        // ignore. The sync never creates, deletes, or ignores anything by itself.
+        // ignore. The sync creates and deletes no characters by itself; the roster
+        // names we hold no character for are staged into RosterImportCandidates instead,
+        // for an officer to import selectively (see /import-guild).
         chars.MapPost("/sync-guild", async (
             HttpContext ctx,
             SessionTokenService tokens,
@@ -273,13 +278,156 @@ public static class MembersEndpoints
                 }
                 c.GuildSyncedAt = now;
             }
+
+            // Roster names we hold no character row for (by name, any realm) — restaged
+            // for import. The staging table is scratch: clear it and repopulate from this
+            // sync so it always mirrors the latest roster, dropping anyone since imported.
+            var existingNames = new HashSet<string>(characters.Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
+            var candidates = roster
+                .Where(rm => !existingNames.Contains(rm.Name))
+                .GroupBy(rm => rm.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList();
+
+            db.RosterImportCandidates.RemoveRange(await db.RosterImportCandidates.ToListAsync());
+            foreach (var rm in candidates)
+                db.RosterImportCandidates.Add(new RosterImportCandidate
+                {
+                    Name = rm.Name,
+                    RealmSlug = rm.RealmSlug,
+                    Rank = rm.Rank,
+                    Level = rm.Level,
+                    Class = WowClass.Name(rm.ClassId),
+                    StagedAt = now
+                });
             await db.SaveChangesAsync();
 
-            // Roster names we hold no character row for — reported so officers know the
-            // roster is ahead of the database, but nothing is created.
-            var unmatchedRoster = roster.Count(rm => !matchedNames.Contains(rm.Name));
+            return Results.Json(new
+            {
+                rosterCount = roster.Count,
+                inGuild,
+                notInGuild,
+                unmatchedRoster = candidates.Count,
+                syncedAt = now
+            });
+        });
 
-            return Results.Json(new { rosterCount = roster.Count, inGuild, notInGuild, unmatchedRoster, syncedAt = now });
+        // The roster names the last sync staged for import — every guild character we
+        // hold no character row for. Officer-gated, like the sync that fills it.
+        chars.MapGet("/import-candidates", async (HttpContext ctx, SessionTokenService tokens) =>
+        {
+            var (_, error) = ctx.RequireOfficer(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            var list = await db.RosterImportCandidates.AsNoTracking()
+                .OrderBy(c => c.Name)
+                .Select(c => new
+                {
+                    name = c.Name,
+                    realm = c.RealmSlug,
+                    rank = c.Rank,
+                    level = c.Level,
+                    cls = c.Class,
+                    stagedAt = c.StagedAt
+                })
+                .ToListAsync();
+            return Results.Json(list);
+        });
+
+        // Import selected roster candidates: create a character for each (unclaimed, with
+        // its guild fields stamped), drop it from the staging table, then pull its gear
+        // the same way the character sheet's Refresh does — Blizzard live first, a recent
+        // Warcraft Logs report as fallback. Gear is best-effort: the character is created
+        // regardless, and each row's gear outcome comes back in the response.
+        chars.MapPost("/import-guild", async (
+            HttpContext ctx,
+            SessionTokenService tokens,
+            BlizzardService blizzard,
+            WarcraftLogsService wcl,
+            IOptions<BlizzardOptions> opt,
+            ImportGuildInput input) =>
+        {
+            var (_, error) = ctx.RequireOfficer(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            var names = (input.Names ?? new List<string>())
+                .Select(n => (n ?? "").Trim())
+                .Where(n => n.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (names.Count == 0)
+                return Results.Json(new { error = "bad_request", detail = "Pick at least one character to import." },
+                    statusCode: 400);
+
+            var staged = await db.RosterImportCandidates.ToListAsync();
+            var byName = new Dictionary<string, RosterImportCandidate>(StringComparer.OrdinalIgnoreCase);
+            foreach (var c in staged) byName[c.Name] = c;
+
+            // Names that already back a character — guard against a stale candidate or a
+            // double-submit creating a duplicate. Cleared from staging if still there.
+            var existing = await db.Characters.Select(c => c.Name).ToListAsync();
+            var existingNames = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
+
+            var guildName = opt.Value.GuildName;
+            var now = DateTimeOffset.UtcNow;
+            var results = new List<object>();
+            var created = new List<Character>();
+
+            foreach (var name in names)
+            {
+                if (!byName.TryGetValue(name, out var cand))
+                {
+                    results.Add(new { name, status = "skipped", detail = "Not a current import candidate — re-sync the roster." });
+                    continue;
+                }
+                if (existingNames.Contains(cand.Name))
+                {
+                    db.RosterImportCandidates.Remove(cand);
+                    results.Add(new { name = cand.Name, status = "skipped", detail = "A character with this name already exists." });
+                    continue;
+                }
+
+                var ch = new Character
+                {
+                    MemberId = null,
+                    Name = cand.Name,
+                    Class = cand.Class,
+                    Realm = cand.RealmSlug,
+                    IsMain = false,
+                    Ignored = false,
+                    GuildName = guildName,
+                    GuildRank = cand.Rank,
+                    GuildSyncedAt = now
+                };
+                db.Characters.Add(ch);
+                db.RosterImportCandidates.Remove(cand);
+                existingNames.Add(cand.Name);
+                created.Add(ch);
+            }
+
+            // Persist the creations and staging removals before hitting the gear APIs, so
+            // a slow or failing gear pull can't cost the characters themselves.
+            await db.SaveChangesAsync();
+
+            foreach (var ch in created)
+            {
+                var gear = await CharacterGearRefresh.RefreshAsync(db, blizzard, wcl, ch);
+                results.Add(new
+                {
+                    name = ch.Name,
+                    id = ch.Id,
+                    status = "created",
+                    gearSource = gear.Source,
+                    gear = gear.Ok ? gear.Note : null,
+                    gearError = gear.Ok ? null : gear.Error
+                });
+            }
+
+            return Results.Json(new { imported = created.Count, results });
         });
 
         // Add a character. Officers may attach it to any member (or leave it an

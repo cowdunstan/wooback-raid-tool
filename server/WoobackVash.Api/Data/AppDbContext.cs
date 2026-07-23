@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<LootRoll> LootRolls => Set<LootRoll>();
     public DbSet<AttendanceRecord> Attendance => Set<AttendanceRecord>();
     public DbSet<CharacterGearSnapshot> GearSnapshots => Set<CharacterGearSnapshot>();
+    public DbSet<RosterImportCandidate> RosterImportCandidates => Set<RosterImportCandidate>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -95,6 +96,12 @@ public class AppDbContext : DbContext
              .HasForeignKey(x => x.CharacterId)
              .OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.Status).HasConversion<string>();
+        });
+
+        b.Entity<RosterImportCandidate>(e =>
+        {
+            // A scratch table rebuilt each sync; one row per roster name.
+            e.HasIndex(c => c.Name).IsUnique();
         });
 
         b.Entity<CharacterGearSnapshot>(e =>

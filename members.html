@@ -119,6 +119,21 @@
 
     <div id="members"></div>
 
+    <div class="rl-card" data-officer-only id="importCard">
+      <h2>On the Blizzard roster, not imported</h2>
+      <p class="card-sub">Guild characters the last sync found that we hold no record of. Tick the ones to bring in &#8212; each is created unclaimed, stamped with its guild rank, and has its gear pulled from Blizzard (or a recent Warcraft Logs report). Claim them onto members from the unlinked list once imported.</p>
+      <div class="rl-toolbar" style="margin:0 0 8px">
+        <button class="btn-primary" id="importSelBtn" onclick="importGuild()" disabled>Import selected</button>
+        <label style="font-size:12px;color:var(--text-dim);display:inline-flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" id="candAll" onchange="toggleAllCandidates(this.checked)"> Select all
+        </label>
+        <span id="candCount" style="font-size:11.5px;color:var(--text-dim)"></span>
+      </div>
+      <table class="rl"><thead><tr><th class="acts" style="width:1%"></th><th>Character</th><th>Class</th><th>Level</th><th>Rank</th></tr></thead>
+        <tbody id="candidateBody"><tr><td colspan="5" class="rl-empty">Sync the guild to see who's on the roster but not yet imported.</td></tr></tbody>
+      </table>
+    </div>
+
     <div class="rl-card">
       <h2>Unlinked characters</h2>
       <p class="card-sub">Characters created by loot &amp; attendance that aren't attached to any member yet.<span class="officer-copy"> Assign one to claim it onto a member.</span></p>
@@ -191,6 +206,8 @@ let MEMBERS = [];
 let MEMBER_OPTIONS = [];
 let ORPHANS = [];
 let IGNORED = [];
+// Blizzard-roster characters staged for import by the last sync (officers only).
+let CANDIDATES = [];
 
 // The name a member is known by here: their server nickname when they have one,
 // which is why the API's DisplayName ordering isn't the order officers read.
@@ -336,6 +353,7 @@ async function loadAll(){
     renderMembers(await mRes.json());
     if(oRes.ok){ renderOrphans(await oRes.json()); }
     if(iRes.ok){ renderIgnored(await iRes.json()); }
+    if(isOfficer()) await loadCandidates();
     showGuildSynced();
     setStatus('Loaded ' + MEMBERS.length + ' member' + (MEMBERS.length === 1 ? '' : 's') + '.');
   }catch(err){ if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true); }
@@ -392,9 +410,91 @@ async function syncGuild(){
     const r = await res.json();
     setStatus('Roster has ' + r.rosterCount + ' character' + (r.rosterCount === 1 ? '' : 's') +
       ' — ' + r.inGuild + ' of ours in guild, ' + r.notInGuild + ' not' +
-      (r.unmatchedRoster ? ', ' + r.unmatchedRoster + ' on the roster we have no record of' : '') + '.');
+      (r.unmatchedRoster ? ', ' + r.unmatchedRoster + ' to import below' : '') + '.');
     loadAll();
   }catch(err){ if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true); }
+}
+
+// Officer tool: fetch the roster characters the last sync staged for import and paint
+// the "not imported" card. Called on load and after a sync; a fetch failure leaves the
+// card as it was rather than blanking it.
+async function loadCandidates(){
+  try{
+    const res = await api('/api/characters/import-candidates');
+    if(res.ok) renderCandidates(await res.json());
+  }catch(err){ /* 401/403 already handled by api(); nothing else to do */ }
+}
+
+function renderCandidates(rows){
+  CANDIDATES = rows || [];
+  const b = document.getElementById('candidateBody');
+  const all = document.getElementById('candAll');
+  if(all) all.checked = false;
+  if(!CANDIDATES.length){
+    b.innerHTML = '<tr><td colspan="5" class="rl-empty">Nothing to import — every roster character has a record. Sync the guild to refresh.</td></tr>';
+    updateImportButton();
+    return;
+  }
+  b.innerHTML = CANDIDATES.map(c => {
+    const val = esc(c.name);
+    return '<tr>' +
+      '<td class="acts"><input type="checkbox" class="cand" value="' + val + '" onchange="updateImportButton()"></td>' +
+      '<td>' + charName(c.name, c.cls, null) + '</td>' +
+      '<td>' + (c.cls ? clsSpec(c) : '<span class="muted">—</span>') + '</td>' +
+      '<td class="muted">' + (c.level || '—') + '</td>' +
+      '<td class="muted">' + (c.rank === 0 ? 'GM' : (c.rank ?? '—')) + '</td>' +
+    '</tr>';
+  }).join('');
+  updateImportButton();
+}
+
+function toggleAllCandidates(checked){
+  document.querySelectorAll('#candidateBody input.cand').forEach(cb => { cb.checked = checked; });
+  updateImportButton();
+}
+
+function selectedCandidates(){
+  return Array.from(document.querySelectorAll('#candidateBody input.cand:checked')).map(cb => cb.value);
+}
+
+function updateImportButton(){
+  const n = selectedCandidates().length;
+  const btn = document.getElementById('importSelBtn');
+  if(btn){ btn.disabled = n === 0; btn.textContent = n ? 'Import ' + n + ' selected' : 'Import selected'; }
+  const count = document.getElementById('candCount');
+  if(count) count.textContent = CANDIDATES.length ? CANDIDATES.length + ' on the roster to import' : '';
+}
+
+// Officer tool: import the ticked candidates. The server creates each character and
+// then pulls its gear, so this can take a moment per character — the button is locked
+// while it runs. The response reports each row's gear outcome.
+async function importGuild(){
+  const names = selectedCandidates();
+  if(!names.length) return;
+  if(!confirm('Import ' + names.length + ' character' + (names.length === 1 ? '' : 's') +
+    ' and pull their gear? They\'re created unclaimed for you to assign.')) return;
+  const btn = document.getElementById('importSelBtn');
+  if(btn) btn.disabled = true;
+  setStatus('Importing ' + names.length + ' character' + (names.length === 1 ? '' : 's') + ' and pulling gear…');
+  try{
+    const res = await api('/api/characters/import-guild', { method:'POST', body: JSON.stringify({ names }) });
+    if(!res.ok){
+      let detail = 'HTTP ' + res.status;
+      try{ const j = await res.json(); if(j && j.detail) detail = j.detail; }catch(e){}
+      setStatus('Import failed: ' + detail, true);
+      if(btn) btn.disabled = false;
+      return;
+    }
+    const r = await res.json();
+    const withGear = (r.results || []).filter(x => x.status === 'created' && x.gearSource).length;
+    const skipped = (r.results || []).filter(x => x.status === 'skipped').length;
+    setStatus('Imported ' + r.imported + ' character' + (r.imported === 1 ? '' : 's') +
+      ' — ' + withGear + ' with gear' + (skipped ? ', ' + skipped + ' skipped' : '') + '.');
+    loadAll();
+  }catch(err){
+    if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true);
+    if(btn) btn.disabled = false;
+  }
 }
 
 async function putChar(id, body, okMsg){

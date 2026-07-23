@@ -125,7 +125,11 @@ board, identity links, loot, and attendance.
   Which tabs make up which raid is `RAID_TABS` in `loot-prio.js`. The two sheets
   are shaped differently and the entry says so: a P3 raid is **one tab** that
   banners each boss inside it, a P2 raid is **one tab per boss** (plus its trash
-  tab, plus the shared tier-set tab) and each names the section it belongs to.
+  tab, plus the shared tier-set tab) and each names the section it belongs to. A
+  P2 boss tab writes its tier drop as the bare token (`Vanquished Defender`) and
+  leaves the slot to the boss, so the entry also carries a `tierSlot` that expands
+  it to the real item (`Gloves of the Vanquished Defender`); the tier-set tab
+  banners the slot itself and needs none.
 
   **Tier tokens** get special handling, because a token drops as one item and is
   redeemed into a class-specific piece: the sheet names the token (`Chestguard of

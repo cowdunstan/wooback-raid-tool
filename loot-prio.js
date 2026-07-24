@@ -1296,7 +1296,7 @@ function renderMyPrio(lookup){
   const raidLabel = raidTab(picked.raid).label;
   if(!perChar.size){
     return `<section class="prio-boss my-prio">
-              <h2>What you can roll on</h2>
+              <h2>What you have prio on</h2>
               <div class="prio-note">Nothing on the ${whEsc(raidLabel)} sheet gives your characters named prio — anything you'd roll on here is open MS &gt; OS.</div>
             </section>`;
   }
@@ -1314,7 +1314,7 @@ function renderMyPrio(lookup){
   }).join('');
 
   return `<section class="prio-boss my-prio">
-            <h2>What you can roll on <span class="my-prio-sub">— ${whEsc(raidLabel)}, your prio only (no MS &gt; OS)</span></h2>
+            <h2>What you have prio on <span class="my-prio-sub">— ${whEsc(raidLabel)}, your prio only (no MS &gt; OS)</span></h2>
             ${blocks}
           </section>`;
 }

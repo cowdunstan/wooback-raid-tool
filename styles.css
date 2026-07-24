@@ -140,7 +140,9 @@
     display:flex;align-items:center;justify-content:center;
     margin:0 auto 4px;font-size:10px;color:#4a5c57;
     transition:border-color .15s, background .15s;
+    cursor:move;touch-action:none;
   }
+  .slot.dragging{z-index:5;}
   .slot.healer .ring{border-color:#3d6fb8;background:rgba(255,255,255,.6);}
   .slot .ring.filled{border-style:solid;}
   .slot .ring.drag-over{background:rgba(46,230,171,.18);}

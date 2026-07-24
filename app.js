@@ -19,6 +19,11 @@ const SPECIAL_STATUS = {
 let roster = [];          // {id, name, cls}
 let counts = { range: 6, healer: 5, chaser: 3 };
 let assignments = { range: [], healer: [], chaser: [] };
+// Per-slot manual position overrides, in the 640×440 arena space (same units as
+// the computed defaults). Sparse and parallel to assignments: an entry is {x,y}
+// once the officer has dragged that orb, or undefined to keep the auto-layout.
+// Only the on-map groups (range/healer) can be repositioned; chasers are off-map.
+let posOverrides = { range: [], healer: [] };
 let idCounter = 0;
 
 function parseRoster(){
@@ -182,6 +187,9 @@ function autoFill(){
     healer: new Array(counts.healer).fill(null),
     chaser: new Array(counts.chaser).fill(null)
   };
+  // A fresh auto-fill rebuilds the counts, so any hand-placed orbs no longer
+  // line up — drop the overrides and let the auto-layout take over again.
+  posOverrides = { range: [], healer: [] };
   chasers.forEach((id,i)=>{ assignments.chaser[i] = id; });
   freeHealers.forEach((m,i)=>{ if(i < counts.healer) assignments.healer[i] = m.id; });
   freeRanged.forEach((m,i)=>{ if(i < counts.range) assignments.range[i] = m.id; });
@@ -198,6 +206,8 @@ function changeCount(type, delta){
   } else {
     const removed = arr.splice(counts[type]);
     removed.forEach(id=>{ if(id) unassignId(id, false); });
+    // Drop overrides for the slots that no longer exist (chaser has none).
+    if(posOverrides[type]) posOverrides[type].splice(counts[type]);
   }
   renderAll();
 }
@@ -224,6 +234,7 @@ function unassignAll(){
 function clearAll(){
   roster = [];
   assignments = { range: new Array(counts.range).fill(null), healer: new Array(counts.healer).fill(null), chaser: new Array(counts.chaser).fill(null) };
+  posOverrides = { range: [], healer: [] };
   document.getElementById('rosterInput').value = '';
   renderAll();
 }
@@ -344,7 +355,46 @@ function renderSlotGroup(containerId, type, positions, extraClass){
       if(!draggedId || draggedId === id) return;
       dropInto(type, i, draggedId);
     });
+
+    enablePositionDrag(div, ring, type, i);
     el.appendChild(div);
+  });
+}
+
+// Let an officer drag an orb to reposition it on the arena. This is a separate
+// channel from the name-chip's HTML5 reassignment drag: grabbing the ring itself
+// moves the slot, grabbing the name chip inside it moves the raider. The moved
+// position is stored per slot in posOverrides (640×440 arena space) and persists
+// through save/load. We update style.left/top live rather than re-rendering, so
+// the pointer capture survives the whole drag.
+function enablePositionDrag(div, ring, type, index){
+  ring.addEventListener('pointerdown', e=>{
+    if(e.button !== 0) return;
+    if(e.target.closest('.name-chip')) return;   // chip = reassign, not reposition
+    e.preventDefault();
+
+    const area = document.querySelector('.arena-area');
+    const rect = area.getBoundingClientRect();
+    const scaleX = 640 / rect.width, scaleY = 440 / rect.height;
+
+    try { ring.setPointerCapture(e.pointerId); } catch(_){}
+    div.classList.add('dragging');
+
+    const move = ev=>{
+      const x = Math.max(0, Math.min(640, (ev.clientX - rect.left) * scaleX));
+      const y = Math.max(0, Math.min(440, (ev.clientY - rect.top) * scaleY));
+      posOverrides[type][index] = { x, y };
+      div.style.left = x + 'px';
+      div.style.top = y + 'px';
+    };
+    const up = ()=>{
+      try { ring.releasePointerCapture(e.pointerId); } catch(_){}
+      div.classList.remove('dragging');
+      ring.removeEventListener('pointermove', move);
+      ring.removeEventListener('pointerup', up);
+    };
+    ring.addEventListener('pointermove', move);
+    ring.addEventListener('pointerup', up);
   });
 }
 
@@ -412,8 +462,11 @@ function renderAll(){
   document.getElementById('countChaser').textContent = counts.chaser;
   document.getElementById('captureGuild').textContent = document.getElementById('guildName').value || 'Raid';
 
-  const rangePos = segmentPositions(counts.range, 320, 214, 134);
-  const healerPos = circlePositions(counts.healer, 320, 214, 61, 61, -90);
+  // Auto-layout is the default; a hand-dragged override wins per slot.
+  const rangePos = segmentPositions(counts.range, 320, 214, 134)
+    .map((p,i)=> posOverrides.range[i] || p);
+  const healerPos = circlePositions(counts.healer, 320, 214, 61, 61, -90)
+    .map((p,i)=> posOverrides.healer[i] || p);
 
   renderSlotGroup('rangeSlots', 'range', rangePos, '');
   renderSlotGroup('healerSlots', 'healer', healerPos, 'healer');
@@ -454,6 +507,7 @@ function boardSnapshot(){
     counts: counts,
     roster: roster,
     assignments: assignments,
+    positions: posOverrides,
     idCounter: idCounter
   };
 }
@@ -465,6 +519,10 @@ function restoreBoard(s){
   if(s.counts && typeof s.counts === 'object') counts = s.counts;
   if(Array.isArray(s.roster)) roster = s.roster;
   if(s.assignments && typeof s.assignments === 'object') assignments = s.assignments;
+  // Older snapshots predate orb positions — fall back to the auto-layout.
+  posOverrides = (s.positions && typeof s.positions === 'object')
+    ? { range: s.positions.range || [], healer: s.positions.healer || [] }
+    : { range: [], healer: [] };
   if(typeof s.idCounter === 'number') idCounter = s.idCounter;
   renderAll();
 }

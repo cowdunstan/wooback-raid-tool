@@ -104,10 +104,13 @@ board, identity links, loot, and attendance.
   that character. The name Raid-Helper carries isn't trusted outright: when it
   matches a roster character that character holds the prio, but when it doesn't
   (a Discord nick, an alt spelled differently, a bare class) the **Discord id**
-  resolves the member and the **signed-up class** picks the character of theirs
-  it fits — their main breaking a tie — so the loot the page shows lands on the
-  character who would actually take it, with the **HAS** / **WON** pills keyed to
-  it. P2 spells the same specs out where P3 abbreviates
+  resolves the member and the **class the signup names** picks the character of
+  theirs it fits — their main breaking a tie — so the loot the page shows lands on
+  the character who would actually take it, with the **HAS** / **WON** pills keyed
+  to it. A *status* row (Tentative/Bench) names no class, only a spec, so it picks
+  by spec instead: an ambiguous spec — `protection`, `holy`, `restoration`, each
+  held by two classes — must not be guessed into a class, or a tentative prot
+  paladin reads as a warrior and rolls on the wrong prio. P2 spells the same specs out where P3 abbreviates
   (`Retribution` for `Ret`, `Feral Tank` for `Bear`), so one table carries both —
   its longer keys are matched exactly before any P3 key is tried as a substring.
 

@@ -257,7 +257,13 @@ let sections = [];        // the parsed sheet: [{ name, items:[…] }]
 let unknownTokens = [];   // sheet tokens the table above doesn't know
 let hideEmpty = true;
 let equipped = [];        // GET /api/items/list — who is wearing what
-let awards = [];          // GET /api/loot — every award, for WON and the tally
+let awards = [];          // GET /api/loot/history — every award, for WON and the tally
+let members = [];         // GET /api/members — kept so the personal section can find "me"
+let myChars = [];         // candidate-shaped objects for the signed-in user's own characters
+let exclusions = new Map(); // itemNameLower → Set(characterId) — officers' per-item roll mutes
+let exclusionNames = new Map(); // characterId → name, so the muted line can name a character not signed up
+let itemIds = new Map();   // itemNameLower → wowhead id, resolved so every item tooltips (not just ones in our gear/loot data)
+let cachedAt = 0;         // when the shown build was fetched (ms) — for the "as of" note
 
 function setStatus(msg, isErr){
   const el = document.getElementById('prioStatus');
@@ -710,6 +716,69 @@ function matchesSpec(cand, spec){
   return true;
 }
 
+/* ───────────────────────── Per-item mutes ─────────────────────────
+   An officer can say "this character does not roll on this item". The mutes come
+   from GET /api/loot-prio/exclusions as { characterId, itemName } rows and are
+   indexed by the sheet's item name (lowercased), so every candidate walk can drop
+   the muted characters for the item it is on. */
+const EMPTY_SET = new Set();
+
+function buildExclusions(rows){
+  const map = new Map();
+  (rows || []).forEach(r => {
+    const item = String(r.itemName || '').toLowerCase();
+    const cid = String(r.characterId || '');
+    if(!item || !cid) return;
+    let set = map.get(item);
+    if(!set){ set = new Set(); map.set(item, set); }
+    set.add(cid);
+  });
+  return map;
+}
+
+// The character ids muted for an item name, or an empty set. `keys` is the item's
+// aliases (sheet name plus the database's), so a mute set on either spelling lands.
+function excludedIdsForKeys(keys){
+  let out = null;
+  (keys || []).forEach(k => {
+    const set = exclusions.get(String(k || '').toLowerCase());
+    if(!set) return;
+    if(!out) out = new Set();
+    set.forEach(id => out.add(id));
+  });
+  return out || EMPTY_SET;
+}
+
+function isExcluded(cand, excludedIds){
+  return !!cand.characterId && excludedIds.has(String(cand.characterId));
+}
+
+/* The signed-in user's own characters, shaped like signup candidates so the same
+   spec matcher ranks them. Found by the Discord id the session carries — the roster
+   from /api/members already drops ignored characters. Drives the personal "what can
+   I roll on" section; independent of who is actually signed up tonight. */
+function buildMyChars(memberList){
+  const pl = (typeof sessionPayload === 'function') ? sessionPayload() : null;
+  const uid = pl && pl.uid ? String(pl.uid) : '';
+  if(!uid) return [];
+  const me = (memberList || []).find(m => String(m.discordUserId || '') === uid);
+  if(!me) return [];
+  return (me.characters || []).map(ch => {
+    const cls  = String(ch.cls || ch.class || '').toLowerCase().trim();
+    const spec = String(ch.spec || '').toLowerCase().replace(/[^a-z]/g, '');
+    const c = {
+      id: 'me-' + ch.id,
+      characterId: ch.id,
+      name: ch.name,
+      cls: RH.CLASS_COLORS[cls] ? cls : (RH.SPEC_TO_CLASS[spec] || ''),
+      spec,
+      isMain: !!ch.isMain
+    };
+    c.role = RH.isTank(c) ? 'tank' : RH.isHealer(c) ? 'healer' : 'dps';
+    return c;
+  }).filter(c => c.cls);
+}
+
 /* ───────────────────────── Annotations ─────────────────────────
    Three things an officer wants next to a name, all from data we already keep:
    who is wearing the item already, who has been awarded it before, and who has
@@ -878,28 +947,40 @@ async function loadEvents(){
   setStatus(`Found ${events.length} recent/upcoming event${events.length===1?'':'s'} — pick the raid and build.`);
 }
 
-async function build(){
+async function build(eventIdArg){
   const sel = document.getElementById('rhEvent');
-  const eventId = sel && sel.value;
+  // Refresh passes the built event id directly, since the picker isn't populated
+  // after a cache restore; the button path falls back to the picker's selection.
+  const eventId = eventIdArg || (sel && sel.value) || picked.eventId;
   const raidKey = document.getElementById('raidPick').value;
   if(!eventId){ setStatus('Load the events and pick one first.', true); return; }
 
   const raid = raidTab(raidKey);
   setStatus(`Loading the signup, the roster and the ${raid.label} sheet…`);
 
-  let ev, members, tabs;
+  let ev, tabs, exclRows;
   try {
-    [ev, members, tabs, equipped, awards] = await Promise.all([
+    // Loot history is the member-readable award list (/api/loot is officer-only);
+    // both return the same rows. Exclusions and loot degrade to empty rather than
+    // failing the build — a member without loot access still gets a prio list.
+    [ev, members, tabs, equipped, awards, exclRows] = await Promise.all([
       RH.fetchEvent(eventId),
       apiGet('/api/members').then(r => r.json()),
       fetchRaidTabs(raid),
       apiGet('/api/items/list').then(r => r.json()).catch(() => []),
-      apiGet('/api/loot').then(r => r.json()).catch(() => [])
+      apiGet('/api/loot/history').then(r => r.json()).catch(() => []),
+      apiGet('/api/loot-prio/exclusions').then(r => r.json()).catch(() => [])
     ]);
   } catch(err){
     reportError(err, 'That event is gone (it may have been deleted).');
     return;
   }
+
+  exclusions = buildExclusions(exclRows);
+  exclusionNames = new Map((exclRows || [])
+    .filter(r => r.characterId && r.characterName)
+    .map(r => [String(r.characterId), r.characterName]));
+  myChars = buildMyChars(members);
 
   const signups = RH.mapSignups(ev.signUps || ev.signups || [], null);
   if(!signups.length){ setStatus('That event has no usable signups.', true); return; }
@@ -913,6 +994,12 @@ async function build(){
   const items = sections.reduce((n, s) => n + s.items.length, 0);
   if(!items){ setStatus(`The ${raid.label} sheet parsed to no items — has its layout changed?`, true); return; }
 
+  // Resolve an id for every item so all of them tooltip, not just the ones our gear
+  // and loot data happens to carry. Best-effort: a failure leaves the DB-derived ids
+  // in place rather than blocking the build.
+  itemIds = await resolveAllItemIds();
+
+  cachedAt = Date.now();
   save();
   render();
 
@@ -939,19 +1026,22 @@ async function build(){
 // typed it wrong).
 // `had` greys the name out: they already have this item, so prio has moved past
 // them (and they are left out of the soft-reserve export).
-function candidateHTML(c, keys, had){
+function candidateHTML(c, keys, had, itemName){
   const color = RH.CLASS_COLORS[c.cls] || '#7fa89c';
   const pills = [];
   if(keys.some(k => c.has.has(k))) pills.push('<span class="stag has">HAS</span>');
   if(keys.some(k => c.won.has(k))) pills.push('<span class="stag won">WON</span>');
-  if(c.recent)            pills.push(`<span class="stag recent" title="${c.recent} win${c.recent===1?'':'s'} in the last ${RECENT_DAYS} days">×${c.recent}</span>`);
   if(!c.spec)             pills.push('<span class="stag tentative">SPEC?</span>');
   if(c.unlinked)          pills.push('<span class="stag unlinked">UNLINKED</span>');
   if(c.status && c.status !== 'active')
     pills.push(`<span class="stag ${c.status}">${c.status === 'tentative' ? 'TENT' : 'BENCH'}</span>`);
   const href = 'character.html?name=' + encodeURIComponent(c.name);
   const cls = 'prio-name' + (had ? ' is-had' : '');
-  return `<a class="${cls}" href="${href}" style="--class-color:${color}">${whEsc(c.name)}${pills.join('')}</a>`;
+  // An officer can mute a linked character on this one item; the ✕ POSTs the mute.
+  const mute = (isOfficer() && c.characterId && itemName)
+    ? `<button class="prio-mute" title="Mute ${whEsc(c.name)} on this item" data-cid="${whEsc(String(c.characterId))}" data-item="${whEsc(itemName)}" onclick="ignoreChar(this)">×</button>`
+    : '';
+  return `<a class="${cls}" href="${href}" style="--class-color:${color}">${whEsc(c.name)}${pills.join('')}</a>${mute}`;
 }
 
 // The candidates for one tier, minus anyone a better tier already claimed. That
@@ -964,15 +1054,16 @@ function candidateHTML(c, keys, had){
 // writes a chain of *names* where the prio is a personal one (the Warglaives go
 // "Xat > Chankles = Doopey"), so a token the spec table doesn't know is tried
 // against the raiders signed up before it counts as unrecognised.
-function tokenMatches(tok){
-  if(tok.specs) return candidates.filter(c => tok.specs.some(s => matchesSpec(c, s)));
+function tokenMatches(tok, excludedIds){
+  const ex = excludedIds || EMPTY_SET;
+  if(tok.specs) return candidates.filter(c => !isExcluded(c, ex) && tok.specs.some(s => matchesSpec(c, s)));
   const name = tok.label.toLowerCase();
-  return candidates.filter(c => c.name.toLowerCase() === name);
+  return candidates.filter(c => !isExcluded(c, ex) && c.name.toLowerCase() === name);
 }
 
-function tierCandidates(tier, taken){
+function tierCandidates(tier, taken, excludedIds){
   return tier.tokens.map(tok => {
-    const all = tokenMatches(tok);
+    const all = tokenMatches(tok, excludedIds);
     const hits = all.filter(c => !taken.has(c.id));
     hits.sort((a, b) => a.recent - b.recent || a.name.localeCompare(b.name));
     hits.forEach(c => taken.add(c.id));
@@ -1008,10 +1099,11 @@ function isOpenItem(item){
 function reservePlan(item, keys){
   if(isOpenItem(item)) return null;
 
+  const excludedIds = excludedIdsForKeys(keys);
   const hasAlready = c => keys.some(k => c.has.has(k) || c.won.has(k));
   const taken = new Set();
   const tiers = item.tiers.map(tier => {
-    const groups = tierCandidates(tier, taken);
+    const groups = tierCandidates(tier, taken, excludedIds);
     const free = [], had = [];
     groups.forEach(g => g.hits.forEach(c => (hasAlready(c) ? had : free).push(c)));
     return { groups, free, had };
@@ -1025,16 +1117,17 @@ function itemHTML(item, lookup){
   const row = lookup(item.name);          // also stamps the HAS flags for this item
   const keys = [item.name.toLowerCase()];
   if(row) keys.push(String(row.name).toLowerCase());
-  const name = itemLink(row ? row.id : null, item.name);
+  const name = itemLink(itemIdFor(item, row), item.name);
   const notes = item.notes.length
     ? `<div class="prio-note">${whEsc(item.notes.join(' · '))}</div>` : '';
+  const muted = mutedHTML(item, keys);
 
   if(item.openRoll){
     return { empty:false, html:
       `<div class="prio-item">
          <div class="prio-item-name">${name}</div>
          <div class="prio-tiers"><span class="prio-open">MS &gt; OS — open to everyone signed up</span></div>
-         ${notes}
+         ${muted}${notes}
        </div>` };
   }
 
@@ -1060,7 +1153,7 @@ function itemHTML(item, lookup){
       anyone = true;
       const amb = g.ambiguous ? '<span class="prio-amb" title="This token means more than one spec">?</span>' : '';
       return `<span class="prio-token">${whEsc(g.label)}${amb}</span>` +
-             g.hits.map(c => candidateHTML(c, keys, plan.hasAlready(c))).join('');
+             g.hits.map(c => candidateHTML(c, keys, plan.hasAlready(c), item.name)).join('');
     }).join('<span class="prio-eq">=</span>');
     return `<span class="prio-tier${reserves}"><span class="prio-rank">${rank}</span>${body}</span>`;
   }).filter(Boolean).join('<span class="prio-gt">›</span>');
@@ -1078,13 +1171,32 @@ function itemHTML(item, lookup){
     `<div class="prio-item${anyone ? '' : ' is-empty'}">
        <div class="prio-item-name">${name}</div>
        <div class="prio-tiers">${tierHtml}</div>
-       ${notes}
+       ${muted}${notes}
      </div>` };
+}
+
+/* The officer-only "muted" line under an item: the characters an officer has told
+   not to roll on it, each with a ✕ to lift the mute. Empty for members and for any
+   item with no mutes. Names come from the exclusion rows, so a muted character need
+   not be signed up tonight to be listed and restorable. */
+function mutedHTML(item, keys){
+  if(!isOfficer()) return '';
+  const ids = excludedIdsForKeys(keys);
+  if(!ids.size) return '';
+  const names = [...ids].map(cid => {
+    const nm = exclusionNames.get(String(cid)) || 'character';
+    return `<span class="prio-muted-name">${whEsc(nm)}` +
+           `<button class="prio-mute" title="Un-mute on this item" data-cid="${whEsc(String(cid))}" data-item="${whEsc(item.name)}" onclick="restoreChar(this)">×</button></span>`;
+  }).join('');
+  return `<div class="prio-muted">Muted here: ${names}</div>`;
 }
 
 function render(){
   const lookup = annotate(equipped, awards);
+  wornByChar = buildWornByChar(equipped);
   const host = document.getElementById('prioResult');
+
+  const myHtml = renderMyPrio(lookup);
 
   let hidden = 0;
   const html = sections.map(section => {
@@ -1098,13 +1210,170 @@ function render(){
             </section>`;
   }).join('');
 
-  host.innerHTML = html || '<div class="pool-empty">Nothing to show — try unticking "hide items nobody wants".</div>';
+  host.innerHTML = myHtml +
+    (html || '<div class="pool-empty">Nothing to show — try unticking "hide items nobody wants".</div>');
   document.getElementById('prioHiddenNote').textContent =
     hidden ? `${hidden} item${hidden===1?'':'s'} hidden — nobody signed up wants them.` : '';
   document.getElementById('prioHead').textContent =
     `${raidTab(picked.raid).label} — ${picked.eventTitle}`;
+  document.getElementById('prioAsOf').textContent = cachedAt
+    ? '· as of ' + new Date(cachedAt).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
+    : '';
   document.getElementById('prioToolbar').style.display = 'flex';
   loadWowhead();
+}
+
+/* ───────────────────────── "What can I roll on" ─────────────────────────
+   The signed-in user's own characters run against the same parsed sheet, so a
+   member (or an officer checking their own alts) sees, up front, every item on this
+   raid they hold *named* prio on. Open MS > OS is deliberately left out — the whole
+   point is "where do I actually have priority". Items a character already has, and
+   items an officer has muted them on, drop out too. */
+let wornByChar = new Map();  // charNameLower → Set(item id) worn, for the HAS check below
+
+function buildWornByChar(rows){
+  const m = new Map();
+  (rows || []).forEach(r => {
+    const id = Number(r.id);
+    if(!id) return;
+    (r.equipped || []).forEach(e => {
+      const key = String(e.name || '').toLowerCase();
+      let ids = m.get(key);
+      if(!ids){ ids = new Set(); m.set(key, ids); }
+      ids.add(id);
+    });
+  });
+  return m;
+}
+
+// Does this character already hold the item? The equipped row lists everyone
+// wearing it by name; a tier token is instead held as its redeemed piece, matched
+// by id against what the character wears (same logic as annotate's HAS).
+function myHasItem(mc, item, row){
+  if(row && (row.equipped || []).some(e => String(e.name || '').toLowerCase() === mc.name.toLowerCase()))
+    return true;
+  const tok = tierToken(item.name.toLowerCase());
+  if(tok){
+    const ids = tok[mc.cls];
+    const worn = wornByChar.get(mc.name.toLowerCase());
+    if(ids && worn && ids.some(id => worn.has(id))) return true;
+  }
+  return false;
+}
+
+// My characters that hold named prio on one item, each with the tier they sit in.
+function myPrioForItem(item, keys, row){
+  if(isOpenItem(item) || item.openRoll) return [];
+  const excludedIds = excludedIdsForKeys(keys);
+  const out = [];
+  myChars.forEach(mc => {
+    if(isExcluded(mc, excludedIds)) return;
+    if(myHasItem(mc, item, row)) return;
+    let found = -1;
+    for(let i = 0; i < item.tiers.length && found < 0; i++){
+      if(item.tiers[i].tokens.some(tok => tok.specs && tok.specs.some(s => matchesSpec(mc, s)))) found = i;
+    }
+    if(found >= 0) out.push({ char: mc, rank: found + 1 });
+  });
+  return out;
+}
+
+function renderMyPrio(lookup){
+  if(!myChars.length) return '';
+
+  const perChar = new Map();   // character name → [{ name, id, rank }]
+  sections.forEach(section => section.items.forEach(item => {
+    const keys = [item.name.toLowerCase()];
+    const row = lookup(item.name);
+    if(row) keys.push(String(row.name).toLowerCase());
+    myPrioForItem(item, keys, row).forEach(h => {
+      let arr = perChar.get(h.char.name);
+      if(!arr){ arr = []; perChar.set(h.char.name, arr); }
+      arr.push({ name: item.name, id: itemIdFor(item, row), rank: h.rank });
+    });
+  }));
+
+  const raidLabel = raidTab(picked.raid).label;
+  if(!perChar.size){
+    return `<section class="prio-boss my-prio">
+              <h2>What you can roll on</h2>
+              <div class="prio-note">Nothing on the ${whEsc(raidLabel)} sheet gives your characters named prio — anything you'd roll on here is open MS &gt; OS.</div>
+            </section>`;
+  }
+
+  const clsOf = new Map(myChars.map(c => [c.name, c.cls]));
+  const blocks = [...perChar.entries()].map(([name, arr]) => {
+    arr.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+    const color = RH.CLASS_COLORS[clsOf.get(name)] || '#7fa89c';
+    const items = arr.map(it =>
+      `<span class="my-prio-item">${itemLink(it.id, it.name)}<span class="my-prio-rank">tier ${it.rank}</span></span>`).join('');
+    return `<div class="my-prio-char">
+              <a class="prio-name" href="character.html?name=${encodeURIComponent(name)}" style="--class-color:${color}">${whEsc(name)}</a>
+              <div class="my-prio-items">${items}</div>
+            </div>`;
+  }).join('');
+
+  return `<section class="prio-boss my-prio">
+            <h2>What you can roll on <span class="my-prio-sub">— ${whEsc(raidLabel)}, your prio only (no MS &gt; OS)</span></h2>
+            ${blocks}
+          </section>`;
+}
+
+/* ───────────────────────── Muting a character ─────────────────────────
+   The officer ✕ next to a name, and the restore ✕ on the muted line. Both hit the
+   backend, update the in-memory index and the cache, then re-render off what is
+   already loaded — no rebuild. */
+async function apiSend(method, path, body){
+  const opts = { method, headers: RH.headers() };
+  if(body){
+    opts.headers = Object.assign({ 'Content-Type':'application/json' }, RH.headers());
+    opts.body = JSON.stringify(body);
+  }
+  let res;
+  try { res = await fetch(API_BASE + path, opts); }
+  catch(err){ const e = new Error('Could not reach the API.'); e.cause = err; throw e; }
+  if(!res.ok){ const e = new Error('The API returned HTTP ' + res.status + '.'); e.status = res.status; throw e; }
+  return res;
+}
+
+async function ignoreChar(btn){
+  const cid = btn.getAttribute('data-cid');
+  const item = btn.getAttribute('data-item');
+  if(!cid || !item) return;
+  const key = item.toLowerCase();
+  try {
+    await apiSend('POST', '/api/loot-prio/exclusions', { characterId: cid, itemName: item });
+  } catch(err){ reportError(err, 'The mute endpoint is unavailable.'); return; }
+
+  let set = exclusions.get(key);
+  if(!set){ set = new Set(); exclusions.set(key, set); }
+  set.add(String(cid));
+  const known = candidates.concat(myChars).find(c => String(c.characterId) === String(cid));
+  if(known) exclusionNames.set(String(cid), known.name);
+  save();
+  render();
+}
+
+async function restoreChar(btn){
+  const cid = btn.getAttribute('data-cid');
+  const item = btn.getAttribute('data-item');
+  if(!cid || !item) return;
+  const key = item.toLowerCase();
+  try {
+    await apiSend('DELETE', '/api/loot-prio/exclusions?characterId=' +
+      encodeURIComponent(cid) + '&itemName=' + encodeURIComponent(item));
+  } catch(err){ reportError(err, 'The mute endpoint is unavailable.'); return; }
+
+  const set = exclusions.get(key);
+  if(set){ set.delete(String(cid)); if(!set.size) exclusions.delete(key); }
+  save();
+  render();
+}
+
+// Rebuild the shown list from the network again — the toolbar's Refresh.
+function refreshBuild(){
+  if(!picked.eventId){ setStatus('Load the events and build a list first.', true); return; }
+  build(picked.eventId);
 }
 
 function toggleHideEmpty(el){
@@ -1158,6 +1427,37 @@ async function resolveItemIds(names){
     throw e;
   }
   return res.json();
+}
+
+// Every distinct item name on the built raid → its id, so the links tooltip. The
+// sheet carries no ids, and only some items appear in our gear/loot data, so this
+// fills the rest from Blizzard's item table (cached server-side). Best-effort: on
+// failure the page keeps the ids it already had from gear/loot.
+async function resolveAllItemIds(){
+  const names = [], seen = new Set();
+  sections.forEach(s => s.items.forEach(it => {
+    const k = it.name.toLowerCase();
+    if(!seen.has(k)){ seen.add(k); names.push(it.name); }
+  }));
+  if(!names.length) return new Map();
+  try {
+    const res = await resolveItemIds(names);
+    const map = new Map();
+    Object.keys(res.resolved || {}).forEach(n => {
+      const id = res.resolved[n];
+      if(id) map.set(String(n).toLowerCase(), id);
+    });
+    return map;
+  } catch(err){
+    console.warn('Item id resolution failed; tooltips fall back to gear/loot ids only:', err);
+    return new Map();
+  }
+}
+
+// The best id we have for an item: our own gear/loot data first (it is exact), then
+// the resolved Blizzard id.
+function itemIdFor(item, row){
+  return (row && row.id) || itemIds.get(item.name.toLowerCase()) || null;
 }
 
 // base64(zlib(bytes)). CompressionStream('deflate') is the zlib wrapper Gargul's
@@ -1339,7 +1639,8 @@ function copyText(){
         return;
       }
       const taken = new Set();
-      const parts = item.tiers.map(tier => tierCandidates(tier, taken)
+      const excludedIds = excludedIdsForKeys([item.name.toLowerCase()]);
+      const parts = item.tiers.map(tier => tierCandidates(tier, taken, excludedIds)
         .filter(g => g.hits.length)
         .map(g => `${g.label}: ${g.hits.map(c => c.name).join(', ')}`)
         .join(' = ')).filter(Boolean);
@@ -1360,29 +1661,70 @@ function copyText(){
 }
 
 /* ───────────────────────── Persistence ─────────────────────────
-   Only the picks. Everything else is refetched, which is what keeps the page
-   honest about a sheet or a signup that changed since last time. */
+   The whole built list is cached, not just the picks, so a mid-raid reload comes
+   back instantly with no refetch or re-parse. Refresh (or a fresh Build) is how you
+   deliberately re-read a sheet or a signup that changed. The candidate HAS/WON sets
+   don't survive JSON, but annotate rebuilds them on every render, so that's fine.
 
-function save(){
-  try{ localStorage.setItem(STORE_KEY, JSON.stringify({ picked, hideEmpty })); }catch(e){}
+   The gear and loot rows can be large; if the full payload trips the storage quota
+   we fall back to persisting only the picks, so at least the raid and toggle stick. */
+
+function serializeExclusions(){
+  return [...exclusions.entries()].map(([k, set]) => [k, [...set]]);
+}
+function deserializeExclusions(pairs){
+  return new Map((pairs || []).map(([k, ids]) => [k, new Set(ids)]));
 }
 
+function save(){
+  const full = {
+    picked, hideEmpty, cachedAt,
+    sections, candidates, unknownTokens, equipped, awards, myChars,
+    itemIds: [...itemIds.entries()],
+    exclusions: serializeExclusions(),
+    exclusionNames: [...exclusionNames.entries()]
+  };
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(full)); }
+  catch(e){
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify({ picked, hideEmpty })); }catch(e2){}
+  }
+}
+
+// Returns true when a full cached build was restored and rendered.
 function restore(){
   let saved = null;
   try{ saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); }catch(e){}
-  if(!saved) return;
+  if(!saved) return false;
   if(saved.picked) picked = Object.assign(picked, saved.picked);
   if(typeof saved.hideEmpty === 'boolean') hideEmpty = saved.hideEmpty;
   document.getElementById('hideEmpty').checked = hideEmpty;
   if(RAID_TABS.some(r => r.key === picked.raid)) document.getElementById('raidPick').value = picked.raid;
+
+  if(saved.sections && saved.sections.length){
+    sections = saved.sections;
+    candidates = saved.candidates || [];
+    unknownTokens = saved.unknownTokens || [];
+    equipped = saved.equipped || [];
+    awards = saved.awards || [];
+    myChars = saved.myChars || [];
+    cachedAt = saved.cachedAt || 0;
+    itemIds = new Map(saved.itemIds || []);
+    exclusions = deserializeExclusions(saved.exclusions);
+    exclusionNames = new Map(saved.exclusionNames || []);
+    render();
+    return true;
+  }
+  return false;
 }
 
 function startOver(){
   picked = { eventId:'', eventTitle:'', raid:RAID_TABS[0].key };
   candidates = []; sections = []; unknownTokens = [];
+  myChars = []; exclusions = new Map(); exclusionNames = new Map(); itemIds = new Map(); cachedAt = 0;
   try{ localStorage.removeItem(STORE_KEY); }catch(e){}
   document.getElementById('prioResult').innerHTML = '';
   document.getElementById('prioHead').textContent = '';
+  document.getElementById('prioAsOf').textContent = '';
   document.getElementById('prioHiddenNote').textContent = '';
   document.getElementById('prioToolbar').style.display = 'none';
   setStatus('Cleared. Load the events to start again.');
@@ -1402,7 +1744,9 @@ function startOver(){
       RAID_TABS.filter(r => r.doc === doc)
                .map(r => `<option value="${r.key}">${whEsc(r.label)}</option>`).join('') +
       '</optgroup>').join('');
-    restore();
-    setStatus('Load the events, pick tonight’s signup and the raid, then build.');
+    const restored = restore();
+    setStatus(restored
+      ? 'Showing your last build — Refresh to re-read the sheet, or Load events to pick another.'
+      : 'Load the events, pick tonight’s signup and the raid, then build.');
   });
 })();

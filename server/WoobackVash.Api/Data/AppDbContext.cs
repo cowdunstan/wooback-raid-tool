@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<AttendanceRecord> Attendance => Set<AttendanceRecord>();
     public DbSet<CharacterGearSnapshot> GearSnapshots => Set<CharacterGearSnapshot>();
     public DbSet<RosterImportCandidate> RosterImportCandidates => Set<RosterImportCandidate>();
+    public DbSet<LootPrioExclusion> LootPrioExclusions => Set<LootPrioExclusion>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -102,6 +103,16 @@ public class AppDbContext : DbContext
         {
             // A scratch table rebuilt each sync; one row per roster name.
             e.HasIndex(c => c.Name).IsUnique();
+        });
+
+        b.Entity<LootPrioExclusion>(e =>
+        {
+            // At most one mute per character per item name — POST upserts on it.
+            e.HasIndex(x => new { x.CharacterId, x.ItemName }).IsUnique();
+            e.HasOne(x => x.Character)
+             .WithMany()
+             .HasForeignKey(x => x.CharacterId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<CharacterGearSnapshot>(e =>

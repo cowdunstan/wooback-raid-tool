@@ -8,12 +8,14 @@ namespace WoobackVash.Api.Proxy;
 
 /// <summary>
 /// The gated proxies ported from raidhelper-proxy.worker.js:
-///  • /v4/*          Raid-Helper API — officer session required; the RH token is
-///                   attached server-side so it never reaches the browser.
+///  • /v4/*          Raid-Helper API — any signed-in tier (the loot-prio page is
+///                   member-visible, and reading a guild signup is not officer work).
+///                   The RH token is attached server-side so it never reaches the browser.
 ///  • /wcl/reports   Warcraft Logs report list — any signed-in tier (logs are
 ///                   public). ?fresh=1 forces a live refresh (officers only).
 ///  • /wcl/ratelimit Warcraft Logs points budget — officer-only diagnostics.
-///  • /sheet/loot    One tab of a guild Google loot sheet — officer-only. Not a
+///  • /sheet/loot    One tab of a guild Google loot sheet — any signed-in tier, since
+///                   the loot-prio page it feeds is now member-visible. Not a
 ///                   credential proxy (the docs are link-shared); it exists because
 ///                   Google sends no CORS header. ?doc=p3|p2 picks the phase's
 ///                   document, ?format=html keeps the cell colours the sheets
@@ -34,8 +36,6 @@ public static class ProxyEndpoints
             var session = ctx.GetSession(tokens);
             if (session is null)
                 return Results.Json(new { error = "unauthorized", detail = "Sign-in required." }, statusCode: 401);
-            if (!session.Officer)
-                return Results.Json(new { error = "forbidden", detail = "Officer access required." }, statusCode: 403);
 
             var o = opt.Value;
             var target = o.ApiBase.TrimEnd('/') + ctx.Request.Path + ctx.Request.QueryString;
@@ -97,8 +97,8 @@ public static class ProxyEndpoints
             return Results.Text(body, "application/json", statusCode: status);
         });
 
-        // One tab of a guild loot sheet — officer-only, because it feeds the
-        // loot-prio page, which is officer work. The document ids live in config
+        // One tab of a guild loot sheet — any signed-in tier, since the loot-prio
+        // page it feeds is now member-visible. The document ids live in config
         // and are never client-supplied: ?doc names a phase ("p3", "p2") which
         // must be a key of LootSheet:Docs, and the tab (gid) must be digits, so
         // the URL this builds can't be steered anywhere else.
@@ -113,7 +113,7 @@ public static class ProxyEndpoints
             IOptions<LootSheetOptions> lootOpt,
             LootSheetService sheet) =>
         {
-            var (_, error) = ctx.RequireOfficer(tokens);
+            var (_, error) = ctx.RequireSession(tokens);
             if (error is not null) return error;
 
             // Absent means the phase the app has always served, so an old client

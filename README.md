@@ -22,7 +22,10 @@ board, identity links, loot, and attendance.
   (newest first), each linked straight to Warcraft Logs. Any signed-in tier.
 - **`board.html`** — the Lady Vashj assignment board (**officers only**); `app.js`
   + `styles.css` power it. Imports rosters from Raid-Helper, and **saves/loads**
-  the whole board (roster + slot counts + assignments) to the backend per raid.
+  the whole board (roster + slot counts + assignments + hand-placed orb
+  **positions**) to the backend per raid. Orbs auto-lay-out along the range arcs
+  and the healer circle, but an officer can **drag any orb** to reposition it
+  freely on the arena; the moved positions ride along in the saved snapshot.
 - **`groups.html`** — **2 group organisation** (**officers only**): the guild runs
   the same raid twice at different times — one Raid-Helper signup for **mains**, a
   second for **alts** — so this page loads *both* signups, resolves them against

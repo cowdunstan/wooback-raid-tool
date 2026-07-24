@@ -91,7 +91,8 @@ board, identity links, loot, and attendance.
   (`SHEET_DOCS`, one per phase with a button to switch between them), open to any
   signed-in tier. Reads the live sheets via their "anyone with the link" share
   setting, so the sign-in gate here is for the app's flow, not a data barrier.
-- **`loot-prio.html`** — **loot prio** (**officers only**): the join between the
+- **`loot-prio.html`** — **loot prio** (**read-only to any signed-in member**; the
+  Gargul export, text copy and per-item mutes are **officer-only**): the join between the
   loot sheets and who is actually raiding. Pick one Raid-Helper signup and a raid
   — **Black Temple** or **Mount Hyjal** from the P3 sheet, **Serpentshrine
   Cavern** or **Tempest Keep** from the P2 one — and every boss's items come back
@@ -105,8 +106,8 @@ board, identity links, loot, and attendance.
   (a Discord nick, an alt spelled differently, a bare class) the **Discord id**
   resolves the member and the **signed-up class** picks the character of theirs
   it fits — their main breaking a tie — so the loot the page shows lands on the
-  character who would actually take it, with the **HAS** / **WON** / recency pills
-  keyed to it. P2 spells the same specs out where P3 abbreviates
+  character who would actually take it, with the **HAS** / **WON** pills keyed to
+  it. P2 spells the same specs out where P3 abbreviates
   (`Retribution` for `Ret`, `Feral Tank` for `Bear`), so one table carries both —
   its longer keys are matched exactly before any P3 key is tried as a substring.
 
@@ -124,10 +125,24 @@ board, identity links, loot, and attendance.
   marks the tokens it can no longer separate with a `?`. A token the table doesn't
   know is reported rather than silently dropped.
   `MS > OS` items are shown as open to everyone. Each candidate carries **HAS**
-  (already wearing it, from the gear snapshots), **WON** (already awarded it) and
-  a `×N` tally of their wins in the last 28 days, so a tie inside a tier has a
-  tiebreaker. **Copy as text** dumps the whole plan for pasting into Discord.
-  Which tabs make up which raid is `RAID_TABS` in `loot-prio.js`. The two sheets
+  (already wearing it, from the gear snapshots) and **WON** (already awarded it); a
+  tie inside a tier still breaks on who has won least in the last 28 days, though
+  that count is no longer shown as a pill. **Copy as text** dumps the whole plan for
+  pasting into Discord. Which tabs make up which raid is `RAID_TABS` in `loot-prio.js`.
+
+  At the top, **What you can roll on** runs the *signed-in user's own* characters
+  (found by the session's Discord id against the roster) over the same parsed sheet
+  and lists, per character, the items on this raid they hold **named** prio on and
+  don't already have — `MS > OS` is left out, since the point is where you actually
+  have priority. It is what makes the page worth opening for a member, not just an
+  officer. Officers can **mute** a character on a single item with the ✕ beside their
+  name — persisted server-side (`/api/loot-prio/exclusions`) and scoped to the raid
+  being shown, it drops that character from that one item across this raid (the tier
+  list, the text copy, the Gargul export, and everyone's personal section) until an
+  officer lifts it from the *Muted here* line. Scoping it to the raid keeps a tier
+  token that drops in both raids of a phase from carrying the mute across.
+  The built list is cached in `localStorage`, so a mid-raid reload restores it
+  instantly with no refetch; **Refresh** re-reads the sheet and signup. The two sheets
   are shaped differently and the entry says so: a P3 raid is **one tab** that
   banners each boss inside it, a P2 raid is **one tab per boss** (plus its trash
   tab, plus the shared tier-set tab) and each names the section it belongs to. A
@@ -212,8 +227,11 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   (7 days) and can be renewed until `Session:MaxLifetimeSeconds` (30 days) after
   the original sign-in — that cap is what bounds how stale the `officer` flag can
   get, since roles are only re-read at login.
-- **Raid-Helper proxy** — `GET /v4/*`, officer-gated. The Raid-Helper token is
-  attached server-side (`RaidHelper__Token`) and never reaches the browser.
+- **Raid-Helper proxy** — `GET /v4/*`, any valid session. The Raid-Helper token is
+  attached server-side (`RaidHelper__Token`) and never reaches the browser. Opened
+  from officer-only to any member so the now member-visible `loot-prio.html` can read
+  a signup; the events it exposes are the guild's own (board/groups still gate their
+  *pages* to officers).
 - **Warcraft Logs proxy** — `GET /wcl/reports`, any valid session (logs are
   public). Server-side v2 API credentials, a cached report list (officers can
   force a refresh), and an officer-only `/wcl/ratelimit` budget check.
@@ -248,7 +266,8 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   the item (name, icon, quality, item level), who has it equipped in their latest
   gear snapshot, how often it dropped, and every award with its rolls. An id also
   picks up hand-typed awards that carry only the name, so both reach one page.
-- **Loot-sheet proxy** — `GET /sheet/loot?doc=&gid=`, officer-gated. Returns one
+- **Loot-sheet proxy** — `GET /sheet/loot?doc=&gid=`, any valid session (opened from
+  officer-only now that `loot-prio.html` is member-visible). Returns one
   tab of one of the guild's Google loot sheets (cached 10 min per doc/tab/view)
   for `loot-prio.html`. `?doc=` names a phase — `p3` (the default, so an older
   client keeps working) or `p2` — and must be a key of `LootSheet:Docs`;
@@ -260,9 +279,12 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   document ids are `LootSheet:Docs` in `appsettings.json`, the same docs
   `SHEET_DOCS` in `sheet.html` embeds — **change both together**, and keep
   their General access on "Anyone with the link → Viewer" or both pages break.
-- **Item-name lookup** — `POST /api/items/resolve` `{ names: [...] }`, officer-gated,
+- **Item-name lookup** — `POST /api/items/resolve` `{ names: [...] }`, any valid session,
   max 500 names. Returns `{ resolved: { name: id }, unresolved: [...] }`. Bridges the
-  loot sheet (names) to a Gargul soft reserve (ids) via Blizzard's item search on
+  loot sheet (names) to ids — the Gargul soft reserve is keyed by id, and every item on
+  the prio page needs one to show a Wowhead tooltip. Opened from officer-only when the
+  page went member-visible; the ids come from the static item table and are cached, so a
+  member can't outspend the budget the first build already did. Blizzard's item search on
   the **static** classicann namespace (`Blizzard:StaticNamespace`) — TBC's item
   table, so "Cuffs of Devastation" is 30870 and not the retail item that reused the
   name. That search is fuzzy, so results are re-matched against the name asked for:
@@ -273,6 +295,14 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   as `(MH)` / `(OH)`; those are picked apart by id. Ids are cached for the process
   lifetime — an item's id never changes. Currently 203 of the sheet's 209 names
   resolve; the rest are reported, never guessed.
+- **Loot-prio mutes** — `GET /api/loot-prio/exclusions?raid=` (any valid session, so the
+  member-visible prio page and everyone's personal section reflect the mutes; `?raid=`
+  narrows to one raid's), `POST`/`DELETE /api/loot-prio/exclusions` (officer-gated). A
+  mute is a `(character, raid, item name)` row (`LootPrioExclusion`, unique on the
+  triple) that drops one character from one item **within one raid** (a `RAID_TABS`
+  key). Keyed by the sheet's item name, lowercased — the identity the sheet and page use
+  throughout — and scoped by raid so an item name shared across two raids of a phase (a
+  tier token) doesn't carry the mute across.
 - **Health** — `/healthz` (liveness), `/readyz` (DB reachability + error detail).
 
 Non-secret config (Discord client id, guild id, role ids, WCL guild identity)

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using WoobackVash.Api.Data;
@@ -11,9 +12,11 @@ using WoobackVash.Api.Data;
 namespace WoobackVash.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724102836_AddLootPrioExclusions")]
+    partial class AddLootPrioExclusions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -281,10 +284,6 @@ namespace WoobackVash.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("Raid")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("Reason")
                         .HasColumnType("text");
 
@@ -293,7 +292,7 @@ namespace WoobackVash.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CharacterId", "Raid", "ItemName")
+                    b.HasIndex("CharacterId", "ItemName")
                         .IsUnique();
 
                     b.ToTable("LootPrioExclusions");

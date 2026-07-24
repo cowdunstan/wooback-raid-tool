@@ -203,9 +203,12 @@ public static class ItemEndpoints
             return Results.Json(rows);
         });
 
-        // Item names → item ids, for the loot-prio page's Gargul soft-reserve export
-        // (the sheet has names, a soft reserve is keyed by id). Officer-gated: it is
-        // an officer feature and it spends the guild's Blizzard API budget.
+        // Item names → item ids, for the loot-prio page: the sheet carries names, but
+        // both the Gargul soft-reserve export and the Wowhead tooltips on every item
+        // need ids. Any signed-in session, since the page is now member-visible — the
+        // ids come from Blizzard's static (never-changing) item table and are cached
+        // process-wide, so a member can't spend more of the budget than the first
+        // build of each name already did.
         //
         // POST rather than GET because a raid tab is ~150 names, which is more than
         // belongs in a query string. Names that can't be resolved come back listed
@@ -213,7 +216,7 @@ public static class ItemEndpoints
         app.MapPost("/api/items/resolve", async (
             HttpContext ctx, SessionTokenService tokens, BlizzardService blizzard, ResolveInput input) =>
         {
-            var (_, error) = ctx.RequireOfficer(tokens);
+            var (_, error) = ctx.RequireSession(tokens);
             if (error is not null) return error;
 
             if (input?.Names is null || input.Names.Count == 0)

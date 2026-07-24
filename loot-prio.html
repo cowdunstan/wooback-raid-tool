@@ -1,9 +1,10 @@
 <meta charset="utf-8">
 <script>
-/* Officer gate. Same as groups.html: captures a session handed back by the auth
-   backend (loot-prio.html#session=…), bounces to the landing page with no
-   unexpired session and to home with a non-officer one. The signature is what
-   actually enforces this — every call the page makes is officer-gated server-side. */
+/* Session gate. Captures a session handed back by the auth backend
+   (loot-prio.html#session=…) and bounces to the landing page with no unexpired
+   session. The page is open to any signed-in tier: members read the prio list and
+   their own "what can I roll on" section; the officer-only actions (Gargul export,
+   text copy, per-item mutes) are hidden by isOfficer() here and enforced server-side. */
 (function(){
   var m = location.hash.match(/(?:^#|&)session=([^&]+)/);
   if(m){
@@ -24,8 +25,6 @@
   if(!pl || !pl.exp || pl.exp <= Math.floor(Date.now()/1000)){
     try{ localStorage.removeItem('vashj_session'); }catch(e){}
     location.replace('index.html');
-  } else if(!pl.officer){
-    location.replace('home.html');
   }
 })();
 </script>
@@ -51,7 +50,7 @@
       </span>
     </div>
     <h1>Loot prio</h1>
-    <p class="subtitle">Pick tonight’s signup and the raid, and the guild loot sheets turn into a per-boss prio list: for every item, the characters signed up that hold priority, in the sheet’s own order. Black Temple and Hyjal come from the P3 sheet, SSC and Tempest Keep from the P2 one. Pills flag anyone already wearing it, anyone who has won it before, and how much loot they’ve taken lately.</p>
+    <p class="subtitle">Pick tonight’s signup and the raid, and the guild loot sheets turn into a per-boss prio list: for every item, the characters signed up that hold priority, in the sheet’s own order. Black Temple and Hyjal come from the P3 sheet, SSC and Tempest Keep from the P2 one. Pills flag anyone already wearing an item or who has won it before. Up top, “What you can roll on” pulls out where your own characters hold prio. Officers can mute a character on a single item with the ✕ beside their name.</p>
 
     <div class="roster-panel">
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
@@ -76,11 +75,13 @@
       <div class="field">
         <label>Showing</label>
         <span id="prioHead" style="font-size:13.5px;font-weight:600;"></span>
+        <span id="prioAsOf" style="font-size:11px;color:var(--text-dim);"></span>
       </div>
       <div class="spacer"></div>
       <label class="prio-check"><input type="checkbox" id="hideEmpty" checked onchange="toggleHideEmpty(this)"> Hide items nobody wants</label>
-      <button class="btn-primary" onclick="copyGargulSR()">Gargul SR string</button>
-      <button class="btn-ghost" onclick="copyText()">Copy as text</button>
+      <button class="btn-ghost" onclick="refreshBuild()">Refresh</button>
+      <button class="btn-primary" data-officer-only onclick="copyGargulSR()">Gargul SR string</button>
+      <button class="btn-ghost" data-officer-only onclick="copyText()">Copy as text</button>
       <button class="btn-ghost" onclick="startOver()">Start over</button>
     </div>
     <div id="srExport" class="roster-panel" style="display:none;"></div>

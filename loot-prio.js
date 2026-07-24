@@ -260,6 +260,8 @@ let equipped = [];        // GET /api/items/list — who is wearing what
 let awards = [];          // GET /api/loot/history — every award, for WON and the tally
 let members = [];         // GET /api/members — kept so the personal section can find "me"
 let myChars = [];         // candidate-shaped objects for the signed-in user's own characters
+let pickerRoster = [];    // officer View-as options: [{ id, label, chars }] for every member
+let viewAs = { kind:'self' }; // whose prio the personal section shows: self | cand | member
 let exclusions = new Map(); // itemNameLower → Set(characterId) — officers' per-item roll mutes
 let exclusionNames = new Map(); // characterId → name, so the muted line can name a character not signed up
 let itemIds = new Map();   // itemNameLower → wowhead id, resolved so every item tooltips (not just ones in our gear/loot data)
@@ -753,17 +755,11 @@ function isExcluded(cand, excludedIds){
   return !!cand.characterId && excludedIds.has(String(cand.characterId));
 }
 
-/* The signed-in user's own characters, shaped like signup candidates so the same
-   spec matcher ranks them. Found by the Discord id the session carries — the roster
-   from /api/members already drops ignored characters. Drives the personal "what can
-   I roll on" section; independent of who is actually signed up tonight. */
-function buildMyChars(memberList){
-  const pl = (typeof sessionPayload === 'function') ? sessionPayload() : null;
-  const uid = pl && pl.uid ? String(pl.uid) : '';
-  if(!uid) return [];
-  const me = (memberList || []).find(m => String(m.discordUserId || '') === uid);
-  if(!me) return [];
-  return (me.characters || []).map(ch => {
+/* One member's characters, shaped like signup candidates so the same spec matcher
+   ranks them. The roster from /api/members already drops ignored characters. */
+function buildCharsFor(member){
+  if(!member) return [];
+  return (member.characters || []).map(ch => {
     const cls  = String(ch.cls || ch.class || '').toLowerCase().trim();
     const spec = String(ch.spec || '').toLowerCase().replace(/[^a-z]/g, '');
     const c = {
@@ -777,6 +773,47 @@ function buildMyChars(memberList){
     c.role = RH.isTank(c) ? 'tank' : RH.isHealer(c) ? 'healer' : 'dps';
     return c;
   }).filter(c => c.cls);
+}
+
+/* The signed-in user's own characters. Found by the Discord id the session carries.
+   Drives the personal "what can I roll on" section; independent of who is actually
+   signed up tonight. An officer can point that section at someone else with the
+   View-as picker (see activeViewChars), but this stays the default. */
+function buildMyChars(memberList){
+  const pl = (typeof sessionPayload === 'function') ? sessionPayload() : null;
+  const uid = pl && pl.uid ? String(pl.uid) : '';
+  if(!uid) return [];
+  return buildCharsFor((memberList || []).find(m => String(m.discordUserId || '') === uid) || null);
+}
+
+/* The roster as View-as options: every member's label and their characters, shaped
+   for the personal section. Officers only — it drives the picker's "Roster" group and
+   is what lets view-as survive a reload, since the full members array is never cached. */
+function buildPickerRoster(memberList){
+  return (memberList || []).map(m => ({
+    id: String(m.discordUserId || ''),
+    label: m.nickname || m.displayName || m.discordUsername || m.name || 'member',
+    chars: buildCharsFor(m)
+  })).filter(r => r.chars.length);
+}
+
+/* Whose characters the personal section is currently showing, and a label for the
+   heading. `self` is the signed-in user; an officer can switch to a raider signed up
+   tonight (`cand`) or any member (`member`). */
+function activeViewChars(){
+  // Only officers get someone else's view. A member can't reach the picker (it is
+  // hidden), but a stale pick could still be in their cache from a shared browser —
+  // fall back to their own prio rather than showing another raider's.
+  if(isOfficer()){
+    if(viewAs.kind === 'cand'){
+      const c = candidates.find(x => String(x.id) === String(viewAs.id));
+      if(c) return { chars:[c], label:c.name, self:false };
+    } else if(viewAs.kind === 'member'){
+      const r = pickerRoster.find(x => x.id === String(viewAs.id));
+      if(r) return { chars:r.chars, label:r.label, self:false };
+    }
+  }
+  return { chars: myChars, label:'you', self:true };
 }
 
 /* ───────────────────────── Annotations ─────────────────────────
@@ -981,6 +1018,7 @@ async function build(eventIdArg){
     .filter(r => r.characterId && r.characterName)
     .map(r => [String(r.characterId), r.characterName]));
   myChars = buildMyChars(members);
+  pickerRoster = buildPickerRoster(members);
 
   const signups = RH.mapSignups(ev.signUps || ev.signups || [], null);
   if(!signups.length){ setStatus('That event has no usable signups.', true); return; }
@@ -1196,7 +1234,8 @@ function render(){
   wornByChar = buildWornByChar(equipped);
   const host = document.getElementById('prioResult');
 
-  const myHtml = renderMyPrio(lookup);
+  populateViewAs();
+  const myHtml = renderMyPrio(lookup, activeViewChars());
 
   let hidden = 0;
   const html = sections.map(section => {
@@ -1261,12 +1300,13 @@ function myHasItem(mc, item, row){
   return false;
 }
 
-// My characters that hold named prio on one item, each with the tier they sit in.
-function myPrioForItem(item, keys, row){
+// The given characters that hold named prio on one item, each with the tier they sit
+// in. `chars` is whoever the section is currently showing (self, or an officer's pick).
+function myPrioForItem(item, keys, row, chars){
   if(isOpenItem(item) || item.openRoll) return [];
   const excludedIds = excludedIdsForKeys(keys);
   const out = [];
-  myChars.forEach(mc => {
+  (chars || []).forEach(mc => {
     if(isExcluded(mc, excludedIds)) return;
     if(myHasItem(mc, item, row)) return;
     let found = -1;
@@ -1278,15 +1318,21 @@ function myPrioForItem(item, keys, row){
   return out;
 }
 
-function renderMyPrio(lookup){
-  if(!myChars.length) return '';
+function renderMyPrio(lookup, view){
+  const chars = (view && view.chars) || [];
+  if(!chars.length) return '';
+  const self = !!(view && view.self);
+  // Heading and empty-state wording shift when an officer is viewing someone else.
+  const who = self ? 'you have' : `${whEsc(view.label)} has`;
+  const whose = self ? 'your' : `${whEsc(view.label)}’s`;
+  const youd = self ? 'you' : 'they';
 
   const perChar = new Map();   // character name → [{ name, id, rank }]
   sections.forEach(section => section.items.forEach(item => {
     const keys = [item.name.toLowerCase()];
     const row = lookup(item.name);
     if(row) keys.push(String(row.name).toLowerCase());
-    myPrioForItem(item, keys, row).forEach(h => {
+    myPrioForItem(item, keys, row, chars).forEach(h => {
       let arr = perChar.get(h.char.name);
       if(!arr){ arr = []; perChar.set(h.char.name, arr); }
       arr.push({ name: item.name, id: itemIdFor(item, row), rank: h.rank });
@@ -1296,12 +1342,12 @@ function renderMyPrio(lookup){
   const raidLabel = raidTab(picked.raid).label;
   if(!perChar.size){
     return `<section class="prio-boss my-prio">
-              <h2>What you have prio on</h2>
-              <div class="prio-note">Nothing on the ${whEsc(raidLabel)} sheet gives your characters named prio — anything you'd roll on here is open MS &gt; OS.</div>
+              <h2>What ${who} prio on</h2>
+              <div class="prio-note">Nothing on the ${whEsc(raidLabel)} sheet gives ${whose} characters named prio — anything ${youd}’d roll on here is open MS &gt; OS.</div>
             </section>`;
   }
 
-  const clsOf = new Map(myChars.map(c => [c.name, c.cls]));
+  const clsOf = new Map(chars.map(c => [c.name, c.cls]));
   const blocks = [...perChar.entries()].map(([name, arr]) => {
     arr.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
     const color = RH.CLASS_COLORS[clsOf.get(name)] || '#7fa89c';
@@ -1314,9 +1360,65 @@ function renderMyPrio(lookup){
   }).join('');
 
   return `<section class="prio-boss my-prio">
-            <h2>What you have prio on <span class="my-prio-sub">— ${whEsc(raidLabel)}, your prio only (no MS &gt; OS)</span></h2>
+            <h2>What ${who} prio on <span class="my-prio-sub">— ${whEsc(raidLabel)}, ${self ? 'your' : 'their'} named prio only (no MS &gt; OS)</span></h2>
             ${blocks}
           </section>`;
+}
+
+/* ───────────────────────── Officer "View as" ─────────────────────────
+   The officer-only picker that points the personal section at someone else. Two
+   groups: the characters signed up tonight (from `candidates`), and the rest of the
+   roster (members with no signed-up character, from `pickerRoster`). Rebuilt on every
+   render so it tracks the current build and re-selects the active pick. Purely
+   client-side — the roster is already member-readable and the prio is public sheet
+   data, so this exposes nothing; the picker just carries `data-officer-only` so
+   menu.js hides it for members. */
+function viewAsValue(){
+  if(viewAs.kind === 'cand')   return 'cand:'   + viewAs.id;
+  if(viewAs.kind === 'member') return 'member:' + viewAs.id;
+  return 'self';
+}
+
+function populateViewAs(){
+  const sel = document.getElementById('viewAs');
+  if(!sel) return;
+
+  const opts = ['<option value="self">Yourself</option>'];
+
+  if(candidates.length){
+    opts.push('<optgroup label="In tonight’s raid">');
+    candidates.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(c => {
+      const cls = c.cls ? ` (${c.cls})` : '';
+      opts.push(`<option value="cand:${whEsc(String(c.id))}">${whEsc(c.name)}${whEsc(cls)}</option>`);
+    });
+    opts.push('</optgroup>');
+  }
+
+  // Anyone already in the raid group is dropped here so a raider isn't listed twice.
+  const signed = new Set(candidates.map(c => c.name.toLowerCase()));
+  const rest = pickerRoster
+    .filter(r => r.id && !r.chars.some(ch => signed.has(ch.name.toLowerCase())))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  if(rest.length){
+    opts.push('<optgroup label="Roster">');
+    rest.forEach(r => opts.push(`<option value="member:${whEsc(r.id)}">${whEsc(r.label)}</option>`));
+    opts.push('</optgroup>');
+  }
+
+  sel.innerHTML = opts.join('');
+  // Re-select the active pick; fall back to self if it's no longer offered (e.g. the
+  // picked raider dropped off a rebuilt signup).
+  sel.value = viewAsValue();
+  if(sel.selectedIndex < 0){ viewAs = { kind:'self' }; sel.value = 'self'; }
+}
+
+function setViewAs(el){
+  const v = el.value || 'self';
+  if(v.startsWith('cand:'))        viewAs = { kind:'cand',   id: v.slice(5) };
+  else if(v.startsWith('member:')) viewAs = { kind:'member', id: v.slice(7) };
+  else                             viewAs = { kind:'self' };
+  save();
+  render();
 }
 
 /* ───────────────────────── Muting a character ─────────────────────────
@@ -1681,6 +1783,7 @@ function save(){
   const full = {
     picked, hideEmpty, cachedAt,
     sections, candidates, unknownTokens, equipped, awards, myChars,
+    pickerRoster, viewAs,
     itemIds: [...itemIds.entries()],
     exclusions: serializeExclusions(),
     exclusionNames: [...exclusionNames.entries()]
@@ -1708,6 +1811,8 @@ function restore(){
     equipped = saved.equipped || [];
     awards = saved.awards || [];
     myChars = saved.myChars || [];
+    pickerRoster = saved.pickerRoster || [];
+    viewAs = (saved.viewAs && saved.viewAs.kind) ? saved.viewAs : { kind:'self' };
     cachedAt = saved.cachedAt || 0;
     itemIds = new Map(saved.itemIds || []);
     exclusions = deserializeExclusions(saved.exclusions);
@@ -1721,7 +1826,8 @@ function restore(){
 function startOver(){
   picked = { eventId:'', eventTitle:'', raid:RAID_TABS[0].key };
   candidates = []; sections = []; unknownTokens = [];
-  myChars = []; exclusions = new Map(); exclusionNames = new Map(); itemIds = new Map(); cachedAt = 0;
+  myChars = []; pickerRoster = []; viewAs = { kind:'self' };
+  exclusions = new Map(); exclusionNames = new Map(); itemIds = new Map(); cachedAt = 0;
   try{ localStorage.removeItem(STORE_KEY); }catch(e){}
   document.getElementById('prioResult').innerHTML = '';
   document.getElementById('prioHead').textContent = '';

@@ -795,15 +795,19 @@ function buildCharsFor(member){
   }).filter(c => c.cls);
 }
 
-/* The signed-in user's own characters. Found by the Discord id the session carries.
-   Drives the personal "what can I roll on" section; independent of who is actually
-   signed up tonight. An officer can point that section at someone else with the
+/* The signed-in user's own characters that are actually signed up tonight. Found by
+   the Discord id the session carries, then narrowed to the roster characters this
+   raid's signup resolved to — the personal "what can I roll on" section is about the
+   character you brought, not every alt you own. Needs `candidates` already built (see
+   buildCandidates). An officer can point that section at someone else with the
    View-as picker (see activeViewChars), but this stays the default. */
 function buildMyChars(memberList){
   const pl = (typeof sessionPayload === 'function') ? sessionPayload() : null;
   const uid = pl && pl.uid ? String(pl.uid) : '';
   if(!uid) return [];
-  return buildCharsFor((memberList || []).find(m => String(m.discordUserId || '') === uid) || null);
+  const mine = buildCharsFor((memberList || []).find(m => String(m.discordUserId || '') === uid) || null);
+  const signedUp = new Set(candidates.filter(c => c.characterId).map(c => String(c.characterId)));
+  return mine.filter(c => signedUp.has(String(c.characterId)));
 }
 
 /* The roster as View-as options: every member's label and their characters, shaped
@@ -1037,13 +1041,14 @@ async function build(eventIdArg){
   exclusionNames = new Map((exclRows || [])
     .filter(r => r.characterId && r.characterName)
     .map(r => [String(r.characterId), r.characterName]));
-  myChars = buildMyChars(members);
   pickerRoster = buildPickerRoster(members);
 
   const signups = RH.mapSignups(ev.signUps || ev.signups || [], null);
   if(!signups.length){ setStatus('That event has no usable signups.', true); return; }
 
   const rosterNotes = buildCandidates(signups, members);
+  // After buildCandidates: the personal section shows only the character you brought.
+  myChars = buildMyChars(members);
   unknownTokens = [];
   sections = tabs.reduce(
     (all, tab, i) => all.concat(parseRaidTab(tab.grid, raid.tabs[i].section, raid.tabs[i].tierSlot)), []);

@@ -133,9 +133,10 @@ board, identity links, loot, and attendance.
   that count is no longer shown as a pill. **Copy as text** dumps the whole plan for
   pasting into Discord. Which tabs make up which raid is `RAID_TABS` in `loot-prio.js`.
 
-  At the top, **What you can roll on** runs the *signed-in user's own* characters
-  (found by the session's Discord id against the roster) over the same parsed sheet
-  and lists, per character, the items on this raid they hold **named** prio on and
+  At the top, **What you can roll on** runs the *signed-in user's own* character —
+  the one they signed up with tonight (found by the session's Discord id against the
+  roster, then narrowed to this raid's signup, so alts they didn't bring stay out) —
+  over the same parsed sheet and lists the items on this raid they hold **named** prio on and
   don't already have — `MS > OS` is left out, since the point is where you actually
   have priority. It is what makes the page worth opening for a member, not just an
   officer. Officers can **mute** a character on a single item with the ✕ beside their

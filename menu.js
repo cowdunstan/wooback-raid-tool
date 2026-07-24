@@ -190,6 +190,12 @@ const RH = (function(){
     enhancement:'shaman', elemental:'shaman'
   };
 
+  // The specs above that more than one class can hold, so SPEC_TO_CLASS's single
+  // answer is a guess. A consumer disambiguating from another source (loot-prio's
+  // roster) must not fall back to that guess for these — that is precisely how a
+  // prot paladin was being read as a warrior.
+  const AMBIGUOUS_SPECS = new Set(['protection', 'holy', 'restoration']);
+
   // Raid-Helper signup buttons that represent a status rather than a class.
   const STATUS_MAP = {
     bench:'bench', standby:'bench',
@@ -303,9 +309,15 @@ const RH = (function(){
                   || 'active';
       if(status === 'absence') return;           // absent raiders never reach a board
 
-      // resolve a real class: className if valid, else infer from spec
-      const cls  = CLASS_COLORS[classKey] ? classKey
-                 : (CLASS_COLORS[SPEC_TO_CLASS[spec]] ? SPEC_TO_CLASS[spec] : '');
+      // The class the header actually names, empty when the header was a status
+      // word or missing. `cls` may go further and *infer* a class from the spec so
+      // a tentative row still gets a colour; `classNamed` never guesses, so a
+      // consumer with a better source (loot-prio's roster) can tell a real class
+      // from an inference — and not read an ambiguous "protection" tentative, which
+      // SPEC_TO_CLASS resolves to warrior, as a warrior when it's a paladin.
+      const classNamed = CLASS_COLORS[classKey] ? classKey : '';
+      const cls  = classNamed
+                 || (CLASS_COLORS[SPEC_TO_CLASS[spec]] ? SPEC_TO_CLASS[spec] : '');
       const role = cls || classKey || SPEC_TO_CLASS[spec] || '';
 
       const key = name.toLowerCase();
@@ -318,7 +330,7 @@ const RH = (function(){
       // not a user id, so it is never a fallback here.
       const userId = String(s.userId || s.userid || '').trim();
 
-      out.push({ id:nextId(), userId, name, cls, role, spec, num:null, status });
+      out.push({ id:nextId(), userId, name, cls, classNamed, role, spec, num:null, status });
     });
     return out;
   }
@@ -358,7 +370,7 @@ const RH = (function(){
   }
 
   return {
-    SERVER_ID, WINDOW_DAYS, CLASS_COLORS, ROLE_FALLBACK, SPEC_TO_CLASS, STATUS_MAP,
+    SERVER_ID, WINDOW_DAYS, CLASS_COLORS, ROLE_FALLBACK, SPEC_TO_CLASS, AMBIGUOUS_SPECS, STATUS_MAP,
     HEALING_SPECS, HEALER_CLASSES, RANGED_SPECS, PURE_RANGE,
     isTank, isHealer, isRanged, headers, fmtEventDate,
     listEvents, fetchEvent, mapSignups, chipHTML, wirePoolDrag

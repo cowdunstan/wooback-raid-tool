@@ -658,18 +658,36 @@ function buildCandidates(signups, members){
   candidates = signups.map(s => {
     const member = (s.userId ? byDiscord.get(s.userId) : null) || byName.get(s.name.toLowerCase()) || null;
     const chars = (member && member.characters) || [];
-    const signupCls = (s.cls || '').toLowerCase().trim();
+    // Only a class *header* names a class; a status row (Tentative/Bench) carries
+    // just a spec, and an ambiguous spec like "protection" is a guess RH already
+    // resolved to warrior. So key off the header, and let the roster and spec
+    // settle the rest — otherwise a tentative prot paladin lands on warrior prio.
+    const named = (s.classNamed || '').toLowerCase().trim();
+    const sspec = (s.spec || '').toLowerCase().replace(/[^a-z]/g, '');
 
     // First the character the roster knows by the signed-up name.
     let known = chars.find(ch => String(ch.name || '').toLowerCase() === s.name.toLowerCase()) || null;
 
-    // Failing that, the member's character whose class matches the signup — the
-    // one they'd actually loot on. Main wins a tie; otherwise the first of that
-    // class. Only reached when the signup name isn't a roster character.
+    // Failing that, the member's character they'd actually loot on: the one whose
+    // class matches the named class, or — when the row named no class, only a spec
+    // — the one whose spec matches. Main wins a tie. This is what keeps a tentative
+    // "Protection" paladin off the warrior's prio and on the paladin's. Only
+    // reached when the signup name isn't itself a roster character.
     let matchedByClass = false;
-    if(!known && member && signupCls){
-      const ofClass = chars.filter(ch => String(ch.cls || '').toLowerCase().trim() === signupCls);
-      known = ofClass.find(ch => ch.isMain) || ofClass[0] || null;
+    if(!known && member){
+      const chCls  = ch => String(ch.cls || '').toLowerCase().trim();
+      const chSpec = ch => String(ch.spec || '').toLowerCase().replace(/[^a-z]/g, '');
+      let pool = named ? chars.filter(ch => chCls(ch) === named)
+               : sspec ? chars.filter(ch => chSpec(ch) === sspec)
+               : [];
+      // With no header and no spec match, a spec that only one class can hold
+      // (fury → warrior) may still pick that class's character. An ambiguous one
+      // (protection/holy/restoration) must not — that guess is this very bug.
+      if(!pool.length && !named && sspec && !RH.AMBIGUOUS_SPECS.has(sspec)){
+        const inferred = RH.SPEC_TO_CLASS[sspec];
+        if(inferred) pool = chars.filter(ch => chCls(ch) === inferred);
+      }
+      known = pool.find(ch => ch.isMain) || pool[0] || null;
       matchedByClass = !!known;
     }
 
@@ -677,9 +695,11 @@ function buildCandidates(signups, members){
     // that is what the loot history and gear tables key on. With nothing resolved,
     // the signup's own name stands.
     const name = known ? known.name : s.name;
-    // The signup wins; the roster is the fallback for whatever it left out.
-    const cls = (s.cls || (known && known.cls) || '').toLowerCase().trim();
-    let spec = (s.spec || (known && known.spec) || '').toLowerCase().replace(/[^a-z]/g, '');
+    // The named class wins; then the resolved character's class; an ambiguous spec
+    // is only guessed (SPEC_TO_CLASS, below) when the roster knows this raider not
+    // at all. This is the fix's crux: a spec-only signup no longer beats the roster.
+    const cls = (named || (known && known.cls) || '').toLowerCase().trim();
+    let spec = (sspec || (known && known.spec) || '').toLowerCase().replace(/[^a-z]/g, '');
 
     const c = {
       id: s.id,

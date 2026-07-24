@@ -16,13 +16,15 @@ namespace WoobackVash.Api.Api;
 /// </summary>
 public static class LootPrioEndpoints
 {
-    public record ExclusionInput(Guid CharacterId, string ItemName, long? ItemId, string? Reason);
+    public record ExclusionInput(Guid CharacterId, string Raid, string ItemName, long? ItemId, string? Reason);
 
     public static void MapLootPrioEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/loot-prio");
 
-        // Every mute in force, so the page can grey out and drop the muted characters.
+        // The mutes in force, so the page can grey out and drop the muted characters.
+        // ?raid= narrows to one raid's mutes — the page always asks for the raid it is
+        // showing, since a mute is scoped to a raid and item names repeat across them.
         group.MapGet("/exclusions", async (HttpContext ctx, SessionTokenService tokens) =>
         {
             var (_, error) = ctx.RequireSession(tokens);
@@ -30,12 +32,17 @@ public static class LootPrioEndpoints
             var db = ctx.RequestServices.GetService<AppDbContext>();
             if (db is null) return DbUnavailable();
 
-            var rows = await db.LootPrioExclusions.AsNoTracking()
+            var raid = ctx.Request.Query["raid"].ToString().Trim();
+            var query = db.LootPrioExclusions.AsNoTracking();
+            if (raid.Length > 0) query = query.Where(x => x.Raid == raid);
+
+            var rows = await query
                 .OrderBy(x => x.ItemName)
                 .Select(x => new
                 {
                     characterId = x.CharacterId,
                     characterName = x.Character != null ? x.Character.Name : null,
+                    raid = x.Raid,
                     itemName = x.ItemName
                 })
                 .ToListAsync();
@@ -52,20 +59,22 @@ public static class LootPrioEndpoints
             if (db is null) return DbUnavailable();
 
             var name = (input.ItemName ?? "").Trim().ToLowerInvariant();
-            if (input.CharacterId == Guid.Empty || name.Length == 0)
-                return Results.Json(new { error = "bad_request", detail = "characterId and itemName are required." },
+            var raid = (input.Raid ?? "").Trim();
+            if (input.CharacterId == Guid.Empty || name.Length == 0 || raid.Length == 0)
+                return Results.Json(new { error = "bad_request", detail = "characterId, raid and itemName are required." },
                     statusCode: 400);
 
             var ch = await db.Characters.FirstOrDefaultAsync(c => c.Id == input.CharacterId);
             if (ch is null) return Results.NotFound(new { error = "not_found", detail = "No such character." });
 
             var existing = await db.LootPrioExclusions
-                .FirstOrDefaultAsync(x => x.CharacterId == input.CharacterId && x.ItemName == name);
+                .FirstOrDefaultAsync(x => x.CharacterId == input.CharacterId && x.Raid == raid && x.ItemName == name);
             if (existing is null)
             {
                 db.LootPrioExclusions.Add(new LootPrioExclusion
                 {
                     CharacterId = input.CharacterId,
+                    Raid = raid,
                     ItemName = name,
                     ItemId = input.ItemId,
                     SetByUid = session!.Uid,
@@ -85,12 +94,13 @@ public static class LootPrioEndpoints
             if (db is null) return DbUnavailable();
 
             var name = ctx.Request.Query["itemName"].ToString().Trim().ToLowerInvariant();
-            if (!Guid.TryParse(ctx.Request.Query["characterId"], out var characterId) || name.Length == 0)
-                return Results.Json(new { error = "bad_request", detail = "characterId and itemName are required." },
+            var raid = ctx.Request.Query["raid"].ToString().Trim();
+            if (!Guid.TryParse(ctx.Request.Query["characterId"], out var characterId) || name.Length == 0 || raid.Length == 0)
+                return Results.Json(new { error = "bad_request", detail = "characterId, raid and itemName are required." },
                     statusCode: 400);
 
             var existing = await db.LootPrioExclusions
-                .FirstOrDefaultAsync(x => x.CharacterId == characterId && x.ItemName == name);
+                .FirstOrDefaultAsync(x => x.CharacterId == characterId && x.Raid == raid && x.ItemName == name);
             if (existing is not null)
             {
                 db.LootPrioExclusions.Remove(existing);

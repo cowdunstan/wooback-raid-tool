@@ -969,7 +969,7 @@ async function build(eventIdArg){
       fetchRaidTabs(raid),
       apiGet('/api/items/list').then(r => r.json()).catch(() => []),
       apiGet('/api/loot/history').then(r => r.json()).catch(() => []),
-      apiGet('/api/loot-prio/exclusions').then(r => r.json()).catch(() => [])
+      apiGet('/api/loot-prio/exclusions?raid=' + encodeURIComponent(raidKey)).then(r => r.json()).catch(() => [])
     ]);
   } catch(err){
     reportError(err, 'That event is gone (it may have been deleted).');
@@ -1342,7 +1342,7 @@ async function ignoreChar(btn){
   if(!cid || !item) return;
   const key = item.toLowerCase();
   try {
-    await apiSend('POST', '/api/loot-prio/exclusions', { characterId: cid, itemName: item });
+    await apiSend('POST', '/api/loot-prio/exclusions', { characterId: cid, raid: picked.raid, itemName: item });
   } catch(err){ reportError(err, 'The mute endpoint is unavailable.'); return; }
 
   let set = exclusions.get(key);
@@ -1361,7 +1361,8 @@ async function restoreChar(btn){
   const key = item.toLowerCase();
   try {
     await apiSend('DELETE', '/api/loot-prio/exclusions?characterId=' +
-      encodeURIComponent(cid) + '&itemName=' + encodeURIComponent(item));
+      encodeURIComponent(cid) + '&raid=' + encodeURIComponent(picked.raid) +
+      '&itemName=' + encodeURIComponent(item));
   } catch(err){ reportError(err, 'The mute endpoint is unavailable.'); return; }
 
   const set = exclusions.get(key);

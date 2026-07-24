@@ -2,9 +2,14 @@ namespace WoobackVash.Api.Models;
 
 /// <summary>
 /// An officer's decision to mute one <see cref="Character"/> on one item in the loot-prio
-/// list: "this character does not roll on this item". Unlike <see cref="Character.Ignored"/>
-/// (which drops a character everywhere), this is per-item — the sheet still hands the
-/// character prio on everything else.
+/// list, for one raid: "this character does not roll on this item, here". Unlike
+/// <see cref="Character.Ignored"/> (which drops a character everywhere), this is per-item —
+/// the sheet still hands the character prio on everything else.
+///
+/// Scoped to a <see cref="Raid"/> (a RAID_TABS key), so the same character+item can be
+/// muted in one raid and left alone in another — the case that matters is a tier token
+/// that drops in both raids of a phase, where the shared item name would otherwise carry
+/// the mute across.
 ///
 /// Keyed by the sheet's own item name (lowercased) rather than a wowhead id: the loot sheet
 /// is written in names, and the prio page keys items by name throughout, so a name is what
@@ -18,6 +23,9 @@ public class LootPrioExclusion
     /// <summary>The character being muted for this item.</summary>
     public Guid CharacterId { get; set; }
     public Character? Character { get; set; }
+
+    /// <summary>The raid the mute is scoped to — a RAID_TABS key ("bt", "mh", "ssc", "tk").</summary>
+    public string Raid { get; set; } = "";
 
     /// <summary>The sheet's item name, lowercased and trimmed — the identity of the mute.</summary>
     public required string ItemName { get; set; }

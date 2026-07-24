@@ -136,9 +136,11 @@ board, identity links, loot, and attendance.
   don't already have — `MS > OS` is left out, since the point is where you actually
   have priority. It is what makes the page worth opening for a member, not just an
   officer. Officers can **mute** a character on a single item with the ✕ beside their
-  name — persisted server-side (`/api/loot-prio/exclusions`), it drops that character
-  from that one item everywhere (the tier list, the text copy, the Gargul export, and
-  everyone's personal section) until an officer lifts it from the *Muted here* line.
+  name — persisted server-side (`/api/loot-prio/exclusions`) and scoped to the raid
+  being shown, it drops that character from that one item across this raid (the tier
+  list, the text copy, the Gargul export, and everyone's personal section) until an
+  officer lifts it from the *Muted here* line. Scoping it to the raid keeps a tier
+  token that drops in both raids of a phase from carrying the mute across.
   The built list is cached in `localStorage`, so a mid-raid reload restores it
   instantly with no refetch; **Refresh** re-reads the sheet and signup. The two sheets
   are shaped differently and the entry says so: a P3 raid is **one tab** that
@@ -293,12 +295,14 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   as `(MH)` / `(OH)`; those are picked apart by id. Ids are cached for the process
   lifetime — an item's id never changes. Currently 203 of the sheet's 209 names
   resolve; the rest are reported, never guessed.
-- **Loot-prio mutes** — `GET /api/loot-prio/exclusions` (any valid session, so the
-  member-visible prio page and everyone's personal section reflect the mutes),
-  `POST`/`DELETE /api/loot-prio/exclusions` (officer-gated). A mute is a
-  `(character, item name)` row (`LootPrioExclusion`, unique on the pair) that drops
-  one character from one item across the whole prio page. Keyed by the sheet's item
-  name, lowercased — the identity the sheet and page use throughout.
+- **Loot-prio mutes** — `GET /api/loot-prio/exclusions?raid=` (any valid session, so the
+  member-visible prio page and everyone's personal section reflect the mutes; `?raid=`
+  narrows to one raid's), `POST`/`DELETE /api/loot-prio/exclusions` (officer-gated). A
+  mute is a `(character, raid, item name)` row (`LootPrioExclusion`, unique on the
+  triple) that drops one character from one item **within one raid** (a `RAID_TABS`
+  key). Keyed by the sheet's item name, lowercased — the identity the sheet and page use
+  throughout — and scoped by raid so an item name shared across two raids of a phase (a
+  tier token) doesn't carry the mute across.
 - **Health** — `/healthz` (liveness), `/readyz` (DB reachability + error detail).
 
 Non-secret config (Discord client id, guild id, role ids, WCL guild identity)

@@ -107,8 +107,8 @@ public class AppDbContext : DbContext
 
         b.Entity<LootPrioExclusion>(e =>
         {
-            // At most one mute per character per item name — POST upserts on it.
-            e.HasIndex(x => new { x.CharacterId, x.ItemName }).IsUnique();
+            // At most one mute per character per item name per raid — POST upserts on it.
+            e.HasIndex(x => new { x.CharacterId, x.Raid, x.ItemName }).IsUnique();
             e.HasOne(x => x.Character)
              .WithMany()
              .HasForeignKey(x => x.CharacterId)

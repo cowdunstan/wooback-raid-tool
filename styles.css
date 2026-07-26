@@ -328,8 +328,13 @@
     font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:#eafff6;letter-spacing:.3px;
   }
   .group-head span:last-child{font-family:'Inter';font-size:12px;font-weight:600;color:var(--teal);}
-  .group-tally{display:flex;flex-wrap:wrap;gap:12px;font-size:10.5px;color:var(--text-dim);
+  .group-tally{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:var(--text-dim);
     text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:10px;}
+  .group-tally .tally-line{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;}
+  /* Mains / alts prefix, tinted like the chip tags it summarises. */
+  .group-tally .tally-label{min-width:38px;}
+  .group-tally .tally-label.main{color:var(--teal);}
+  .group-tally .tally-label.alt{color:#c9aef5;}
   .group-tally b{color:var(--text);font-size:12px;}
   .group-list{
     align-content:flex-start;min-height:120px;border:1px dashed var(--panel-line);

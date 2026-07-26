@@ -211,6 +211,13 @@ const RH = (function(){
                         'marksmanship','survival'];
   const PURE_RANGE = ['mage','warlock','hunter'];
 
+  // The role bucket a Raid-Helper signup was made under — the raider's own choice,
+  // and the one thing that settles a bear tank (feral/guardian, indistinguishable
+  // from a feral cat by spec) or a spec-less shadow priest that class alone gets
+  // wrong. RH names them "Tanks"/"Healers"/"Melee"/"Ranged"; a status row (Absence,
+  // Bench) carries none. Maps onto the four groups-page tally buckets.
+  const SIGNUP_ROLE = { tanks:'tank', healers:'healer', melee:'melee', ranged:'ranged' };
+
   function isTank(m){
     return m.role === 'tank' || m.spec === 'protection' || m.spec === 'guardian';
   }
@@ -327,6 +334,10 @@ const RH = (function(){
       const cls  = classNamed
                  || (CLASS_COLORS[SPEC_TO_CLASS[spec]] ? SPEC_TO_CLASS[spec] : '');
       const role = cls || classKey || SPEC_TO_CLASS[spec] || '';
+      // The role the raider signed up under, kept apart from the class-derived
+      // `role` above so it stays authoritative — the groups tally trusts it over
+      // any spec/class guess.
+      const pickedRole = SIGNUP_ROLE[String(s.roleName || '').toLowerCase().trim()] || '';
 
       const key = name.toLowerCase();
       if(seen.has(key)) return;                  // de-dupe by name, first signup wins
@@ -338,7 +349,7 @@ const RH = (function(){
       // not a user id, so it is never a fallback here.
       const userId = String(s.userId || s.userid || '').trim();
 
-      out.push({ id:nextId(), userId, name, cls, classNamed, role, spec, num:null, status });
+      out.push({ id:nextId(), userId, name, cls, classNamed, role, pickedRole, spec, num:null, status });
     });
     return out;
   }

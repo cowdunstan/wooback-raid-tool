@@ -32,8 +32,12 @@ board, identity links, loot, and attendance.
   the roster links, and splits them into two 25-man groups by drag-and-drop or one
   **Auto-allocate** press (balancing tanks / healers / ranged / melee, spreading
   classes, and evening **mains against alts** so each raid draws a like number of
-  each). Each group's tally heads its **Mains** and **Alts** lines with that group's
-  count of each. Dropping one chip **onto another swaps their places** — the way to
+  each). Roles come from the **role the raider signed up under** in Raid-Helper
+  (`roleName` — Tanks / Healers / Melee / Ranged), matched to each character by class;
+  it's what settles a feral bear tank from a cat, or a shadow priest whose spec the
+  roster never recorded, where a spec/class guess falls back only when no signup names
+  that class. Each group's tally heads its **Mains** and **Alts** lines with that
+  group's count of each. Dropping one chip **onto another swaps their places** — the way to
   trade a pair or rebalance two *full* groups, since a swap leaves each group's
   headcount unchanged where a plain drag onto a full group is refused; two characters
   of the **same raider** may trade too, flipping which group (which raid) their main

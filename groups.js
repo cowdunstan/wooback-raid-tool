@@ -185,7 +185,7 @@ function makeChipId(){ return 'g' + (chipSeq++); }
 
 // A roster character or a raw signup, in the shape RH.chipHTML and the role
 // classifiers expect. Roster classes come back capitalised ("Priest").
-function toChip(src, person, tag){
+function toChip(src, person, tag, pickedRole){
   const cls = String(src.cls || '').toLowerCase().trim();
   const spec = String(src.spec || '').toLowerCase().replace(/[^a-z]/g, '');
   // The raid role the logs recorded ("tank"/"healer"/"dps") is the authoritative
@@ -203,12 +203,29 @@ function toChip(src, person, tag){
     role: (raidRole === 'tank' || raidRole === 'healer' || raidRole === 'dps')
       ? raidRole
       : (cls || RH.SPEC_TO_CLASS[spec] || ''),
+    // The tally/​auto-allocate bucket the raider signed up under (tank/healer/ranged/
+    // melee), when we know it. Passed in for a roster-character chip whose signup we
+    // matched; taken straight off the chip's own source for a signup-built one.
+    pickedRole: pickedRole || src.pickedRole || '',
     spec: spec,
     num: null,
     status: person.status,
     tag: tag || '',
     source: person.sources.join('+')
   };
+}
+
+// The role a raider signed up under for the raid they bring this character to,
+// matched by class. A signup's `name` is the person, not the character — the same
+// raider signs up as a Shadow priest for the main raid and a Fury warrior for the
+// alt — so class is what ties "their priest" to the Ranged signup and "their bear"
+// to the Tanks one. Blank when no signup names that class (an extra roster alt the
+// officer places by hand), leaving the chip to fall back to spec/class.
+function pickedRoleForCharacter(character, signups){
+  const cls = String(character.cls || '').toLowerCase().trim();
+  if(!cls) return '';
+  const match = signups.find(su => su.pickedRole && su.cls === cls);
+  return match ? match.pickedRole : '';
 }
 
 // The worst status wins: a raider tentative on one signup isn't a firm yes.
@@ -276,12 +293,12 @@ function buildPool(signupsA, signupsB, members){
       bothCount++;
       // Every character they have, so the officer chooses which raid gets which.
       const all = characters.length ? characters : p.signups;
-      all.forEach(c => chips.push(toChip(c, p, c.isMain ? 'MAIN' : 'ALT')));
+      all.forEach(c => chips.push(toChip(c, p, c.isMain ? 'MAIN' : 'ALT', pickedRoleForCharacter(c, p.signups))));
       return;
     }
     const main = characters.find(c => c.isMain);
     if(main){
-      chips.push(toChip(main, p, 'MAIN'));
+      chips.push(toChip(main, p, 'MAIN', pickedRoleForCharacter(main, p.signups)));
     } else {
       noMainCount++;
       chips.push(toChip(p.signups[0], p, 'NO MAIN'));
@@ -533,6 +550,10 @@ function renderItemCheck(){
    the split instead of being checked afterwards. */
 
 function bucketOf(chip){
+  // The raider's own Raid-Helper role wins — it settles the cases spec/class can't
+  // (a feral bear tank vs a cat, a spec-less shadow priest). Fall back to the shared
+  // classifiers for a chip we couldn't tie to a signup.
+  if(chip.pickedRole) return chip.pickedRole;
   if(RH.isTank(chip)) return 'tank';
   if(RH.isHealer(chip)) return 'healer';
   if(RH.isRanged(chip)) return 'ranged';

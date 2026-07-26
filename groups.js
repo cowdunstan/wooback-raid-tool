@@ -486,6 +486,12 @@ function bucketOf(chip){
   return 'melee';
 }
 
+// Only a character explicitly flagged as someone's alt counts as one; a roster
+// main, a single-signup raider with no main recorded, and an unlinked signup all
+// stand in for the person, so they sit on the mains line. Matches the tag toChip
+// stamps on the chip ('MAIN' / 'ALT' / 'NO MAIN' / 'UNLINKED').
+function isAltChip(chip){ return chip.tag === 'ALT'; }
+
 // Order a bucket so no two of the same class are dealt back to back: take one
 // from each class in turn until every class list is empty.
 function interleaveByClass(chips){
@@ -609,10 +615,18 @@ function renderGroup(g){
   const chips = groups[g].map(chipById).filter(Boolean);
   document.getElementById('groupCount' + g).textContent = chips.length + '/' + groupSize;
 
-  const tally = ['tank','healer','ranged','melee']
-    .map(b => `<span>${b === 'tank' ? 'Tanks' : b === 'healer' ? 'Healers' : b === 'ranged' ? 'Ranged' : 'Melee'} <b>${chips.filter(c => bucketOf(c) === b).length}</b></span>`)
+  // The four role counts for a subset of the group, mains and alts split onto
+  // their own line so an officer can see how each raid's composition is balanced.
+  const tallyRow = subset => ['tank','healer','ranged','melee']
+    .map(b => `<span>${b === 'tank' ? 'Tanks' : b === 'healer' ? 'Healers' : b === 'ranged' ? 'Ranged' : 'Melee'} <b>${subset.filter(c => bucketOf(c) === b).length}</b></span>`)
     .join('');
-  document.getElementById('groupTally' + g).innerHTML = tally;
+  const mains = chips.filter(c => !isAltChip(c));
+  const alts = chips.filter(isAltChip);
+  // Both rows always render, zeros and all, so the two groups line up and the
+  // titles stay put.
+  document.getElementById('groupTally' + g).innerHTML =
+    `<div class="tally-line"><span class="tally-label main">Mains</span>${tallyRow(mains)}</div>` +
+    `<div class="tally-line"><span class="tally-label alt">Alts</span>${tallyRow(alts)}</div>`;
 
   const list = document.getElementById('groupList' + g);
   list.innerHTML = chips.length

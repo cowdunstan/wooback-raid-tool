@@ -269,8 +269,11 @@ const RH = (function(){
   // so a page can say "none recent, but the server has N".
   async function listEvents(){
     const data = await get('/v4/servers/' + encodeURIComponent(SERVER_ID) + '/events');
-    // The field name for the events array isn't verified against a live token —
-    // log the raw response so an unexpected shape is easy to diagnose.
+    // Verified against a live token (2026-07): the array is `postedEvents`, and
+    // the response is paginated — `eventsOverall` is the server's true total, of
+    // which one page (currentPage/pages) rides in `postedEvents`. The other
+    // field names stay as harmless fallbacks; the debug log keeps an odd shape
+    // easy to diagnose.
     console.debug('Raid-Helper server-events response:', data);
     const all = data.postedEvents || data.events || data.scheduledEvents ||
                 (Array.isArray(data) ? data : []);

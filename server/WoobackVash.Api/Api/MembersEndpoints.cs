@@ -70,7 +70,7 @@ public static class MembersEndpoints
                         .OrderByDescending(c => c.IsMain).ThenBy(c => c.Name)
                         .Select(c => new
                         {
-                            id = c.Id, name = c.Name, cls = c.Class, spec = c.Spec, realm = c.Realm,
+                            id = c.Id, name = c.Name, cls = c.Class, spec = c.Spec, role = c.Role, realm = c.Realm,
                             level = c.Level, isMain = c.IsMain, notes = c.Notes, ignored = c.Ignored,
                             guildName = c.GuildName, guildRank = c.GuildRank, guildSyncedAt = c.GuildSyncedAt
                         })

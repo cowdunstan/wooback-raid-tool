@@ -346,7 +346,7 @@ const RH = (function(){
   // A draggable raider. `tag` is an optional extra pill (the groups page marks
   // MAIN / ALT / UNLINKED); `status` renders the tentative/bench pill.
   function chipHTML(member){
-    const color = CLASS_COLORS[member.cls] || ROLE_FALLBACK[member.role] || '#2ee6ab';
+    const color = CLASS_COLORS[member.cls] || ROLE_FALLBACK[member.role] || '#e8b84d';
     const num = member.num != null ? `<span class="num">${member.num}</span>` : '';
     const roleTag = member.cls ? member.cls.slice(0,3).toUpperCase()
                   : (member.role ? member.role.slice(0,3).toUpperCase() : '');
@@ -367,7 +367,7 @@ const RH = (function(){
         e.dataTransfer.effectAllowed = 'move';
       });
     });
-    el.ondragover = function(e){ e.preventDefault(); el.style.background='rgba(46,230,171,.08)'; };
+    el.ondragover = function(e){ e.preventDefault(); el.style.background='rgba(232,184,77,.08)'; };
     el.ondragleave = function(){ el.style.background=''; };
     el.ondrop = function(e){
       e.preventDefault();

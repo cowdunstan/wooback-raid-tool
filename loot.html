@@ -31,30 +31,30 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <style>
-  .rl-card{background:var(--panel,#0d1a17);border:1px solid var(--panel-line,#1e332d);border-radius:10px;padding:16px;margin-top:14px}
+  .rl-card{background:var(--panel,#26262b);border:1px solid var(--panel-line,#47474f);border-radius:10px;padding:16px;margin-top:14px}
   .rl-card h2{font-family:'Cinzel',serif;font-size:16px;margin:0 0 4px}
-  .rl-card .card-sub{color:var(--text-dim,#7f9a92);font-size:12px;margin:0 0 12px}
+  .rl-card .card-sub{color:var(--text-dim,#a8a8b2);font-size:12px;margin:0 0 12px}
   .rl-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-  textarea.rl-paste{width:100%;box-sizing:border-box;min-height:110px;background:#0a1815;border:1px solid var(--panel-line,#1e332d);color:var(--text,#dfeee9);border-radius:6px;padding:9px 10px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;margin-bottom:10px}
+  textarea.rl-paste{width:100%;box-sizing:border-box;min-height:110px;background:var(--well);border:1px solid var(--panel-line,#47474f);color:var(--text,#f0f0f4);border-radius:6px;padding:9px 10px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;margin-bottom:10px}
   table.rl{width:100%;border-collapse:collapse;font-size:13px}
-  table.rl th{text-align:left;color:var(--text-dim,#7f9a92);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:6px 8px;border-bottom:1px solid var(--panel-line,#1e332d)}
+  table.rl th{text-align:left;color:var(--text-dim,#a8a8b2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:6px 8px;border-bottom:1px solid var(--panel-line,#47474f)}
   /* Explicit colour: the page runs in quirks mode, where a <table> drops colour
      inheritance, so plain cells would fall back to black. Muted cells / class-
      coloured names override this. */
-  table.rl td{padding:7px 8px;border-bottom:1px solid rgba(30,51,45,.5);vertical-align:top;color:var(--text,#dff5ee)}
-  table.rl .muted{color:var(--text-dim,#7f9a92)}
+  table.rl td{padding:7px 8px;border-bottom:1px solid rgba(71,71,79,.5);vertical-align:top;color:var(--text,#f0f0f4)}
+  table.rl .muted{color:var(--text-dim,#a8a8b2)}
   table.rl td strong{font-weight:600}
-  .rl-empty{color:var(--text-dim,#7f9a92);padding:10px 8px;font-size:13px}
-  .rl-del{background:none;border:none;color:var(--amber,#e0a53d);cursor:pointer;font-size:13px;padding:2px 6px}
+  .rl-empty{color:var(--text-dim,#a8a8b2);padding:10px 8px;font-size:13px}
+  .rl-del{background:none;border:none;color:var(--amber);cursor:pointer;font-size:13px;padding:2px 6px}
   .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
-  .pill-de{background:rgba(224,165,61,.18);color:#e0a53d}
-  .bids-toggle{background:none;border:none;color:var(--text-dim,#7f9a92);cursor:pointer;font-size:12px;padding:0;font-family:'Inter'}
-  .bids-toggle:hover{color:var(--text,#dfeee9)}
+  .pill-de{background:rgba(var(--amber-rgb),.18);color:var(--amber)}
+  .bids-toggle{background:none;border:none;color:var(--text-dim,#a8a8b2);cursor:pointer;font-size:12px;padding:0;font-family:'Inter'}
+  .bids-toggle:hover{color:var(--text,#f0f0f4)}
   .bids{margin:6px 0 2px;padding:0;list-style:none;font-size:12px}
-  .bids li{padding:2px 0;color:var(--text-dim,#7f9a92)}
-  .bids .amt{display:inline-block;min-width:34px;color:var(--text,#dfeee9);font-weight:600}
+  .bids li{padding:2px 0;color:var(--text-dim,#a8a8b2)}
+  .bids .amt{display:inline-block;min-width:34px;color:var(--text,#f0f0f4);font-weight:600}
   .bids .cl{font-size:10px;text-transform:uppercase;letter-spacing:.4px;opacity:.75;margin-left:6px}
-  .banner{margin-top:12px;padding:11px 14px;border-radius:8px;font-size:13px;background:rgba(46,230,171,.10);border:1px solid rgba(46,230,171,.30);color:var(--text,#dfeee9);display:none}
+  .banner{margin-top:12px;padding:11px 14px;border-radius:8px;font-size:13px;background:rgba(var(--accent-rgb),.10);border:1px solid rgba(var(--accent-rgb),.30);color:var(--text,#f0f0f4);display:none}
 </style>
 
 <div class="app">

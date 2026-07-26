@@ -328,8 +328,8 @@ function renderSlotGroup(containerId, type, positions, extraClass){
     div.style.left = pos.x+'px';
     div.style.top = pos.y+'px';
     const color = member ? (CLASS_COLORS[member.cls] || RH.ROLE_FALLBACK[member.role] || '') : '';
-    div.innerHTML = `<div class="ring ${member?'filled':''}" style="${member?`border-color:${color||'var(--teal)'}`:''}">
-        ${member ? `<span class="name-wrap"><span class="name-chip" draggable="true" data-id="${member.id}" style="background:${color||'#2ee6ab'}">${member.name}</span></span>` : (type==='healer'?'heal':'range')}
+    div.innerHTML = `<div class="ring ${member?'filled':''}" style="${member?`border-color:${color||'var(--accent)'}`:''}">
+        ${member ? `<span class="name-wrap"><span class="name-chip" draggable="true" data-id="${member.id}" style="background:${color||'#e8b84d'}">${member.name}</span></span>` : (type==='healer'?'heal':'range')}
       </div>
       <div class="label">${type==='healer'?'Healer':'Range'} ${i+1}</div>`;
 
@@ -443,7 +443,7 @@ function renderChase(){
       chip.addEventListener('dblclick', e=>{ e.stopPropagation(); unassignId(member.id); });
     }
 
-    div.addEventListener('dragover', e=>{ e.preventDefault(); div.style.background='rgba(232,163,61,.22)'; });
+    div.addEventListener('dragover', e=>{ e.preventDefault(); div.style.background='rgba(219,123,47,.22)'; });
     div.addEventListener('dragleave', ()=>{ div.style.background=''; });
     div.addEventListener('drop', e=>{
       e.preventDefault();
@@ -479,7 +479,7 @@ document.getElementById('guildName').addEventListener('input', ()=>{
 });
 
 function exportImage(){
-  html2canvas(document.getElementById('capture'), { backgroundColor: '#081210', scale: 2 }).then(canvas=>{
+  html2canvas(document.getElementById('capture'), { backgroundColor: '#141417', scale: 2 }).then(canvas=>{
     const link = document.createElement('a');
     const guild = (document.getElementById('guildName').value || 'raid').replace(/\s+/g,'_');
     link.download = `vashj-p2-${guild}.png`;

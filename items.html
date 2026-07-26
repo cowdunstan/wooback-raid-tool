@@ -35,10 +35,10 @@
   .il-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
   .il-search{
     flex:1;min-width:240px;max-width:420px;
-    background:#0a1815;border:1px solid var(--panel-line);color:var(--text);
+    background:var(--well);border:1px solid var(--panel-line);color:var(--text);
     border-radius:7px;padding:9px 12px;font-size:13.5px;font-family:'Inter';
   }
-  .il-search:focus{outline:none;border-color:var(--teal-dim)}
+  .il-search:focus{outline:none;border-color:var(--accent-dim)}
   .il-count{font-size:11.5px;color:var(--text-dim)}
   .il-panel{background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;padding:6px 14px 14px;overflow-x:auto}
   table.il{width:100%;border-collapse:collapse;font-size:13px}
@@ -49,17 +49,17 @@
   }
   table.il th.sortable{cursor:pointer;user-select:none}
   table.il th.sortable:hover{color:var(--text)}
-  table.il th .arrow{color:var(--teal);font-size:9px;margin-left:3px}
+  table.il th .arrow{color:var(--accent);font-size:9px;margin-left:3px}
   /* Explicit colour: the page runs in quirks mode, where a <table> drops colour
      inheritance, so plain cells would fall back to black. */
-  table.il td{padding:8px;border-bottom:1px solid rgba(31,74,63,.5);vertical-align:top;color:var(--text)}
+  table.il td{padding:8px;border-bottom:1px solid rgba(71,71,79,.5);vertical-align:top;color:var(--text)}
   table.il tr:last-child td{border-bottom:none}
   table.il .muted{color:var(--text-dim)}
   table.il td.num{text-align:right;padding-right:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
   .il-item{font-weight:600}
   .il-icon{
     width:22px;height:22px;border-radius:4px;border:1px solid var(--panel-line);
-    vertical-align:-6px;margin-right:7px;background:#0b1a17;
+    vertical-align:-6px;margin-right:7px;background:var(--well);
   }
   /* Names link to the character sheet; the class colour stays the only colour. */
   .chr-link{text-decoration:none}
@@ -73,7 +73,7 @@
      rings, and that rule is display:block — it would stack the label. */
   .wearers .il-slot{font-size:10px;text-transform:uppercase;letter-spacing:.4px;opacity:.75;margin-left:6px}
   .il-empty{color:var(--text-dim);padding:18px 8px;font-size:13px;text-align:center}
-  mark{background:rgba(46,230,171,.28);color:inherit;border-radius:2px;padding:0 1px}
+  mark{background:rgba(var(--accent-rgb),.28);color:inherit;border-radius:2px;padding:0 1px}
 </style>
 
 <div class="app">

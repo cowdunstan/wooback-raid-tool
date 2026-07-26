@@ -36,9 +36,9 @@
 <link rel="stylesheet" href="styles.css">
 <style>
   .rl-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:8px}
-  .rl-card{background:var(--panel,#0d1a17);border:1px solid var(--panel-line,#1e332d);border-radius:10px;padding:16px;margin-top:14px}
+  .rl-card{background:var(--panel,#26262b);border:1px solid var(--panel-line,#47474f);border-radius:10px;padding:16px;margin-top:14px}
   .rl-card h2{font-family:'Cinzel',serif;font-size:16px;margin:0 0 4px}
-  .rl-card .card-sub{color:var(--text-dim,#7f9a92);font-size:12px;margin:0 0 12px}
+  .rl-card .card-sub{color:var(--text-dim,#a8a8b2);font-size:12px;margin:0 0 12px}
   /* The import card is a collapsed <details>: a clickable header row with its own
      caret, the h2 kept inline so it reads as the summary rather than a stacked title. */
   /* The page runs in quirks mode (BackCompat), where the UA stylesheet doesn't hide a
@@ -46,52 +46,52 @@
   details.rl-card:not([open]) > :not(summary){display:none}
   details.rl-card > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;margin:0 0 4px}
   details.rl-card > summary::-webkit-details-marker{display:none}
-  details.rl-card > summary::before{content:'\25B6';color:var(--text-dim,#7f9a92);font-size:10px;transition:transform .12s}
+  details.rl-card > summary::before{content:'\25B6';color:var(--text-dim,#a8a8b2);font-size:10px;transition:transform .12s}
   details.rl-card[open] > summary::before{transform:rotate(90deg)}
   details.rl-card > summary h2{margin:0;display:inline}
   details.rl-card[open] > summary{margin-bottom:8px}
-  .cand-summary-count{color:var(--text-dim,#7f9a92);font-family:'Inter',sans-serif;font-size:12px;font-weight:500}
+  .cand-summary-count{color:var(--text-dim,#a8a8b2);font-family:'Inter',sans-serif;font-size:12px;font-weight:500}
   /* Member roster — three cards per row, dropping to two then one as space runs out. */
   #members{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
   @media (max-width:1200px){ #members{grid-template-columns:repeat(2,minmax(0,1fr))} }
   @media (max-width:780px){ #members{grid-template-columns:minmax(0,1fr)} }
-  .mem{border:1px solid var(--panel-line,#1e332d);border-radius:10px;overflow:hidden;background:var(--panel,#0d1a17);min-width:0}
-  .mem-head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:11px 14px;border-bottom:1px solid var(--panel-line,#1e332d)}
+  .mem{border:1px solid var(--panel-line,#47474f);border-radius:10px;overflow:hidden;background:var(--panel,#26262b);min-width:0}
+  .mem-head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:11px 14px;border-bottom:1px solid var(--panel-line,#47474f)}
   .mem-head .mem-name{font-family:'Cinzel',serif;font-size:15px;font-weight:700}
-  .mem-head .mem-user{color:var(--text-dim,#7f9a92);font-size:12px;overflow:hidden;text-overflow:ellipsis}
-  .mem-head .mem-seen{margin-left:auto;color:var(--text-dim,#7f9a92);font-size:11px}
+  .mem-head .mem-user{color:var(--text-dim,#a8a8b2);font-size:12px;overflow:hidden;text-overflow:ellipsis}
+  .mem-head .mem-seen{margin-left:auto;color:var(--text-dim,#a8a8b2);font-size:11px}
   /* One character per stacked block rather than a wide table row — a 5-column table
      with an inline reassign <select> is what stopped these cards from narrowing. */
-  .chr{padding:9px 14px;border-bottom:1px solid rgba(30,51,45,.5)}
+  .chr{padding:9px 14px;border-bottom:1px solid rgba(71,71,79,.5)}
   .chr:last-child{border-bottom:none}
   .chr-top{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px}
-  .chr-meta{color:var(--text-dim,#7f9a92);font-size:11.5px;margin-top:2px}
+  .chr-meta{color:var(--text-dim,#a8a8b2);font-size:11.5px;margin-top:2px}
   /* Names link to the character sheet; the class colour stays the only colour. */
   .chr-link{text-decoration:none}
   .chr-link:hover strong{text-decoration:underline}
   .chr-actions{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:6px}
-  .chr-actions select{flex:1 1 120px;min-width:0;background:#0a1815;border:1px solid var(--panel-line,#1e332d);color:var(--text,#dfeee9);border-radius:6px;padding:4px 6px;font-size:12px;font-family:'Inter'}
+  .chr-actions select{flex:1 1 120px;min-width:0;background:var(--well);border:1px solid var(--panel-line,#47474f);color:var(--text,#f0f0f4);border-radius:6px;padding:4px 6px;font-size:12px;font-family:'Inter'}
   table.rl{width:100%;border-collapse:collapse;font-size:13px}
-  table.rl th{text-align:left;color:var(--text-dim,#7f9a92);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:6px 12px;border-bottom:1px solid var(--panel-line,#1e332d)}
+  table.rl th{text-align:left;color:var(--text-dim,#a8a8b2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:6px 12px;border-bottom:1px solid var(--panel-line,#47474f)}
   /* Explicit colour: the page runs in quirks mode, where a <table> drops colour
      inheritance, so plain cells would fall back to black. */
-  table.rl td{padding:8px 12px;border-bottom:1px solid rgba(30,51,45,.5);vertical-align:middle;color:var(--text,#dfeee9)}
+  table.rl td{padding:8px 12px;border-bottom:1px solid rgba(71,71,79,.5);vertical-align:middle;color:var(--text,#f0f0f4)}
   table.rl tr:last-child td{border-bottom:none}
-  table.rl .muted{color:var(--text-dim,#7f9a92)}
-  table.rl input,table.rl select{background:#0a1815;border:1px solid var(--panel-line,#1e332d);color:var(--text,#dfeee9);border-radius:6px;padding:5px 7px;font-size:12.5px;font-family:'Inter';max-width:100%}
-  .rl-empty{color:var(--text-dim,#7f9a92);padding:12px;font-size:13px}
+  table.rl .muted{color:var(--text-dim,#a8a8b2)}
+  table.rl input,table.rl select{background:var(--well);border:1px solid var(--panel-line,#47474f);color:var(--text,#f0f0f4);border-radius:6px;padding:5px 7px;font-size:12.5px;font-family:'Inter';max-width:100%}
+  .rl-empty{color:var(--text-dim,#a8a8b2);padding:12px;font-size:13px}
   .row-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
-  .rl-del{background:none;border:none;color:var(--amber,#e0a53d);cursor:pointer;font-size:13px;padding:2px 6px}
-  .lnk{background:none;border:none;color:var(--text-dim,#7f9a92);cursor:pointer;font-size:12px;padding:2px 6px;text-decoration:underline}
-  .lnk:hover{color:var(--text,#dfeee9)}
+  .rl-del{background:none;border:none;color:var(--amber);cursor:pointer;font-size:13px;padding:2px 6px}
+  .lnk{background:none;border:none;color:var(--text-dim,#a8a8b2);cursor:pointer;font-size:12px;padding:2px 6px;text-decoration:underline}
+  .lnk:hover{color:var(--text,#f0f0f4)}
   .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
-  .pill-main{background:rgba(46,230,171,.16);color:#2ee6ab}
+  .pill-main{background:rgba(var(--accent-rgb),.16);color:var(--accent)}
   .pill-alt{background:rgba(127,176,242,.14);color:#7fb0f2}
-  .pill-guild{background:rgba(46,230,171,.10);color:#8fd6bd}
-  .pill-warn{background:rgba(224,165,61,.16);color:#e0a53d}
-  .pill-unknown{background:rgba(127,154,146,.14);color:#7f9a92}
+  .pill-guild{background:rgba(168,117,232,.12);color:#c9aef5}
+  .pill-warn{background:rgba(var(--amber-rgb),.16);color:var(--amber)}
+  .pill-unknown{background:rgba(127,127,138,.14);color:#a8a8b2}
   table.rl td strong{font-weight:600}
-  .cls{color:#aecabf}
+  .cls{color:#a8a8b2}
   /* Read-only view for non-officers: same lists, minus every control that writes.
      Cosmetic only — the API is what actually refuses the writes. */
   html.read-only .chr-actions,

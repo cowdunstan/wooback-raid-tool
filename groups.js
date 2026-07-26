@@ -58,6 +58,18 @@ function clashIn(group, chip){
     .find(c => c && c.id !== chip.id && c.personId === chip.personId);
 }
 
+// As clashIn, but also ignoring `leavingId` — the chip about to vacate this group
+// in a swap. A swap is only refused for a clash with someone who's staying.
+function clashInExcluding(group, chip, leavingId){
+  return groups[group]
+    .map(chipById)
+    .find(other => other && other.id !== chip.id && other.id !== leavingId
+                && other.personId === chip.personId);
+}
+
+// Which list a chip sits in: 1, 2, or 0 for the pool.
+function groupOf(id){ return groups[1].includes(id) ? 1 : groups[2].includes(id) ? 2 : 0; }
+
 function place(id, group){
   const chip = chipById(id);
   if(!chip) return;
@@ -86,6 +98,45 @@ function sendToPool(id){
   if(!chip || !placedIds().has(id)) return;
   removeFromGroups(id);
   setStatus(`${chip.name} → back to the pool.`);
+  save();
+  renderAll();
+}
+
+/* Trade two chips' places by dropping one onto the other. Unlike place(), a swap
+   leaves each group's headcount unchanged, so it's the way to rebalance two full
+   groups — and to trade a specific pair — without parking anyone in the pool
+   first. The one-per-group rule still holds: each chip must be welcome where the
+   other is leaving from, counting that other as already gone. */
+function swap(draggedId, targetId){
+  if(draggedId === targetId) return;
+  const draggedChip = chipById(draggedId), targetChip = chipById(targetId);
+  if(!draggedChip || !targetChip) return;
+  if(draggedChip.personId && draggedChip.personId === targetChip.personId){
+    setStatus(`${draggedChip.name} and ${targetChip.name} are the same raider — nothing to swap.`, true);
+    return;
+  }
+
+  const draggedGroup = groupOf(draggedId), targetGroup = groupOf(targetId);
+  const targetClash = targetGroup ? clashInExcluding(targetGroup, draggedChip, targetChip.id) : null;
+  if(targetClash){
+    setStatus(`Can't swap — ${draggedChip.name} would sit with ${targetClash.name} in Group ${targetGroup}, and they're the same raider (${draggedChip.personName}).`, true);
+    return;
+  }
+  const draggedClash = draggedGroup ? clashInExcluding(draggedGroup, targetChip, draggedChip.id) : null;
+  if(draggedClash){
+    setStatus(`Can't swap — ${targetChip.name} would sit with ${draggedClash.name} in Group ${draggedGroup}, and they're the same raider (${targetChip.personName}).`, true);
+    return;
+  }
+
+  // Read both slot indices before writing either, so a same-group swap (which
+  // would otherwise find the just-written id) doesn't alias. A chip in the pool
+  // has no group entry; removing the other from its group is enough to surface it.
+  const draggedIndex = draggedGroup ? groups[draggedGroup].indexOf(draggedId) : -1;
+  const targetIndex  = targetGroup  ? groups[targetGroup].indexOf(targetId)   : -1;
+  if(draggedGroup) groups[draggedGroup][draggedIndex] = targetId;
+  if(targetGroup)  groups[targetGroup][targetIndex]   = draggedId;
+
+  setStatus(`Swapped ${draggedChip.name} and ${targetChip.name}.`);
   save();
   renderAll();
 }
@@ -561,6 +612,24 @@ function wireDragFeedback(el){
     });
     c.addEventListener('dragend', clearDragFeedback);
     c.addEventListener('dblclick', () => sendToPool(c.dataset.id));
+
+    // Dropping a chip onto another chip swaps the two, rather than letting the
+    // container's onDrop place() the dragged one. stopPropagation keeps the
+    // container handler from also firing.
+    c.addEventListener('dragover', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      c.classList.add('swap-target');
+    });
+    c.addEventListener('dragleave', () => c.classList.remove('swap-target'));
+    c.addEventListener('drop', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      c.classList.remove('swap-target');
+      el.style.background = '';   // the container's dragover highlight, left un-cleared
+      const draggedId = event.dataTransfer.getData('text/plain');
+      if(draggedId && draggedId !== c.dataset.id) swap(draggedId, c.dataset.id);
+    });
   });
 }
 // Pin an item pill onto every chip whose character is wearing one. Done after

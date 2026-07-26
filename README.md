@@ -31,7 +31,10 @@ board, identity links, loot, and attendance.
   second for **alts** — so this page loads *both* signups, resolves them against
   the roster links, and splits them into two 25-man groups by drag-and-drop or one
   **Auto-allocate** press (balancing tanks / healers / ranged / melee and spreading
-  classes). **One person holds at most one slot per group**: someone signed up to
+  classes). Dropping one chip **onto another swaps their places** — the way to trade
+  a pair or rebalance two *full* groups, since a swap leaves each group's headcount
+  unchanged where a plain drag onto a full group is refused. **One person holds at
+  most one slot per group**: someone signed up to
   both raids contributes a chip per character they own and takes a slot in each
   group, never two in the same one. Identity is the **Discord user id** the
   Raid-Helper signup carries, matched against `Member.discordUserId` — so a

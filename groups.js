@@ -135,13 +135,21 @@ function makeChipId(){ return 'g' + (chipSeq++); }
 function toChip(src, person, tag){
   const cls = String(src.cls || '').toLowerCase().trim();
   const spec = String(src.spec || '').toLowerCase().replace(/[^a-z]/g, '');
+  // The raid role the logs recorded ("tank"/"healer"/"dps") is the authoritative
+  // classification and the only thing that catches a tank the spec alone misses —
+  // a bear or a warrior that logged its dps spec while tanking. Honour it when the
+  // roster has one; otherwise role stands in as a class fallback for the chip's
+  // colour and tag, exactly as on the pasted board.
+  const raidRole = String(src.role || '').toLowerCase().trim();
   return {
     id: makeChipId(),
     personId: person.personId,
     personName: person.name,
     name: src.name,
     cls: RH.CLASS_COLORS[cls] ? cls : (RH.CLASS_COLORS[RH.SPEC_TO_CLASS[spec]] ? RH.SPEC_TO_CLASS[spec] : ''),
-    role: cls || RH.SPEC_TO_CLASS[spec] || '',
+    role: (raidRole === 'tank' || raidRole === 'healer' || raidRole === 'dps')
+      ? raidRole
+      : (cls || RH.SPEC_TO_CLASS[spec] || ''),
     spec: spec,
     num: null,
     status: person.status,

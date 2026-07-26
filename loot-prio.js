@@ -701,10 +701,17 @@ function buildCandidates(signups, members){
     const cls = (named || (known && known.cls) || '').toLowerCase().trim();
     let spec = (sspec || (known && known.spec) || '').toLowerCase().replace(/[^a-z]/g, '');
 
+    // Last-ditch class guess from the spec, for a raider the roster couldn't place.
+    // It must honour the same rule as above: an ambiguous spec (protection/holy/
+    // restoration) resolves to more than one class, so guessing it — protection to
+    // warrior — is exactly how a prot paladin was still landing on warrior prio.
+    // Leave `cls` blank there; the spec still carries the role (isTank sees it).
+    const guessed = (!RH.AMBIGUOUS_SPECS.has(spec) && RH.SPEC_TO_CLASS[spec]) || '';
+
     const c = {
       id: s.id,
       name,
-      cls: RH.CLASS_COLORS[cls] ? cls : (RH.SPEC_TO_CLASS[spec] || ''),
+      cls: RH.CLASS_COLORS[cls] ? cls : guessed,
       spec,
       status: s.status || 'active',
       characterId: known ? known.id : null,

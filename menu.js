@@ -216,6 +216,11 @@ const RH = (function(){
   }
   function isHealer(m){
     if(isTank(m)) return false;
+    // The logged raid role is authoritative, the way isTank honours it: a shadow
+    // priest or ret paladin logs as dps, and without this the class fallback below
+    // would read any spec-less priest/paladin/druid/shaman as a healer.
+    if(m.role === 'healer') return true;
+    if(m.role === 'dps') return false;
     if(m.spec) return HEALING_SPECS.includes(m.spec);
     return HEALER_CLASSES.includes(m.cls);
   }

@@ -333,7 +333,7 @@
     text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:10px;}
   .group-tally .tally-line{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;}
   /* Mains / alts prefix, tinted like the chip tags it summarises. */
-  .group-tally .tally-label{min-width:38px;}
+  .group-tally .tally-label{min-width:58px;}
   .group-tally .tally-label.main{color:var(--teal);}
   .group-tally .tally-label.alt{color:#c9aef5;}
   .group-tally b{color:var(--text);font-size:12px;}

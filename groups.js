@@ -106,17 +106,19 @@ function sendToPool(id){
    leaves each group's headcount unchanged, so it's the way to rebalance two full
    groups — and to trade a specific pair — without parking anyone in the pool
    first. The one-per-group rule still holds: each chip must be welcome where the
-   other is leaving from, counting that other as already gone. */
+   other is leaving from, counting that other as already gone. Two characters of
+   the same raider are allowed to trade — their main and alt swapping which group
+   (which raid) each plays in is exactly the case an officer wants — because that
+   flip keeps each of the two groups holding one of them; the clash checks below
+   let it through since each counts the other as leaving. */
 function swap(draggedId, targetId){
   if(draggedId === targetId) return;
   const draggedChip = chipById(draggedId), targetChip = chipById(targetId);
   if(!draggedChip || !targetChip) return;
-  if(draggedChip.personId && draggedChip.personId === targetChip.personId){
-    setStatus(`${draggedChip.name} and ${targetChip.name} are the same raider — nothing to swap.`, true);
-    return;
-  }
 
   const draggedGroup = groupOf(draggedId), targetGroup = groupOf(targetId);
+  // Nothing to trade when neither is placed — both would stay in the pool.
+  if(!draggedGroup && !targetGroup) return;
   const targetClash = targetGroup ? clashInExcluding(targetGroup, draggedChip, targetChip.id) : null;
   if(targetClash){
     setStatus(`Can't swap — ${draggedChip.name} would sit with ${targetClash.name} in Group ${targetGroup}, and they're the same raider (${draggedChip.personName}).`, true);
@@ -576,9 +578,15 @@ function autoAllocate(){
       const eligible = [1,2].filter(g =>
         groups[g].length < groupSize && !clashIn(g, chip));
       if(!eligible.length){ stranded++; return; }
-      // Fewest of this bucket, then of this class, then overall; Group 1 breaks ties.
+      // Fewest of this bucket *on this chip's side* — i.e. balance main-tanks,
+      // alt-tanks, main-healers, … each across the two groups, which spreads the
+      // roles and evens mains against alts in one move (and collapses to plain
+      // role-balance when a raid is all mains). Then the chip's side overall, then
+      // its class, then total size; Group 1 breaks ties.
+      const sameSide = c => isAltChip(c) === isAltChip(chip);
       eligible.sort((x, y) =>
-        countIn(x, c => bucketOf(c) === bucket) - countIn(y, c => bucketOf(c) === bucket) ||
+        countIn(x, c => bucketOf(c) === bucket && sameSide(c)) - countIn(y, c => bucketOf(c) === bucket && sameSide(c)) ||
+        countIn(x, sameSide) - countIn(y, sameSide) ||
         countIn(x, c => c.cls === chip.cls) - countIn(y, c => c.cls === chip.cls) ||
         groups[x].length - groups[y].length ||
         x - y);
@@ -694,8 +702,8 @@ function renderGroup(g){
   // Both rows always render, zeros and all, so the two groups line up and the
   // titles stay put.
   document.getElementById('groupTally' + g).innerHTML =
-    `<div class="tally-line"><span class="tally-label main">Mains</span>${tallyRow(mains)}</div>` +
-    `<div class="tally-line"><span class="tally-label alt">Alts</span>${tallyRow(alts)}</div>`;
+    `<div class="tally-line"><span class="tally-label main">Mains <b>${mains.length}</b></span>${tallyRow(mains)}</div>` +
+    `<div class="tally-line"><span class="tally-label alt">Alts <b>${alts.length}</b></span>${tallyRow(alts)}</div>`;
 
   const list = document.getElementById('groupList' + g);
   list.innerHTML = chips.length

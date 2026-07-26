@@ -665,8 +665,17 @@ function buildCandidates(signups, members){
     const named = (s.classNamed || '').toLowerCase().trim();
     const sspec = (s.spec || '').toLowerCase().replace(/[^a-z]/g, '');
 
-    // First the character the roster knows by the signed-up name.
+    // First the character the roster knows by the signed-up name — but not when
+    // that character's class flatly contradicts the class they signed up under. A
+    // raider bringing their prot paladin "Teroz" but owning a warrior alt that
+    // happens to share the signup name "Tero" must bind to the paladin, not the
+    // warrior the name alone would catch. Only a *known* class overrides the name;
+    // a character with no logged class still takes it and inherits `named` below.
     let known = chars.find(ch => String(ch.name || '').toLowerCase() === s.name.toLowerCase()) || null;
+    if(known && named){
+      const kc = String(known.cls || '').toLowerCase().trim();
+      if(kc && kc !== named) known = null;
+    }
 
     // Failing that, the member's character they'd actually loot on: the one whose
     // class matches the named class, or — when the row named no class, only a spec

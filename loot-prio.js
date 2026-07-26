@@ -645,6 +645,16 @@ function parseRaidTab(grid, forcedSection, tierSlot){
    annotations (all keyed on character name) land. The main breaks a tie when more
    than one character of that class is on the roster. */
 
+// Which classes can hold a role a raider signs up under — the tank and healer
+// buttons on a Raid-Helper signup name the *role*, not the class (a tank row comes
+// through as className "Tank"), so this is how a "Tanks" signup finds the paladin,
+// warrior or druid it belongs to. Only the narrow roles are listed; melee/ranged are
+// any class, so they're left to the class header the signup already carries.
+const ROLE_CLASSES = {
+  tank:   ['warrior', 'paladin', 'druid'],
+  healer: ['priest', 'paladin', 'druid', 'shaman']
+};
+
 function buildCandidates(signups, members){
   const byDiscord = new Map();
   const byName = new Map();
@@ -672,9 +682,20 @@ function buildCandidates(signups, members){
     // warrior the name alone would catch. Only a *known* class overrides the name;
     // a character with no logged class still takes it and inherits `named` below.
     let known = chars.find(ch => String(ch.name || '').toLowerCase() === s.name.toLowerCase()) || null;
-    if(known && named){
+    if(known){
       const kc = String(known.cls || '').toLowerCase().trim();
-      if(kc && kc !== named) known = null;
+      if(named){
+        // A class header that flatly disagrees: the name match is a coincidence.
+        if(kc && kc !== named) known = null;
+      } else if(ROLE_CLASSES[s.pickedRole]){
+        // A tank/healer row names the *role*, not the class (RH sends className
+        // "Tank"), so `named` is empty and the guard above can't fire. Drop a
+        // same-named alt that can't be who they signed up as — a classless "Tero"
+        // or a rogue "Tero" when they brought their prot-paladin "Teroz" — so the
+        // spec/role match below resolves to the real character. Same idea as the
+        // groups tally trusting the signed-up role over a spec/class guess.
+        if(!kc || !ROLE_CLASSES[s.pickedRole].includes(kc)) known = null;
+      }
     }
 
     // Failing that, the member's character they'd actually loot on: the one whose
@@ -695,6 +716,13 @@ function buildCandidates(signups, members){
       if(!pool.length && !named && sspec && !RH.AMBIGUOUS_SPECS.has(sspec)){
         const inferred = RH.SPEC_TO_CLASS[sspec];
         if(inferred) pool = chars.filter(ch => chCls(ch) === inferred);
+      }
+      // Still nothing, but they signed up for a tank/healer role: take the character
+      // whose class can serve it (a "Tanks" row → their warrior/paladin/druid), main
+      // first. Catches a prot paladin whose spec the roster never recorded, where the
+      // ambiguous "protection" above is deliberately not guessed.
+      if(!pool.length && ROLE_CLASSES[s.pickedRole]){
+        pool = chars.filter(ch => ROLE_CLASSES[s.pickedRole].includes(chCls(ch)));
       }
       known = pool.find(ch => ch.isMain) || pool[0] || null;
       matchedByClass = !!known;
@@ -730,7 +758,11 @@ function buildCandidates(signups, members){
       won: new Set(),
       has: new Set()
     };
-    c.role = RH.isTank(c) ? 'tank' : RH.isHealer(c) ? 'healer' : 'dps';
+    // The role they signed up under wins — it settles a feral bear tank from a cat,
+    // and a shadow priest from a healer, the way the groups tally now does. Fall back
+    // to the spec/class classifiers when the signup carried no role.
+    c.role = ({ tank:'tank', healer:'healer', melee:'dps', ranged:'dps' })[s.pickedRole]
+          || (RH.isTank(c) ? 'tank' : RH.isHealer(c) ? 'healer' : 'dps');
     if(!member) unlinked++;
     if(!spec) noSpec++;
     if(matchedByClass) byClass++;

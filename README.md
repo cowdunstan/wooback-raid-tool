@@ -121,7 +121,10 @@ board, identity links, loot, and attendance.
   resolves the member and the **class the signup names** picks the character of
   theirs it fits — their main breaking a tie — so the loot the page shows lands on
   the character who would actually take it, with the **HAS** / **WON** pills keyed
-  to it. A *status* row (Tentative/Bench) names no class, only a spec, so it picks
+  to it. A **tank** row names the *role*, not the class (Raid-Helper sends `Tank`),
+  so there the **role signed up under** picks the character — their prot-paladin
+  *Teroz*, not a same-named *Tero* alt that would otherwise bind by name and leave
+  them class-less. A *status* row (Tentative/Bench) names no class, only a spec, so it picks
   by spec instead: an ambiguous spec — `protection`, `holy`, `restoration`, each
   held by two classes — must not be guessed into a class, or a tentative prot
   paladin reads as a warrior and rolls on the wrong prio. P2 spells the same specs out where P3 abbreviates

@@ -468,13 +468,26 @@
     color:var(--text-dim);letter-spacing:0;text-transform:none;
   }
   .my-prio-char{
-    display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+    display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;
     padding:8px 0;border-top:1px solid rgba(71,71,79,.5);
   }
   .my-prio .my-prio-char:first-of-type{border-top:none;padding-top:0;}
+  .my-prio-groups{display:flex;flex-direction:column;}
+  .my-prio-group{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;padding:10px 0;}
+  .my-prio-group:first-child{padding-top:0;}
+  .my-prio-group:last-child{padding-bottom:0;}
+  /* A rule between tiers, dimmer than the between-character line above so the
+     hierarchy stays: characters split by the stronger border, tiers by this. */
+  .my-prio-group + .my-prio-group{border-top:1px solid rgba(71,71,79,.35);}
   .my-prio-items{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;}
   .my-prio-item{display:inline-flex;align-items:center;gap:5px;}
-  .my-prio-rank{
+  /* Prio 2+ groups: one item per line, the specs that outrank you named beneath. */
+  .my-prio-rows{display:flex;flex-direction:column;gap:8px;font-size:12px;}
+  .my-prio-row{display:flex;flex-direction:column;gap:2px;}
+  .my-prio-ahead{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px;font-size:11px;padding-left:14px;}
+  .my-prio-behind{color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;font-size:9px;font-weight:700;}
+  .my-prio-sep{color:var(--text-dim);}
+  .my-prio-tier{
     background:rgba(0,0,0,.35);color:var(--accent);border-radius:4px;
     padding:1px 5px;font-size:10px;font-weight:700;
   }

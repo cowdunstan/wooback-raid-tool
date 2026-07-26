@@ -1386,7 +1386,21 @@ function myPrioForItem(item, keys, row, chars){
     for(let i = 0; i < item.tiers.length && found < 0; i++){
       if(item.tiers[i].tokens.some(tok => tok.specs && tok.specs.some(s => matchesSpec(mc, s)))) found = i;
     }
-    if(found >= 0) out.push({ char: mc, rank: found + 1 });
+    if(found < 0) return;
+    // Everything the sheet ranks above this character on this item — the tokens of
+    // every tier ahead of theirs, deduped and in order. It is read off the sheet, so
+    // it is the classes and specs with priority, not the raiders who signed up as
+    // them. `cls` is the token's class when it names exactly one, so it can be
+    // coloured; blank for an ambiguous token ("Resto") or a named-prio one ("Xat").
+    const ahead = [];
+    for(let i = 0; i < found; i++){
+      item.tiers[i].tokens.forEach(tok => {
+        if(ahead.some(a => a.label === tok.label)) return;
+        const classes = tok.specs ? new Set(tok.specs.map(s => s.cls)) : new Set();
+        ahead.push({ label: tok.label, cls: classes.size === 1 ? [...classes][0] : '' });
+      });
+    }
+    out.push({ char: mc, rank: found + 1, ahead });
   });
   return out;
 }
@@ -1400,7 +1414,7 @@ function renderMyPrio(lookup, view){
   const whose = self ? 'your' : `${whEsc(view.label)}’s`;
   const youd = self ? 'you' : 'they';
 
-  const perChar = new Map();   // character name → [{ name, id, rank }]
+  const perChar = new Map();   // character name → [{ name, id, rank, ahead }]
   sections.forEach(section => section.items.forEach(item => {
     const keys = [item.name.toLowerCase()];
     const row = lookup(item.name);
@@ -1408,7 +1422,7 @@ function renderMyPrio(lookup, view){
     myPrioForItem(item, keys, row, chars).forEach(h => {
       let arr = perChar.get(h.char.name);
       if(!arr){ arr = []; perChar.set(h.char.name, arr); }
-      arr.push({ name: item.name, id: itemIdFor(item, row), rank: h.rank });
+      arr.push({ name: item.name, id: itemIdFor(item, row), rank: h.rank, ahead: h.ahead });
     });
   }));
 
@@ -1422,13 +1436,50 @@ function renderMyPrio(lookup, view){
 
   const clsOf = new Map(chars.map(c => [c.name, c.cls]));
   const blocks = [...perChar.entries()].map(([name, arr]) => {
-    arr.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
     const color = RH.CLASS_COLORS[clsOf.get(name)] || '#7fa89c';
-    const items = arr.map(it =>
-      `<span class="my-prio-item">${itemLink(it.id, it.name)}<span class="my-prio-rank">tier ${it.rank}</span></span>`).join('');
+    // The items this character holds prio on, bucketed by which tier they sit in —
+    // "prio 1" for the top tier, "prio 2" for one behind it, and so on. A tier is a
+    // group here rather than a per-item pill, so the ones you're first in line for
+    // read together.
+    const byTier = new Map();
+    arr.forEach(it => {
+      let g = byTier.get(it.rank);
+      if(!g){ g = []; byTier.set(it.rank, g); }
+      g.push(it);
+    });
+    const groups = [...byTier.entries()].sort((a, b) => a[0] - b[0]).map(([tier, items]) => {
+      items.sort((a, b) => a.name.localeCompare(b.name));
+      // Prio 1 is the tier you're first in line for — nothing outranks you, so the
+      // items just read together inline.
+      if(tier === 1){
+        const links = items.map(it =>
+          `<span class="my-prio-item">${itemLink(it.id, it.name)}</span>`).join('');
+        return `<div class="my-prio-group">
+                  <span class="my-prio-tier">prio ${tier}</span>
+                  <div class="my-prio-items">${links}</div>
+                </div>`;
+      }
+      // Prio 2+: each item on its own line, with the classes and specs that hold
+      // priority over this character on it named underneath (from myPrioForItem's
+      // `ahead`), coloured by class where the token names just one.
+      const rows = items.map(it => {
+        const specs = (it.ahead || []).map(a => {
+          const color = RH.CLASS_COLORS[a.cls];
+          return color ? `<span style="color:${color}">${whEsc(a.label)}</span>` : whEsc(a.label);
+        }).join('<span class="my-prio-sep">·</span>');
+        return `<div class="my-prio-row">
+                  <span class="my-prio-item">${itemLink(it.id, it.name)}</span>
+                  <span class="my-prio-ahead"><span class="my-prio-behind">behind</span>${specs}</span>
+                </div>`;
+      }).join('');
+      return `<div class="my-prio-group">
+                <span class="my-prio-tier">prio ${tier}</span>
+                <div class="my-prio-rows">${rows}</div>
+              </div>`;
+    }).join('');
     return `<div class="my-prio-char">
               <a class="prio-name" href="character.html?name=${encodeURIComponent(name)}" style="--class-color:${color}">${whEsc(name)}</a>
-              <div class="my-prio-items">${items}</div>
+              <div class="my-prio-groups">${groups}</div>
             </div>`;
   }).join('');
 

@@ -110,6 +110,7 @@
     cursor:grab;user-select:none;white-space:nowrap;
   }
   .chip:active{cursor:grabbing;}
+  .chip.swap-target{outline:2px solid var(--teal);outline-offset:1px;background:rgba(46,230,171,.18);}
   .chip .cls{color:var(--text-dim);font-size:10.5px;}
   .chip .num{
     background:rgba(0,0,0,.35);color:var(--teal);border-radius:4px;

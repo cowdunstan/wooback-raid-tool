@@ -79,7 +79,10 @@ board, identity links, loot, and attendance.
   every item with its **enchant and gems** — plus everything it has won, every
   roll it has made, and its attendance, with an alt switcher across the member's
   characters. Reached from a name anywhere on the roster, loot history or loot
-  stats; opened bare (`character.html`) it resolves to your own main.
+  stats; opened bare (`character.html`) it resolves to your own main. **Spec** can be
+  set by hand from the header (owner or officer) — for a character no log has reported
+  a spec for yet, or when the log-derived one is wrong; a later attendance import can
+  still overwrite it from a log, the same as the roster editor's spec field.
   Gear comes from two places. The attendance import stores a **Warcraft Logs**
   snapshot per character per report (see below), so the sheet reads the database and
   older nights stay browsable in a picker. And a **Refresh gear** button (owner or
@@ -317,13 +320,17 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
 - **Character sheet** (any signed-in session) — `GET /api/characters/sheet`
   (`?id=`, `?name=`, or nothing for the caller's own main) returns the character,
   its alts, the newest gear snapshot with the list of earlier ones, its loot,
-  rolls and attendance, and `canRefreshGear` (whether the caller may refresh it);
+  rolls and attendance, and `canRefreshGear` / `canEditSetup` (both owner-or-officer —
+  whether the caller may refresh gear and set the spec by hand);
   `GET /api/characters/sheet/history?id=&code=` returns one earlier snapshot.
   `POST /api/characters/sheet/refresh?id=` (**owner or officer**) refreshes gear on
   demand: Blizzard's live character-equipment route first, falling back to the
   character's most recent Warcraft Logs report when Blizzard has nothing. A snapshot's
   `Source` is `"wcl"` or `"blizzard"`; a Blizzard row is keyed by a `"blizzard"`
   sentinel report code, so it stays a single live row per character.
+  `POST /api/characters/sheet/spec?id=` (**owner or officer**) sets the character's
+  spec from a `{ "spec": "…" }` body — a blank value clears it back to unset. A later
+  attendance import can still overwrite it from a log.
 - **Item page** (any signed-in session) — `GET /api/items?id=` or `?name=` returns
   the item (name, icon, quality, item level), who has it equipped in their latest
   gear snapshot, how often it dropped, and every award with its rolls. An id also

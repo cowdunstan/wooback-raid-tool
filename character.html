@@ -39,6 +39,18 @@
   .cs-name{font-family:'Cinzel',serif;font-size:26px;font-weight:700;line-height:1.1}
   .cs-sub{font-size:12.5px;color:var(--text-dim);margin-top:6px}
   .cs-sub b{color:var(--text);font-weight:600}
+  /* Inline spec editor on the setup line (owner or officer). Sits after the guild
+     text, so a compact ghost button and a small field keep it on the same row. */
+  .cs-spec-btn{padding:2px 9px;font-size:11px;margin-left:8px;vertical-align:middle}
+  .cs-spec-form{display:inline-flex;align-items:center;gap:6px;margin-left:8px;vertical-align:middle}
+  .cs-spec-input{
+    background:var(--well);color:var(--text);border:1px solid var(--panel-line);
+    border-radius:6px;padding:3px 8px;font-family:inherit;font-size:12px;width:150px;
+  }
+  .cs-spec-form .btn-ghost{padding:2px 9px;font-size:11px}
+  .cs-spec-save{color:var(--accent);border-color:var(--accent-dim)}
+  .cs-spec-msg{font-size:11px;color:var(--amber)}
+
   .cs-alts{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
   .cs-alt{
     display:inline-block;background:var(--chip-bg);border:1px solid var(--panel-line);
@@ -205,6 +217,10 @@ function cap(s){
 /* ───────────────────────── Load ───────────────────────── */
 const params = new URLSearchParams(location.search);
 let CURRENT_ID = null;
+// Owner-or-officer, from the API — whether to show the inline spec editor. The last
+// rendered character is kept so Cancel can redraw the header without a round-trip.
+let CAN_EDIT = false;
+let CURRENT_CHAR = null;
 
 async function api(path){
   const res = await fetch(API_BASE + path, { headers:{ 'Authorization':'Bearer ' + sessionToken() } });
@@ -214,12 +230,17 @@ async function api(path){
   return body;
 }
 
-async function apiPost(path){
-  const res = await fetch(API_BASE + path, { method:'POST', headers:{ 'Authorization':'Bearer ' + sessionToken() } });
+async function apiPost(path, body){
+  const opts = { method:'POST', headers:{ 'Authorization':'Bearer ' + sessionToken() } };
+  if(body !== undefined){
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(API_BASE + path, opts);
   if(res.status === 401){ logout(); throw new Error('signed out'); }
-  const body = await res.json().catch(() => null);
-  if(!res.ok) throw new Error((body && body.detail) || ('HTTP ' + res.status));
-  return body;
+  const data = await res.json().catch(() => null);
+  if(!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
+  return data;
 }
 
 // Pull a fresh gear snapshot (Blizzard live, else the latest Warcraft Logs report)
@@ -263,6 +284,7 @@ async function load(){
 }
 
 function render(d){
+  CAN_EDIT = !!d.canEditSetup;
   renderHead(d.character);
   document.getElementById('gearRefresh').style.display = d.canRefreshGear ? '' : 'none';
   renderGear(d.gear, d.gearHistory);
@@ -272,12 +294,21 @@ function render(d){
 }
 
 function renderHead(c){
+  CURRENT_CHAR = c;
   const col = classColor(c.cls);
   const bits = [];
   if(c.spec) bits.push(cap(c.spec));
   if(c.cls) bits.push(cap(c.cls));
   if(c.role) bits.push(cap(c.role));
   if(c.realm) bits.push(c.realm);
+
+  // Owner or officer may set the spec by hand — for a character no log has reported
+  // a spec for yet, or when the log-derived one is wrong.
+  const specEdit = CAN_EDIT
+    ? '<button class="btn-ghost cs-spec-btn" id="specEditBtn">'
+      + (c.spec ? 'Edit spec' : 'Set spec') + '</button>'
+      + '<span class="cs-spec-form" id="specForm"></span>'
+    : '';
 
   const guild = c.guildSyncedAt
     ? (c.guildName ? '&lt;' + esc(c.guildName) + '&gt;' + (c.guildRank === 0 ? ' (GM)' : '')
@@ -296,12 +327,52 @@ function renderHead(c){
 
   document.getElementById('head').innerHTML =
       '<div class="cs-name"' + (col ? ' style="color:' + col + '"' : '') + '>' + esc(c.name) + '</div>'
-    + '<div class="cs-sub">' + (bits.length ? '<b>' + esc(bits.join(' · ')) + '</b> — ' : '') + guild + '</div>'
+    + '<div class="cs-sub">' + (bits.length ? '<b>' + esc(bits.join(' · ')) + '</b> — ' : '') + guild + specEdit + '</div>'
     + '<div class="cs-sub">'
     + (c.member ? 'Played by <b>' + esc(c.member.name) + '</b>. ' : 'Not linked to a Discord member yet. ')
     + (c.setupUpdatedAt ? 'Setup last seen in a log on ' + esc(fmtDate(c.setupUpdatedAt)) + '.' : '')
     + '</div>'
     + altHtml;
+
+  if(CAN_EDIT) document.getElementById('specEditBtn').addEventListener('click', beginSpecEdit);
+}
+
+// Swap the "Edit spec" button for an inline text field. The log stores specs as a
+// single capitalised word ("Destruction"), so a free-text box matches — blank clears.
+function beginSpecEdit(){
+  const btn = document.getElementById('specEditBtn');
+  const form = document.getElementById('specForm');
+  btn.style.display = 'none';
+  form.innerHTML =
+      '<input id="specInput" class="cs-spec-input" type="text" maxlength="40" placeholder="e.g. Destruction">'
+    + '<button class="btn-ghost cs-spec-save" id="specSave">Save</button>'
+    + '<button class="btn-ghost" id="specCancel">Cancel</button>'
+    + '<span class="cs-spec-msg" id="specMsg"></span>';
+  const input = document.getElementById('specInput');
+  input.value = CURRENT_CHAR && CURRENT_CHAR.spec ? cap(CURRENT_CHAR.spec) : '';
+  input.focus();
+  input.select();
+  document.getElementById('specSave').addEventListener('click', saveSpec);
+  document.getElementById('specCancel').addEventListener('click', function(){ renderHead(CURRENT_CHAR); });
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); saveSpec(); }
+    else if(e.key === 'Escape'){ renderHead(CURRENT_CHAR); }
+  });
+}
+
+async function saveSpec(){
+  const input = document.getElementById('specInput');
+  const msg = document.getElementById('specMsg');
+  document.getElementById('specSave').disabled = true;
+  msg.textContent = 'Saving…';
+  try{
+    await apiPost('/api/characters/sheet/spec?id=' + encodeURIComponent(CURRENT_ID), { spec: input.value.trim() });
+    await load();          // re-render the sheet from the saved spec
+    loadWowhead();
+  }catch(err){
+    msg.textContent = err.message;
+    document.getElementById('specSave').disabled = false;
+  }
 }
 
 /* ───────────────────────── Gear ─────────────────────────

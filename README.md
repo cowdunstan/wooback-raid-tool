@@ -155,8 +155,12 @@ board, identity links, loot, and attendance.
   roster, then narrowed to this raid's signup, so alts they didn't bring stay out) —
   over the same parsed sheet and lists the items on this raid they hold **named** prio on and
   don't already have — `MS > OS` is left out, since the point is where you actually
-  have priority. It is what makes the page worth opening for a member, not just an
-  officer. Officers can **mute** a character on a single item with the ✕ beside their
+  have priority. The items are grouped by the prio tier they sit in — **prio 1** is
+  where they're first in line (listed inline), and each **prio 2+** tier puts every
+  item on its own line with the classes and specs that outrank them on it named
+  underneath (read off the sheet's higher tiers, so it is specs rather than the
+  raiders signed up, coloured by class). It is what makes the page worth opening for a
+  member, not just an officer. Officers can **mute** a character on a single item with the ✕ beside their
   name — persisted server-side (`/api/loot-prio/exclusions`) and scoped to the raid
   being shown, it drops that character from that one item across this raid (the tier
   list, the text copy, the Gargul export, and everyone's personal section) until an

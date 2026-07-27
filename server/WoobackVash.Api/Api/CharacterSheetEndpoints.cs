@@ -55,8 +55,9 @@ public static class CharacterSheetEndpoints
 
             var gear = await LatestGear(db, c.Id);
             var history = await GearHistory(db, c.Id);
-            // Whether to offer the "refresh gear" button — the endpoint enforces the same.
-            var canRefreshGear = await CanRefreshGear(db, session!, c);
+            // Whether to offer the "refresh gear" button and the inline spec editor —
+            // both are owner-or-officer, and the endpoints enforce the same.
+            var canEdit = await CanEdit(db, session!, c);
 
             // Awards won by this character, newest first, with the roll that took it.
             var loot = await db.LootAwards.AsNoTracking()
@@ -154,7 +155,8 @@ public static class CharacterSheetEndpoints
                 },
                 gear,
                 gearHistory = history,
-                canRefreshGear,
+                canRefreshGear = canEdit,
+                canEditSetup = canEdit,
                 loot,
                 rolls,
                 summary,
@@ -200,7 +202,7 @@ public static class CharacterSheetEndpoints
             var (character, resolveError) = await ResolveCharacter(db, session!, ctx.Request.Query);
             if (resolveError is not null) return resolveError;
 
-            if (!await CanRefreshGear(db, session!, character!))
+            if (!await CanEdit(db, session!, character!))
                 return Results.Json(new { error = "forbidden", detail = "You can only refresh gear for your own characters." },
                     statusCode: 403);
 
@@ -215,12 +217,44 @@ public static class CharacterSheetEndpoints
                 ? Results.Json(new { source = r.Source, note = r.Note })
                 : Results.Json(new { error = "upstream", detail = r.Error }, statusCode: r.Status);
         });
+
+        // Set a character's spec by hand, for when no log has reported it yet or the
+        // log-derived one is wrong. Owner-or-officer, like the gear refresh. This is a
+        // manual fallback: a later attendance import can still overwrite Spec from a log
+        // (see GearSnapshotStore), exactly as it does for the roster editor's spec field.
+        sheet.MapPost("/spec", async (HttpContext ctx, SessionTokenService tokens, SpecInput input) =>
+        {
+            var (session, error) = ctx.RequireSession(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            var (character, resolveError) = await ResolveCharacter(db, session!, ctx.Request.Query);
+            if (resolveError is not null) return resolveError;
+
+            if (!await CanEdit(db, session!, character!))
+                return Results.Json(new { error = "forbidden", detail = "You can only edit your own characters." },
+                    statusCode: 403);
+
+            var ch = await db.Characters.FirstOrDefaultAsync(x => x.Id == character!.Id);
+            if (ch is null) return NotFound("No such character.");
+
+            var spec = input.Spec?.Trim();
+            ch.Spec = string.IsNullOrEmpty(spec) ? null : spec;
+            await db.SaveChangesAsync();
+            return Results.Json(new { ok = true, spec = ch.Spec });
+        });
     }
 
-    /// <summary>Owner-or-officer: an officer may refresh anyone's gear, a raider only
-    /// the characters linked to their own Discord account. The API is the enforcement —
-    /// the sheet only uses the same answer to decide whether to show the button.</summary>
-    private static async Task<bool> CanRefreshGear(AppDbContext db, SessionPayload session, Character c)
+    /// <summary>The body of <c>POST /api/characters/sheet/spec</c>. An empty or missing
+    /// spec clears it back to "not set".</summary>
+    public record SpecInput(string? Spec);
+
+    /// <summary>Owner-or-officer: an officer may edit anyone's character, a raider only
+    /// the characters linked to their own Discord account. Gates both the gear refresh
+    /// and the inline spec editor. The API is the enforcement — the sheet only uses the
+    /// same answer to decide whether to show the affordances.</summary>
+    private static async Task<bool> CanEdit(AppDbContext db, SessionPayload session, Character c)
     {
         if (session.Officer) return true;
         if (c.MemberId is null) return false;

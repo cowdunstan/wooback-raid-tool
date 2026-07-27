@@ -413,6 +413,7 @@ const NAV_LINKS = [
   { href:'loot-history.html', label:'Loot history' },
   { href:'loot-stats.html', label:'Loot stats' },
   { href:'loot-prio.html',  label:'Loot prio' },
+  { href:'my-priority.html', label:'My raid loot priority' },
   { href:'sheet.html',      label:'Loot sheets' }
 ];
 

@@ -112,7 +112,8 @@ board, identity links, loot, and attendance.
   Cavern** or **Tempest Keep** from the P2 one — and every boss's items come back
   with the characters signed up that hold prio, in the sheet's own order. Both
   sheets write prio as **spec tokens**
-  (`Cuffs of Devastation → Arcane > Balance > Ele > Destro`); `loot-prio.js` maps
+  (`Cuffs of Devastation → Arcane > Balance > Ele > Destro`); the shared
+  `loot-sheet.js` maps
   those to specs (`SPEC_TOKENS`) and matches them against the spec each raider
   signed up with, falling back to the spec a Warcraft Logs import last saw for
   that character. The name Raid-Helper carries isn't trusted outright: when it
@@ -148,7 +149,7 @@ board, identity links, loot, and attendance.
   (already wearing it, from the gear snapshots) and **WON** (already awarded it); a
   tie inside a tier still breaks on who has won least in the last 28 days, though
   that count is no longer shown as a pill. **Copy as text** dumps the whole plan for
-  pasting into Discord. Which tabs make up which raid is `RAID_TABS` in `loot-prio.js`.
+  pasting into Discord. Which tabs make up which raid is `RAID_TABS` in `loot-sheet.js`.
 
   At the top, **What you can roll on** runs the *signed-in user's own* character —
   the one they signed up with tonight (found by the session's Discord id against the
@@ -179,14 +180,14 @@ board, identity links, loot, and attendance.
   **Tier tokens** get special handling, because a token drops as one item and is
   redeemed into a class-specific piece: the sheet names the token (`Chestguard of
   the Forgotten Conqueror`), but the winner wears the piece (`Lightbringer
-  Chestguard`), which is all the gear snapshots see. `TIER_TOKENS` in `loot-prio.js`
+  Chestguard`), which is all the gear snapshots see. `TIER_TOKENS` in `loot-sheet.js`
   maps each token to the item ids of every class piece it turns into, so **a raider
   wearing the upgrade counts as holding the token** — HAS fires, they are struck out
   and prio moves past them, and they drop from the soft-reserve export. The match is
   per class and per slot: a paladin holding the Conqueror shoulder is detected by the
   paladin shoulder piece, not the priest's or a helm. P3 names its tier tokens in
   full; P2's shared tier-set tab writes them bare under a slot banner (`Tier sets —
-  Helms` → `Vanquished Champion`), so `loot-prio.js` rejoins banner and label into
+  Helms` → `Vanquished Champion`), so `loot-sheet.js` rejoins banner and label into
   the real item name (`Helm of the Vanquished Champion`) before parsing — otherwise
   all five slots collapse to one lookup and never resolve to an item id.
 
@@ -205,6 +206,42 @@ board, identity links, loot, and attendance.
   `POST /api/items/resolve`, because the sheet carries names only. `plusOnes` is
   0 for everyone since we track none — Gargul asks before overwriting plus-ones
   it already has, and the page says to answer **No**.
+- **`my-priority.html`** — **my raid loot priority** — what can I roll on (**open to any signed-in member**;
+  the only officer-only affordance is the *View as* picker): the member-facing twin of
+  `loot-prio.html` with **no Raid-Helper signup**. Pick a raid and every boss's
+  items come back with a badge on each one saying whether *you* can roll on it —
+  your **named prio tier** where the sheet names your spec, or open **MS > OS** for
+  anything the sheet leaves open (either `MS > OS` outright or a named chain that
+  opens to the room after it). Eligibility is your own roster characters (all of
+  them, found by the session's Discord id — not narrowed to a signup) run against
+  the sheet with the same `SPEC_TOKENS` / `matchesSpec` the prio page uses. An item a
+  character **already holds drops out** — you wouldn't roll on gear you have — judged
+  by the same HAS check the prio page uses (tier tokens counted as their redeemed
+  piece); an item every character owns reads **You have this** rather than a roll. A
+  member with more than one character gets a **Character** dropdown (their main the
+  default) and the whole page — badges and the summary — is about the one they pick;
+  with a single character there's nothing to choose and the dropdown is hidden. Up
+  top, **What you have prio on** is the same by-tier personal summary `loot-prio.html`
+  shows, here without needing an event picked, and it leads with a **Detected as** line
+  naming the spec each character's prio was worked out from and a note to take a wrong
+  one to an officer. A **only what I can roll on** toggle
+  hides the items your specs can't take (and the ones you already have); officers can
+  point the whole page at another raider with **View as**. It reads the mutes an
+  officer set on `loot-prio.html` (`/api/loot-prio/exclusions`) so a muted character
+  drops from their own list, but sets none — there is no Gargul export, text copy or
+  mute control here. The built list is cached in `localStorage`. `my-priority.js` is
+  the page; all the sheet reading and matching is the shared `loot-sheet.js` (below).
+- **`loot-sheet.js`** — the *pure* half of the loot-sheet machinery, shared by
+  `loot-prio.js` and `my-priority.js` (both load it after `menu.js`). It fetches a raid's
+  tabs through `/sheet/loot` and parses them into bosses → items → prio tiers
+  (`RAID_TABS`, `parseRaidTab`, the colour-fill class inference `SHEET_CLASS_FILLS`,
+  the tier-token table `TIER_TOKENS`), maps sheet tokens to specs (`SPEC_TOKENS`)
+  and matches them against a character (`matchesSpec`), and shapes a member's roster
+  characters for that matcher (`buildCharsFor`). No page DOM, no signup, no per-page
+  state — it depends only on `menu.js`. The two pages add their own rendering on top:
+  `loot-prio.js` joins it to a Raid-Helper signup, `my-priority.js` runs your own
+  characters against it. Kept as plain globals (there is no module system here), so
+  it must load before either page script.
 - **`menu.js`** — shared session helpers, the `API_BASE` constant, the hamburger
   menu, the item-link helpers (`itemLink`, `loadWowhead`, `SLOT_ORDER`,
   `WOWHEAD_DOMAIN`) every page renders items with, and the **`RH`** module: the

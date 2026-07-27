@@ -491,3 +491,26 @@
     background:rgba(0,0,0,.35);color:var(--accent);border-radius:4px;
     padding:1px 5px;font-size:10px;font-weight:700;
   }
+  /* The "Detected as" line: which spec each character's prio was worked out from,
+     with the note to take a wrong one to an officer. */
+  .my-prio-detected{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:2px 0 6px;}
+  .my-prio-detected-label{
+    font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);
+  }
+  .my-prio-spec{font-size:10px;font-weight:500;color:var(--text-dim);}
+
+  /* my-priority.html — "what can I roll on". A badge beside each item's name says
+     whether the viewer can roll on it (named prio, or open MS > OS) and the tier they
+     sit in is lit brighter than the reserving highlight loot-prio reuses. Items they
+     can't roll — the wrong specs, or one they already hold — keep the
+     .prio-item.is-empty dimming. */
+  .roll-badge{
+    display:inline-block;margin-left:8px;vertical-align:middle;
+    font-size:9px;font-weight:700;letter-spacing:.5px;border-radius:3px;
+    padding:1px 5px;text-transform:uppercase;
+  }
+  .roll-badge.can{background:rgba(var(--accent-rgb),.18);color:var(--accent);}
+  .roll-badge.open{background:rgba(var(--amber-rgb),.18);color:var(--amber);}
+  .roll-badge.has{background:rgba(var(--accent-rgb),.13);color:var(--accent-dim);}
+  .roll-badge.no{background:rgba(168,168,178,.16);color:var(--text-dim);}
+  .prio-tier.is-mine .prio-rank{background:var(--accent);color:var(--on-accent);}

@@ -1,0 +1,96 @@
+<meta charset="utf-8">
+<script>
+/* Session gate. Captures a session handed back by the auth backend
+   (my-priority.html#session=…) and bounces to the landing page with no unexpired
+   session. The page is open to any signed-in tier: every raider reads their own
+   "what can I roll on" list off the public loot sheets; the only officer-only bit
+   is the "View as" picker, hidden by isOfficer() here (and nothing it exposes is
+   private — the roster is member-readable and the prio is public sheet data). */
+(function(){
+  var m = location.hash.match(/(?:^#|&)session=([^&]+)/);
+  if(m){
+    try{ localStorage.setItem('vashj_session', decodeURIComponent(m[1])); }catch(e){}
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  function payload(tok){
+    if(!tok) return null;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      return JSON.parse(atob(p));
+    }catch(e){ return null; }
+  }
+  var tok = null;
+  try{ tok = localStorage.getItem('vashj_session'); }catch(e){}
+  var pl = payload(tok);
+  if(!pl || !pl.exp || pl.exp <= Math.floor(Date.now()/1000)){
+    try{ localStorage.removeItem('vashj_session'); }catch(e){}
+    location.replace('index.html');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+
+<div class="app">
+  <div class="wrap">
+    <div class="authbar">
+      <span class="authbar-left">
+        <div class="nav">
+          <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navDrawer">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-drawer" id="navDrawer"></nav>
+        </div>
+        <span class="eyebrow">Loot</span>
+      </span>
+      <span class="authbar-right">
+        <span id="authWho" class="auth-who"></span>
+        <button class="btn-ghost" onclick="logout()">Sign out</button>
+      </span>
+    </div>
+    <h1>My raid loot priority</h1>
+    <p class="subtitle">Pick a raid and the guild loot sheets turn into a per-boss list of what your own characters can roll on — no signup needed. Up top, “What you can roll on” pulls out where you hold named prio, grouped by tier and naming the classes ahead of you. Below, every boss lists all its items, with the ones you can roll marked: open <b>MS &gt; OS</b> for anything, or your prio tier where the sheet names your spec. Black Temple and Hyjal come from the P3 sheet, SSC and Tempest Keep from the P2 one. Officers can point the whole page at any raider with the “View as” picker.</p>
+
+    <div class="roster-panel">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div class="field">
+          <label>Raid</label>
+          <select id="raidPick" class="picker" onchange="onRaidChange()"></select>
+        </div>
+        <button class="btn-primary" onclick="build()">Show items</button>
+      </div>
+      <div id="rollsStatus" style="font-size:11.5px;color:var(--text-dim);margin-top:8px;min-height:15px;"></div>
+    </div>
+
+    <div class="toolbar" id="rollsToolbar" style="display:none;">
+      <div class="field">
+        <label>Showing</label>
+        <span id="rollsHead" style="font-size:13.5px;font-weight:600;"></span>
+        <span id="rollsAsOf" style="font-size:11px;color:var(--text-dim);"></span>
+      </div>
+      <div class="field" data-officer-only>
+        <label>View as</label>
+        <select id="viewAs" class="picker" onchange="setViewAs(this)"></select>
+      </div>
+      <div class="field" id="charField" style="display:none;">
+        <label>Character</label>
+        <select id="charPick" class="picker" onchange="setCharPick(this)"></select>
+      </div>
+      <div class="spacer"></div>
+      <label class="prio-check"><input type="checkbox" id="onlyMine" onchange="toggleOnlyMine(this)"> Only what I can roll on</label>
+      <button class="btn-ghost" onclick="refreshBuild()">Refresh</button>
+      <button class="btn-ghost" onclick="startOver()">Start over</button>
+    </div>
+    <div id="rollsHiddenNote" style="font-size:11.5px;color:var(--text-dim);margin:-6px 0 10px;"></div>
+
+    <div id="rollsResult"></div>
+
+    <footer>Prio comes from the guild loot sheets — edits happen there, not here.</footer>
+  </div>
+</div>
+
+<script src="menu.js"></script>
+<script src="loot-sheet.js"></script>
+<script src="my-priority.js"></script>

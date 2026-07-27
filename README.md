@@ -80,9 +80,10 @@ board, identity links, loot, and attendance.
   roll it has made, and its attendance, with an alt switcher across the member's
   characters. Reached from a name anywhere on the roster, loot history or loot
   stats; opened bare (`character.html`) it resolves to your own main. **Spec** can be
-  set by hand from the header (owner or officer) — for a character no log has reported
-  a spec for yet, or when the log-derived one is wrong; a later attendance import can
-  still overwrite it from a log, the same as the roster editor's spec field.
+  set by hand from the header (owner or officer) — a dropdown of the class's specs (an
+  unknown class falls back to free text) — for a character no log has reported a spec
+  for yet, or when the log-derived one is wrong; a later attendance import can still
+  overwrite it from a log, the same as the roster editor's spec field.
   Gear comes from two places. The attendance import stores a **Warcraft Logs**
   snapshot per character per report (see below), so the sheet reads the database and
   older nights stay browsable in a picker. And a **Refresh gear** button (owner or

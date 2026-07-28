@@ -196,6 +196,81 @@ const RH = (function(){
   // prot paladin was being read as a warrior.
   const AMBIGUOUS_SPECS = new Set(['protection', 'holy', 'restoration']);
 
+  // Phase-3 (Black Temple / Hyjal) best-in-slot guides, keyed by our own internal
+  // cls:spec (feral folds its role in, since bear and cat want different gear). Two
+  // hubs — Wowhead and Icy-Veins — both of which publish one deterministic per-spec
+  // URL; the pair here is [wowhead-slug, icyveins-slug]. Links only: bisGuides just
+  // sends a raider to the list, it never scrapes or stores one. A few naming quirks
+  // are baked in: Wowhead drops "protection" from the paladin tank slug, Rogue is a
+  // single spec-less guide on both, and priest/shaman/druid healers collapse to one.
+  const BIS_GUIDES = {
+    'warrior:arms':        ['arms-warrior-dps',          'arms-warrior-dps'],
+    'warrior:fury':        ['fury-warrior-dps',          'fury-warrior-dps'],
+    'warrior:protection':  ['protection-warrior-tank',   'protection-warrior-tank'],
+    'paladin:holy':        ['holy-paladin-healer',       'holy-paladin-healer'],
+    'paladin:protection':  ['paladin-tank',              'protection-paladin-tank'],
+    'paladin:retribution': ['retribution-paladin-dps',   'retribution-paladin-dps'],
+    'hunter:beastmastery': ['beast-mastery-hunter-dps',  'beast-mastery-hunter-dps'],
+    'hunter:marksmanship': ['marksmanship-hunter-dps',   'marksmanship-hunter-dps'],
+    'hunter:survival':     ['survival-hunter-dps',       'survival-hunter-dps'],
+    'rogue':               ['rogue-dps',                 'rogue-dps'],
+    'priest:shadow':       ['shadow-priest-dps',         'shadow-priest-dps'],
+    'priest:holy':         ['priest-healer',             'holy-priest-healer'],
+    'shaman:elemental':    ['elemental-shaman-dps',      'elemental-shaman-dps'],
+    'shaman:enhancement':  ['enhancement-shaman-dps',    'enhancement-shaman-dps'],
+    'shaman:restoration':  ['shaman-healer',             'restoration-shaman-healer'],
+    'mage:arcane':         ['arcane-mage-dps',           'arcane-mage-dps'],
+    'mage:fire':           ['fire-mage-dps',             'fire-mage-dps'],
+    'mage:frost':          ['frost-mage-dps',            'frost-mage-dps'],
+    'warlock:affliction':  ['affliction-warlock-dps',    'affliction-warlock-dps'],
+    'warlock:demonology':  ['demonology-warlock-dps',    'demonology-warlock-dps'],
+    'warlock:destruction': ['destruction-warlock-dps',   'destruction-warlock-dps'],
+    'druid:balance':       ['balance-druid-dps',         'balance-druid-dps'],
+    'druid:feral:dps':     ['feral-druid-dps',           'feral-druid-dps'],
+    'druid:feral:tank':    ['feral-druid-tank',          'feral-druid-tank'],
+    'druid:restoration':   ['druid-healer',              'restoration-druid-healer']
+  };
+  const BIS_WH_SUFFIX = '-bt-hyjal-phase-3-best-in-slot-gear-burning-crusade';
+  const BIS_IV_SUFFIX = '-pve-gear-best-in-slot';
+
+  // Fold a shaped character's cls/spec/role onto a BIS_GUIDES key, or null when we
+  // can't name a spec guide (a class with no detected spec — Rogue aside, which has
+  // one guide regardless). Guardian is TBC-feral's tank side; discipline shares the
+  // holy healer guide.
+  function bisKey(cls, spec, role){
+    if(cls === 'rogue') return 'rogue';
+    if(cls === 'druid' && spec === 'guardian') return 'druid:feral:tank';
+    if(cls === 'druid' && spec === 'feral')  return role === 'tank' ? 'druid:feral:tank' : 'druid:feral:dps';
+    if(cls === 'priest' && spec === 'discipline') spec = 'holy';
+    if(!cls || !spec) return null;
+    return cls + ':' + spec;
+  }
+
+  // { wowhead, icyveins } absolute BIS-guide URLs for a shaped character
+  // ({ cls, spec, role }), or null when there's no guide to point at.
+  function bisGuides(ch){
+    const cls  = String(ch && ch.cls  || '').toLowerCase().replace(/[^a-z]/g, '');
+    const spec = String(ch && ch.spec || '').toLowerCase().replace(/[^a-z]/g, '');
+    const g = BIS_GUIDES[bisKey(cls, spec, String(ch && ch.role || '').toLowerCase())];
+    if(!g) return null;
+    return {
+      wowhead:  'https://www.wowhead.com/tbc/guide/' + g[0] + BIS_WH_SUFFIX,
+      icyveins: 'https://www.icy-veins.com/tbc-classic/' + g[1] + BIS_IV_SUFFIX
+    };
+  }
+
+  // The two BIS links for a character, ready to drop beside where its spec is shown.
+  // Empty string when bisGuides finds none, so a spec-less character adds nothing.
+  // URLs are static (no user text), so they need no escaping.
+  function bisGuidesHTML(ch){
+    const g = bisGuides(ch);
+    if(!g) return '';
+    return '<span class="bis-links">' +
+      '<a class="bis-link" href="' + g.wowhead + '" target="_blank" rel="noopener">Wowhead BIS</a>' +
+      '<a class="bis-link" href="' + g.icyveins + '" target="_blank" rel="noopener">Icy-Veins BIS</a>' +
+      '</span>';
+  }
+
   // Raid-Helper signup buttons that represent a status rather than a class.
   const STATUS_MAP = {
     bench:'bench', standby:'bench',
@@ -391,6 +466,7 @@ const RH = (function(){
   return {
     SERVER_ID, WINDOW_DAYS, CLASS_COLORS, ROLE_FALLBACK, SPEC_TO_CLASS, AMBIGUOUS_SPECS, STATUS_MAP,
     HEALING_SPECS, HEALER_CLASSES, RANGED_SPECS, PURE_RANGE,
+    bisGuides, bisGuidesHTML,
     isTank, isHealer, isRanged, headers, fmtEventDate,
     listEvents, fetchEvent, mapSignups, chipHTML, wirePoolDrag
   };

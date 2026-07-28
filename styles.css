@@ -499,6 +499,20 @@
   }
   .my-prio-spec{font-size:10px;font-weight:500;color:var(--text-dim);}
 
+  /* The character chip and its BIS-guide links: the name/spec sit as before, with the
+     Wowhead and Icy-Veins links for that character's detected spec riding alongside.
+     Shown next to the spec on my-priority's "Detected as" row and next to the name on
+     loot-prio's per-character prio blocks. Outbound links, so they read quieter than
+     the item links — an outline pill that lights up on hover. */
+  .my-prio-chip{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;}
+  .bis-links{display:inline-flex;align-items:center;gap:4px;}
+  .bis-link{
+    font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+    color:var(--text-dim);text-decoration:none;
+    border:1px solid var(--panel-line);border-radius:3px;padding:1px 5px;
+  }
+  .bis-link:hover{color:var(--accent);border-color:var(--accent);}
+
   /* my-priority.html — "what can I roll on". A badge beside each item's name says
      whether the viewer can roll on it (named prio, or open MS > OS) and the tier they
      sit in is lit brighter than the reserving highlight loot-prio reuses. Items they

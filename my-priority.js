@@ -341,8 +341,9 @@ function detectedSpecLabel(mc){
 function detectedRosterHTML(chars, self){
   const chips = chars.map(mc => {
     const color = RH.CLASS_COLORS[mc.cls] || '#7fa89c';
-    return `<a class="prio-name" href="character.html?name=${encodeURIComponent(mc.name)}" style="--class-color:${color}">` +
-           `${whEsc(mc.name)}<span class="my-prio-spec">${whEsc(detectedSpecLabel(mc))}</span></a>`;
+    return `<span class="my-prio-chip"><a class="prio-name" href="character.html?name=${encodeURIComponent(mc.name)}" style="--class-color:${color}">` +
+           `${whEsc(mc.name)}<span class="my-prio-spec">${whEsc(detectedSpecLabel(mc))}</span></a>` +
+           RH.bisGuidesHTML(mc) + `</span>`;
   }).join('');
   const whose = self ? 'Your' : 'Their';
   const each  = self ? 'each of your characters was' : 'each of their characters was';

@@ -164,7 +164,10 @@ board, identity links, loot, and attendance.
   item on its own line with the classes and specs that outrank them on it named
   underneath (read off the sheet's higher tiers, so it is specs rather than the
   raiders signed up, coloured by class). It is what makes the page worth opening for a
-  member, not just an officer. Officers can **mute** a character on a single item with the ✕ beside their
+  member, not just an officer. Each character named in this summary carries two
+  **BIS-guide links** — the Wowhead and Icy-Veins Phase-3 (Black Temple / Hyjal)
+  best-in-slot guides for its detected spec, from `RH.bisGuides` in `menu.js`.
+  Officers can **mute** a character on a single item with the ✕ beside their
   name — persisted server-side (`/api/loot-prio/exclusions`) and scoped to the raid
   being shown, it drops that character from that one item across this raid (the tier
   list, the text copy, the Gargul export, and everyone's personal section) until an
@@ -227,7 +230,10 @@ board, identity links, loot, and attendance.
   top, **What you have prio on** is the same by-tier personal summary `loot-prio.html`
   shows, here without needing an event picked, and it leads with a **Detected as** line
   naming the spec each character's prio was worked out from and a note to take a wrong
-  one to an officer. A **only what I can roll on** toggle
+  one to an officer. Each **Detected as** chip carries two **BIS-guide links** — the
+  Wowhead and Icy-Veins Phase-3 (Black Temple / Hyjal) best-in-slot guides for that
+  character's detected spec (`RH.bisGuides` in `menu.js`); a character with no detected
+  spec gets none. A **only what I can roll on** toggle
   hides the items your specs can't take (and the ones you already have); officers can
   point the whole page at another raider with **View as**. It reads the mutes an
   officer set on `loot-prio.html` (`/api/loot-prio/exclusions`) so a muted character

@@ -774,6 +774,7 @@ function renderMyPrio(lookup, view){
   }
 
   const clsOf = new Map(chars.map(c => [c.name, c.cls]));
+  const charByName = new Map(chars.map(c => [c.name, c]));
   const blocks = [...perChar.entries()].map(([name, arr]) => {
     const color = RH.CLASS_COLORS[clsOf.get(name)] || '#7fa89c';
     // The items this character holds prio on, bucketed by which tier they sit in —
@@ -817,7 +818,7 @@ function renderMyPrio(lookup, view){
               </div>`;
     }).join('');
     return `<div class="my-prio-char">
-              <a class="prio-name" href="character.html?name=${encodeURIComponent(name)}" style="--class-color:${color}">${whEsc(name)}</a>
+              <span class="my-prio-chip"><a class="prio-name" href="character.html?name=${encodeURIComponent(name)}" style="--class-color:${color}">${whEsc(name)}</a>${RH.bisGuidesHTML(charByName.get(name))}</span>
               <div class="my-prio-groups">${groups}</div>
             </div>`;
   }).join('');

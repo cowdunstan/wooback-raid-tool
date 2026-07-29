@@ -477,20 +477,20 @@ const RH = (function(){
    renderNav() below. Officer-only links carry `officer:true` and are hidden for
    home-tier members by the same [data-officer-only] pass used elsewhere. */
 const NAV_LINKS = [
-  { href:'home.html',       label:'Home' },
-  { href:'logs.html',       label:'Warcraft Logs' },
-  { href:'board.html',      label:'Vash assignments', officer:true },
-  { href:'attendance.html', label:'Attendance',       officer:true },
-  { href:'loot.html',       label:'Loot log',         officer:true },
-  { href:'groups.html',     label:'2 group organisation', officer:true },
-  { href:'members.html',    label:'Roster & alts' },
-  { href:'character.html',  label:'Character sheet' },
-  { href:'items.html',      label:'Items' },
+  { href:'home.html',        label:'Home' },
+  { href:'logs.html',        label:'Warcraft Logs' },
+  { href:'groups.html',      label:'2 group organisation', officer:true },
+  { href:'attendance.html',  label:'Attendance',           officer:true },
+  { href:'character.html',   label:'Character sheet' },
+  { href:'items.html',       label:'Items' },
   { href:'loot-history.html', label:'Loot history' },
-  { href:'loot-stats.html', label:'Loot stats' },
-  { href:'loot-prio.html',  label:'Loot prio' },
+  { href:'loot.html',        label:'Loot log',             officer:true },
+  { href:'loot-prio.html',   label:'Loot prio' },
+  { href:'sheet.html',       label:'Loot sheets' },
+  { href:'loot-stats.html',  label:'Loot stats' },
   { href:'my-priority.html', label:'My raid loot priority' },
-  { href:'sheet.html',      label:'Loot sheets' }
+  { href:'members.html',     label:'Roster & alts' },
+  { href:'board.html',       label:'Vash assignments',     officer:true }
 ];
 
 function renderNav(drawer){

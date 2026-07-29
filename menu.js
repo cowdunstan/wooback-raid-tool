@@ -478,6 +478,7 @@ const RH = (function(){
    home-tier members by the same [data-officer-only] pass used elsewhere. */
 const NAV_LINKS = [
   { href:'home.html',        label:'Home' },
+  { href:'logs.html',        label:'Warcraft Logs' },
   { href:'groups.html',      label:'2 group organisation', officer:true },
   { href:'attendance.html',  label:'Attendance',           officer:true },
   { href:'character.html',   label:'Character sheet' },
@@ -489,8 +490,7 @@ const NAV_LINKS = [
   { href:'loot-stats.html',  label:'Loot stats' },
   { href:'my-priority.html', label:'My raid loot priority' },
   { href:'members.html',     label:'Roster & alts' },
-  { href:'board.html',       label:'Vash assignments',     officer:true },
-  { href:'logs.html',        label:'Warcraft Logs' }
+  { href:'board.html',       label:'Vash assignments',     officer:true }
 ];
 
 function renderNav(drawer){

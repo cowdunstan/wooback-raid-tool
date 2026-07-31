@@ -87,6 +87,9 @@ const SPEC_TOKENS = {
   'balance':      [{ cls:'druid',   spec:'balance' }],
   'bear':         [{ cls:'druid',   spec:'guardian' }, { cls:'druid', spec:'feral', role:'tank' }],
   'feral tank':   [{ cls:'druid',   spec:'guardian' }, { cls:'druid', spec:'feral', role:'tank' }],
+  // Set names the sheet sometimes writes for the bear instead of the spec.
+  'warden':       [{ cls:'druid',   spec:'guardian' }, { cls:'druid', spec:'feral', role:'tank' }],
+  'guardian':     [{ cls:'druid',   spec:'guardian' }, { cls:'druid', spec:'feral', role:'tank' }],
   'cat':          [{ cls:'druid',   spec:'feral', role:'dps' }],
   'feral dps':    [{ cls:'druid',   spec:'feral', role:'dps' }],
   'feral':        [{ cls:'druid',   spec:'feral' }],
@@ -96,6 +99,7 @@ const SPEC_TOKENS = {
   '2h arms':      [{ cls:'warrior', spec:'arms' }],
   'fury':         [{ cls:'warrior', spec:'fury' }],
   'prot warrior': [{ cls:'warrior', spec:'protection' }],
+  'gladiator':    [{ cls:'warrior', spec:'protection' }],  // set name for the prot warrior
   // A bare class name means the dps side of it — the sheet always spells a tank
   // out as "Prot Warrior" / "Prot". Reached by rows like "No Talon Warrior".
   'warrior':      [{ cls:'warrior', spec:'arms' }, { cls:'warrior', spec:'fury' }],
@@ -106,6 +110,7 @@ const SPEC_TOKENS = {
   'holy paladin': [{ cls:'paladin', spec:'holy' }],
   'prot':         [{ cls:'paladin', spec:'protection' }],
   'prot paladin': [{ cls:'paladin', spec:'protection' }],
+  'justicar':     [{ cls:'paladin', spec:'protection' }],  // set name for the prot paladin
   'ret':          [{ cls:'paladin', spec:'retribution' }],
   'retribution':  [{ cls:'paladin', spec:'retribution' }],
 

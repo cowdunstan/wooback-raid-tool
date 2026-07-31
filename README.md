@@ -159,12 +159,14 @@ board, identity links, loot, and attendance.
   roster, then narrowed to this raid's signup, so alts they didn't bring stay out) —
   over the same parsed sheet and lists the items on this raid they hold **named** prio on and
   don't already have — `MS > OS` is left out, since the point is where you actually
-  have priority. The items are grouped by the prio tier they sit in — **prio 1** is
-  where they're first in line (listed inline), and each **prio 2+** tier puts every
-  item on its own line with the classes and specs that outrank them on it named
-  underneath (read off the sheet's higher tiers, so it is specs rather than the
-  raiders signed up, coloured by class). It is what makes the page worth opening for a
-  member, not just an officer. Each character named in this summary carries two
+  have priority. The items are grouped by how many raiders actually stand in front —
+  **prio 1** is where they're first in line (listed inline), and each **prio 2+** tier
+  puts every item on its own line with the **raiders signed up tonight** who outrank
+  them on it named underneath, each coloured by class and linking to their character
+  page. Those contenders are read off who is *here*, not off the sheet's class tokens:
+  a higher tier nobody signed up for puts no one in front, so the item counts as prio 1,
+  and anyone already holding the item is left out. It is what makes the page worth
+  opening for a member, not just an officer. Each character named in this summary carries two
   **BIS-guide links** — the Wowhead and Icy-Veins Phase-3 (Black Temple / Hyjal)
   best-in-slot guides for its detected spec, from `RH.bisGuides` in `menu.js`.
   Officers can **mute** a character on a single item with the ✕ beside their
@@ -228,7 +230,9 @@ board, identity links, loot, and attendance.
   default) and the whole page — badges and the summary — is about the one they pick;
   with a single character there's nothing to choose and the dropdown is hidden. Up
   top, **What you have prio on** is the same by-tier personal summary `loot-prio.html`
-  shows, here without needing an event picked, and it leads with a **Detected as** line
+  shows — but with no signup there are no raiders to stand in front of you, so each
+  **prio 2+** item names the **classes and specs** ahead of you off the sheet rather than
+  the signed-up raiders `loot-prio.html` can name. It needs no event picked, and it leads with a **Detected as** line
   naming the spec each character's prio was worked out from and a note to take a wrong
   one to an officer. Each **Detected as** chip carries two **BIS-guide links** — the
   Wowhead and Icy-Veins Phase-3 (Black Temple / Hyjal) best-in-slot guides for that

@@ -712,11 +712,13 @@ function myHasItem(mc, item, row){
   return false;
 }
 
-// The given characters that hold named prio on one item, each with the tier they sit
-// in. `chars` is whoever the section is currently showing (self, or an officer's pick).
+// The given characters that hold named prio on one item, each with the raiders
+// standing in front of them. `chars` is whoever the section is currently showing
+// (self, or an officer's pick).
 function myPrioForItem(item, keys, row, chars){
   if(isOpenItem(item) || item.openRoll) return [];
   const excludedIds = excludedIdsForKeys(keys);
+  const hasAlready = c => keys.some(k => c.has.has(k) || c.won.has(k));
   const out = [];
   (chars || []).forEach(mc => {
     if(isExcluded(mc, excludedIds)) return;
@@ -726,20 +728,32 @@ function myPrioForItem(item, keys, row, chars){
       if(item.tiers[i].tokens.some(tok => tok.specs && tok.specs.some(s => matchesSpec(mc, s)))) found = i;
     }
     if(found < 0) return;
-    // Everything the sheet ranks above this character on this item — the tokens of
-    // every tier ahead of theirs, deduped and in order. It is read off the sheet, so
-    // it is the classes and specs with priority, not the raiders who signed up as
-    // them. `cls` is the token's class when it names exactly one, so it can be
-    // coloured; blank for an ambiguous token ("Resto") or a named-prio one ("Xat").
+    // The raiders signed up tonight the sheet ranks above this character on this
+    // item — the people who would actually take it first, in the sheet's tier order.
+    // Read off who is *here*, not the classes on the sheet: a higher tier nobody
+    // signed up for puts no one in front, so the item drops to "first in line" and is
+    // grouped under prio 1 below. Deduped so a raider matching more than one tier is
+    // named once, at the highest they hold; anyone already holding the item is left
+    // out, prio having moved past them; and a character can't rank in front of itself.
+    // `rank` counts the tiers that actually have a body ahead, so "prio 2" means one
+    // real contender is above you, not merely that the sheet lists your spec second.
+    const seen = new Set();
+    let tiersAhead = 0;
     const ahead = [];
     for(let i = 0; i < found; i++){
-      item.tiers[i].tokens.forEach(tok => {
-        if(ahead.some(a => a.label === tok.label)) return;
-        const classes = tok.specs ? new Set(tok.specs.map(s => s.cls)) : new Set();
-        ahead.push({ label: tok.label, cls: classes.size === 1 ? [...classes][0] : '' });
-      });
+      const here = [];
+      item.tiers[i].tokens.forEach(tok => tokenMatches(tok, excludedIds).forEach(c => {
+        if(seen.has(c.id) || hasAlready(c)) return;
+        if(mc.characterId && c.characterId && String(mc.characterId) === String(c.characterId)) return;
+        seen.add(c.id);
+        here.push(c);
+      }));
+      if(!here.length) continue;
+      here.sort((a, b) => a.recent - b.recent || a.name.localeCompare(b.name));
+      here.forEach(c => ahead.push({ name: c.name, cls: c.cls }));
+      tiersAhead++;
     }
-    out.push({ char: mc, rank: found + 1, ahead });
+    out.push({ char: mc, rank: tiersAhead + 1, ahead });
   });
   return out;
 }
@@ -799,17 +813,17 @@ function renderMyPrio(lookup, view){
                   <div class="my-prio-items">${links}</div>
                 </div>`;
       }
-      // Prio 2+: each item on its own line, with the classes and specs that hold
-      // priority over this character on it named underneath (from myPrioForItem's
-      // `ahead`), coloured by class where the token names just one.
+      // Prio 2+: each item on its own line, with the raiders standing in front of this
+      // character on it named underneath (from myPrioForItem's `ahead`), each coloured
+      // by class and linking to their character page.
       const rows = items.map(it => {
-        const specs = (it.ahead || []).map(a => {
-          const color = RH.CLASS_COLORS[a.cls];
-          return color ? `<span style="color:${color}">${whEsc(a.label)}</span>` : whEsc(a.label);
+        const names = (it.ahead || []).map(a => {
+          const color = RH.CLASS_COLORS[a.cls] || '#7fa89c';
+          return `<a class="my-prio-ahead-name" href="character.html?name=${encodeURIComponent(a.name)}" style="--class-color:${color}">${whEsc(a.name)}</a>`;
         }).join('<span class="my-prio-sep">·</span>');
         return `<div class="my-prio-row">
                   <span class="my-prio-item">${itemLink(it.id, it.name)}</span>
-                  <span class="my-prio-ahead"><span class="my-prio-behind">behind</span>${specs}</span>
+                  <span class="my-prio-ahead"><span class="my-prio-behind">behind</span>${names}</span>
                 </div>`;
       }).join('');
       return `<div class="my-prio-group">

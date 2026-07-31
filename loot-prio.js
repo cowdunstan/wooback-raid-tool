@@ -957,6 +957,39 @@ function refreshBuild(){
   build(picked.eventId);
 }
 
+// Officer-only: refresh the gear snapshot for every signed-up character at once, so
+// the HAS pills read off current gear rather than the last night they raided with us.
+// The server tries Blizzard's live equipment first and falls back to Warcraft Logs —
+// same path as the character sheet's per-character "Refresh gear" — so "Blizzard" here
+// means Blizzard-first, not Blizzard-only. Rebuilds the list afterwards so the fresh
+// snapshots show through.
+async function refreshAllGear(){
+  if(!picked.eventId){ setStatus('Load the events and build a list first.', true); return; }
+  const ids = [...new Set(candidates.filter(c => c.characterId).map(c => String(c.characterId)))];
+  if(!ids.length){ setStatus('No signed-up characters are linked to the roster yet.', true); return; }
+
+  const btn = document.getElementById('prioRefreshGear');
+  if(btn) btn.disabled = true;
+  setStatus(`Updating gear for ${ids.length} character${ids.length === 1 ? '' : 's'}…`);
+  try {
+    const res = await apiSend('POST', '/api/characters/sheet/refresh-bulk', { ids }).then(r => r.json());
+    await build(picked.eventId);   // re-render with the new snapshots; sets its own status
+    const rows = (res && res.results) || [];
+    const blizz = rows.filter(r => r.ok && r.source === 'blizzard').length;
+    const wcl   = rows.filter(r => r.ok && r.source === 'wcl').length;
+    const failed = (res ? res.total - res.updated : 0);
+    const parts = [`Updated ${res ? res.updated : 0} of ${res ? res.total : ids.length}`];
+    if(blizz) parts.push(`${blizz} from Blizzard`);
+    if(wcl)   parts.push(`${wcl} from Warcraft Logs`);
+    if(failed) parts.push(`${failed} failed`);
+    setStatus(parts.join(' · ') + '.', !!failed);
+  } catch(err){
+    reportError(err, 'The bulk gear refresh is unavailable.');
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+
 function toggleHideEmpty(el){
   hideEmpty = !!el.checked;
   save();

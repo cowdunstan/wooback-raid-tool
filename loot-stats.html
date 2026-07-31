@@ -119,6 +119,12 @@ function nameHtml(c){
   // Every name here is a character we hold an id for, so it links to its sheet.
   return c && c.id ? '<a href="character.html?id=' + esc(c.id) + '" class="chr-link">' + inner + '</a>' : inner;
 }
+// A bare name from an award (a master looter, a rivalry side) rendered class-coloured
+// when we happen to hold a character by that name, and as plain text otherwise.
+function knownName(name){
+  const c = CHARS.get(String(name || '').toLowerCase());
+  return c ? nameHtml(c) : esc(name || '?');
+}
 
 /* ───────────────────────── Aggregation ─────────────────────────
    Everything below is derived client-side from the same award list the loot
@@ -130,8 +136,9 @@ function chr(name, cls, id){
   const key = String(name || '').toLowerCase();
   let c = CHARS.get(key);
   if(!c){
-    c = { name: name, cls: cls || null, id: id || null, rolls:0, sum:0, wins:0, losses:0,
-          hundreds:0, ones:0, osWins:0, lostTo:new Map(), streak:0, worstStreak:0 };
+    c = { name: name, cls: cls || null, id: id || null, rolls:0, sum:0, sumSq:0, wins:0, losses:0,
+          hundreds:0, ones:0, osWins:0, nearMiss:0, bigWins:0, lostTo:new Map(),
+          victims:new Set(), wonItems:new Set(), streak:0, worstStreak:0 };
     CHARS.set(key, c);
   }
   if(!c.cls && cls) c.cls = cls;
@@ -143,7 +150,50 @@ let TOTALS = { awards:0, rolls:0, de:0 };
 // Single-fact records that aren't leaderboards (best story, not biggest number).
 let LUCKIEST = null, CONTESTED = null;
 
+// Tallies the per-character map can't hold: pairwise, per-looter, per-night, per-item.
+const H2H = new Map();       // "keyA|keyB" (sorted) → { [winnerKey]: times } — rivalry
+const LOOTERS = new Map();   // master-looter name → items handed out
+const GIFTS = new Map();     // "winner looter" → items from that one looter — teacher's pet
+const NIGHTS = new Map();    // YYYY-MM-DD → items awarded that night
+const DE_ITEMS = new Map();  // item key → { count, name, id } — shard bait
+const ITEM_ROLLS = new Map();// item key → { rolls, drops, name, id } — white whale
+
+// An item is keyed by id when we have one, else by lower-cased name, so the same drop
+// across nights lands in one bucket.
+function itemKey(a){ return a.itemId != null ? 'i' + a.itemId : 'n' + String(a.itemName || '').toLowerCase(); }
+// The calendar day an award landed on (viewer's local zone) — one raid night. Built
+// from local parts, not toISOString(), so a late-night award stays on its own night.
+function nightKey(a){
+  const d = new Date(a.awardedAt);
+  if(isNaN(d)) return null;
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
 function aggregate(rows){
+  // Raw pass — every award, including the zero-roll ones the leaderboard loop below
+  // drops. A master-loot hand-out and a disenchant carry no rolls but *are* the looter,
+  // loot-night and shard signals, so those tallies can only be built here.
+  rows.forEach(a => {
+    const looter = a.awardedBy ? String(a.awardedBy).trim() : '';
+    if(looter && !a.disenchanted){
+      LOOTERS.set(looter, (LOOTERS.get(looter) || 0) + 1);
+      // Handing loot to yourself isn't favouritism, so it doesn't feed teacher's pet.
+      if(a.character && String(a.character).toLowerCase() !== looter.toLowerCase()){
+        const gk = a.character + ' ' + looter;
+        const g = GIFTS.get(gk) || { winner: a.character, looter: looter, count: 0 };
+        g.count++; GIFTS.set(gk, g);
+      }
+    }
+    const nk = nightKey(a);
+    if(nk) NIGHTS.set(nk, (NIGHTS.get(nk) || 0) + 1);
+    if(a.disenchanted){
+      const ik = itemKey(a);
+      const d = DE_ITEMS.get(ik) || { count: 0, name: a.itemName, id: a.itemId };
+      d.count++; DE_ITEMS.set(ik, d);
+    }
+  });
+
   // An award with no rolls was handed out, not won — a master-loot assignment, a
   // trade, an export from before Gargul recorded bids. Counting it would hand the
   // winner a free win nobody had the chance to lose, so it sits out of every stat.
@@ -166,11 +216,20 @@ function aggregate(rows){
     const isOS = a.offSpec === true ||
       (!!winRoll && String(winRoll.classification || '').toUpperCase() === 'OS');
 
-    if(winnerKey){
-      const w = chr(a.character, a.characterClass || (winRoll && winRoll.cls), a.characterId);
+    // The winner's accumulator, hoisted so the roll loop below can credit them the
+    // people they beat (taxman) as it walks the losers.
+    const w = winnerKey ? chr(a.character, a.characterClass || (winRoll && winRoll.cls), a.characterId) : null;
+    if(w){
       w.wins++;
       if(isOS) w.osWins++;
+      if(rolls.length >= 4) w.bigWins++;   // sniper: won against a real crowd
+      w.wonItems.add(itemKey(a));          // magpie: distinct items, not total wins
     }
+
+    // Every drop that drew a roll, and how many it drew, cumulated for the white whale.
+    const ik = itemKey(a);
+    const wr = ITEM_ROLLS.get(ik) || { rolls: 0, drops: 0, name: a.itemName, id: a.itemId };
+    wr.rolls += rolls.length; wr.drops++; ITEM_ROLLS.set(ik, wr);
 
     if(rolls.length > (CONTESTED ? CONTESTED.count : 1)){
       CONTESTED = { count: rolls.length, item: a.itemName, itemId: a.itemId,
@@ -183,6 +242,7 @@ function aggregate(rows){
       c.rolls++;
       if(isFinite(amt)){
         c.sum += amt;
+        c.sumSq += amt * amt;
         if(amt === 100) c.hundreds++;
         if(amt === 1) c.ones++;
       }
@@ -198,7 +258,20 @@ function aggregate(rows){
         c.losses++;
         c.streak++;
         if(c.streak > c.worstStreak) c.worstStreak = c.streak;
-        if(winnerKey) c.lostTo.set(winnerKey, (c.lostTo.get(winnerKey) || 0) + 1);
+        // A 90-something that still lost — one for the 99 club.
+        if(isFinite(amt) && amt >= 90) c.nearMiss++;
+        if(winnerKey){
+          const loserKey = String(r.player || '').toLowerCase();
+          c.lostTo.set(winnerKey, (c.lostTo.get(winnerKey) || 0) + 1);
+          w.victims.add(loserKey);         // taxman: the winner's breadth of victims
+          // Head-to-head tally, keyed on the unordered pair, for the rivalry record.
+          if(loserKey && loserKey !== winnerKey){
+            const pk = [winnerKey, loserKey].sort().join('|');
+            const h = H2H.get(pk) || {};
+            h[winnerKey] = (h[winnerKey] || 0) + 1;
+            H2H.set(pk, h);
+          }
+        }
       }
     });
   });
@@ -222,6 +295,8 @@ function board(opts){
 }
 
 function avg(c){ return c.rolls ? c.sum / c.rolls : NaN; }
+// Population standard deviation of a roller's own rolls — how wild their swings are.
+function std(c){ if(!c.rolls) return NaN; const m = avg(c); return Math.sqrt(Math.max(0, c.sumSq / c.rolls - m * m)); }
 function pct(n){ return Math.round(n * 100) + '%'; }
 // `many` covers the words a trailing "s" gets wrong (loss → losses).
 function plural(n, word, many){ return n + ' ' + (n === 1 ? word : (many || word + 's')); }
@@ -284,6 +359,30 @@ function cards(){
       fmt:(v,c) => plural(v,'time'),
       detail:c => { const n = nemesis(c); return n ? 'beaten by ' + n.foe.name : ''; } }) });
 
+  out.push({ emoji:'🎢', title:'Feast or famine', blurb:'No middle gear. A 97 or a 4, and nothing in between.',
+    entries: board({ eligible:enough, value:std, fmt:v => '±' + v.toFixed(1),
+      detail:c => 'over ' + plural(c.rolls,'roll') }) });
+
+  out.push({ emoji:'📏', title:'Old reliable', blurb:'Rolls the same number every week, with grim certainty.',
+    entries: board({ eligible:enough, value:std, asc:true, fmt:v => '±' + v.toFixed(1),
+      detail:c => 'over ' + plural(c.rolls,'roll') }) });
+
+  out.push({ emoji:'😩', title:'The 99 club', blurb:'A 90-something, and it still wasn\'t enough. Again.',
+    entries: board({ value:c => c.nearMiss,
+      detail:c => 'of ' + plural(c.losses,'loss','losses') }) });
+
+  out.push({ emoji:'🧛', title:'The taxman', blurb:'Everyone pays, sooner or later. No exemptions.',
+    entries: board({ value:c => c.victims.size, fmt:v => plural(v,'victim'),
+      detail:c => 'across ' + plural(c.wins,'win') }) });
+
+  out.push({ emoji:'🔭', title:'The sniper', blurb:'Waits for a crowd to gather, then walks off with it.',
+    entries: board({ value:c => c.bigWins,
+      detail:c => 'of ' + plural(c.wins,'win') + ' won' }) });
+
+  out.push({ emoji:'🎒', title:'The magpie', blurb:'Not the most items — the most different ones. A collection.',
+    entries: board({ value:c => c.wonItems.size, fmt:v => plural(v,'item'),
+      detail:c => 'from ' + plural(c.wins,'win') }) });
+
   return out;
 }
 
@@ -324,6 +423,81 @@ function recordCards(){
            '<span class="ls-value">' + CONTESTED.count + '</span></div>' +
            '<div class="ls-detail">rolls — it went to ' + esc(CONTESTED.winner || 'nobody') + '</div>' });
   }
+
+  // Bitterest rivalry — the pair who have contested each other the most, and the split.
+  let riv = null;
+  H2H.forEach((h, pk) => {
+    const parts = pk.split('|');
+    const total = (h[parts[0]] || 0) + (h[parts[1]] || 0);
+    if(!riv || total > riv.total) riv = { total, a: parts[0], b: parts[1], av: h[parts[0]] || 0, bv: h[parts[1]] || 0 };
+  });
+  if(riv && riv.total >= 4){
+    const aLeads = riv.av >= riv.bv;
+    const hiC = CHARS.get(aLeads ? riv.a : riv.b), loC = CHARS.get(aLeads ? riv.b : riv.a);
+    const hiN = aLeads ? riv.av : riv.bv, loN = aLeads ? riv.bv : riv.av;
+    out.push({ emoji:'🥊', title:'Bitterest rivalry', blurb:'Two names that turn up in each other\'s losses again and again.',
+      html:'<div class="ls-top"><span class="ls-name">' + nameHtml(hiC) + '</span>' +
+           '<span class="ls-value">' + hiN + '–' + loN + '</span></div>' +
+           '<div class="ls-detail">over ' + nameHtml(loC) + ', across ' + plural(riv.total,'contest') + '</div>' });
+  }
+
+  // The generous hand — the master looter who has handed out the most, with runners-up.
+  const looters = [...LOOTERS.entries()].map(e => ({ name: e[0], count: e[1] }))
+    .sort((a, b) => b.count - a.count).slice(0, 4);
+  if(looters.length && looters[0].count > 0){
+    const rest = looters.slice(1);
+    out.push({ emoji:'🎅', title:'The generous hand', blurb:'Hands out everyone else\'s loot all night. A saint, allegedly.',
+      html:'<div class="ls-top"><span class="ls-name">' + knownName(looters[0].name) + '</span>' +
+           '<span class="ls-value">' + looters[0].count + '</span></div>' +
+           '<div class="ls-detail">' + plural(looters[0].count,'item') + ' handed out</div>' +
+           (rest.length ? '<ul class="ls-rest">' + rest.map((l, i) =>
+             '<li><span class="rank">' + (i + 2) + '.</span>' + knownName(l.name) +
+             '<span class="val">' + l.count + '</span></li>').join('') + '</ul>' : '') });
+  }
+
+  // Teacher's pet — the winner who took the most from one particular master looter.
+  let pet = null;
+  GIFTS.forEach(g => { if(!pet || g.count > pet.count) pet = g; });
+  if(pet && pet.count >= 3){
+    out.push({ emoji:'🐶', title:'Teacher\'s pet', blurb:'Nobody is accusing anyone of anything. Just noting it down.',
+      html:'<div class="ls-top"><span class="ls-name">' + knownName(pet.winner) + '</span>' +
+           '<span class="ls-value">' + pet.count + '</span></div>' +
+           '<div class="ls-detail">' + plural(pet.count,'item') + ' from ' + knownName(pet.looter) + '</div>' });
+  }
+
+  // Busiest loot night — the single night the boss table gave up entirely.
+  let night = null;
+  NIGHTS.forEach((count, day) => { if(!night || count > night.count) night = { day, count }; });
+  if(night && night.count > 1){
+    const d = new Date(night.day + 'T00:00:00');
+    const label = isNaN(d) ? night.day : d.toLocaleDateString(undefined, { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+    out.push({ emoji:'📅', title:'Busiest loot night', blurb:'The night the loot simply would not stop coming.',
+      html:'<div class="ls-top"><span class="ls-name">' + esc(label) + '</span>' +
+           '<span class="ls-value">' + night.count + '</span></div>' +
+           '<div class="ls-detail">' + plural(night.count,'item') + ' awarded in one night</div>' });
+  }
+
+  // Shard bait — the item nobody wanted, disenchanted the most.
+  let shard = null;
+  DE_ITEMS.forEach(d => { if(!shard || d.count > shard.count) shard = d; });
+  if(shard && shard.count > 1){
+    out.push({ emoji:'🧲', title:'Shard bait', blurb:'Dropped and dropped, and wanted by absolutely no one.',
+      html:'<div class="ls-top"><span class="ls-name">' + itemLink(shard.id, shard.name) + '</span>' +
+           '<span class="ls-value">' + shard.count + '</span></div>' +
+           '<div class="ls-detail">disenchanted ' + plural(shard.count,'time') + '</div>' });
+  }
+
+  // The white whale — the item the guild keeps fighting over, night after night. Needs
+  // more than one drop, or it's just the most-contested item under another name.
+  let whale = null;
+  ITEM_ROLLS.forEach(w => { if(w.drops >= 2 && (!whale || w.rolls > whale.rolls)) whale = w; });
+  if(whale){
+    out.push({ emoji:'🐋', title:'The white whale', blurb:'The item the guild has fought over the most, drop after drop.',
+      html:'<div class="ls-top"><span class="ls-name">' + itemLink(whale.id, whale.name) + '</span>' +
+           '<span class="ls-value">' + whale.rolls + '</span></div>' +
+           '<div class="ls-detail">rolls across ' + plural(whale.drops,'drop') + '</div>' });
+  }
+
   return out;
 }
 

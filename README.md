@@ -109,7 +109,8 @@ board, identity links, loot, and attendance.
   signed-in tier. Reads the live sheets via their "anyone with the link" share
   setting, so the sign-in gate here is for the app's flow, not a data barrier.
 - **`loot-prio.html`** — **loot prio** (**read-only to any signed-in member**; the
-  Gargul export, text copy and per-item mutes are **officer-only**): the join between the
+  Gargul export, text copy, per-item mutes and the **Update Blizzard gear** button are
+  **officer-only**): the join between the
   loot sheets and who is actually raiding. Pick one Raid-Helper signup and a raid
   — **Black Temple** or **Mount Hyjal** from the P3 sheet, **Serpentshrine
   Cavern** or **Tempest Keep** from the P2 one — and every boss's items come back
@@ -174,7 +175,11 @@ board, identity links, loot, and attendance.
   officer lifts it from the *Muted here* line. Scoping it to the raid keeps a tier
   token that drops in both raids of a phase from carrying the mute across.
   The built list is cached in `localStorage`, so a mid-raid reload restores it
-  instantly with no refetch; **Refresh** re-reads the sheet and signup. The two sheets
+  instantly with no refetch; **Refresh** re-reads the sheet and signup. **Update
+  Blizzard gear** (officer-only) refreshes the gear snapshot for every signed-up
+  character in one go (`/api/characters/sheet/refresh-bulk`, Blizzard-first) and
+  rebuilds, so the **HAS** pills read off current gear rather than the last night
+  each raider logged with us. The two sheets
   are shaped differently and the entry says so: a P3 raid is **one tab** that
   banners each boss inside it, a P2 raid is **one tab per boss** (plus its trash
   tab, plus the shared tier-set tab) and each names the section it belongs to. A
@@ -334,6 +339,11 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   character's most recent Warcraft Logs report when Blizzard has nothing. A snapshot's
   `Source` is `"wcl"` or `"blizzard"`; a Blizzard row is keyed by a `"blizzard"`
   sentinel report code, so it stays a single live row per character.
+  `POST /api/characters/sheet/refresh-bulk` (**officer only**) is the same refresh over
+  a whole signup: a `{ "ids": [ … ] }` body of character ids (the ones `loot-prio.html`
+  resolved from a Raid-Helper signup, capped at 60) each run that Blizzard-first/WCL-fallback
+  path and commit on their own, so one character failing never sinks the rest; it returns
+  `{ total, updated, results: [{ id, name, ok, source, note, error }] }`.
   `POST /api/characters/sheet/spec?id=` (**owner or officer**) sets the character's
   spec from a `{ "spec": "…" }` body — a blank value clears it back to unset. A later
   attendance import can still overwrite it from a log.

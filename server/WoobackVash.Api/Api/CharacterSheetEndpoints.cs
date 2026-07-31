@@ -22,6 +22,10 @@ public static class CharacterSheetEndpoints
     /// <summary>How many past raids the sheet lists under attendance.</summary>
     private const int RecentRaids = 10;
 
+    /// <summary>Ceiling on one bulk gear refresh — a signup is ~25 characters, and each
+    /// id is a sequential Blizzard call, so this bounds the request's length.</summary>
+    private const int MaxBulkRefresh = 60;
+
     public static void MapCharacterSheetEndpoints(this IEndpointRouteBuilder app)
     {
         var sheet = app.MapGroup("/api/characters/sheet");
@@ -218,6 +222,51 @@ public static class CharacterSheetEndpoints
                 : Results.Json(new { error = "upstream", detail = r.Error }, statusCode: r.Status);
         });
 
+        // Refresh gear for a whole raid signup at once — the officer bulk version of
+        // /refresh above, driven from loot-prio.html so a night's HAS pills read off
+        // current gear. Officer-only (a raider refreshes their own from the sheet); the
+        // client resolves the signup to character ids and posts them here. Each id runs
+        // the same Blizzard-first/WCL-fallback path and commits on its own, so one
+        // character failing (or Blizzard throwing) never sinks the rest of the batch.
+        sheet.MapPost("/refresh-bulk", async (
+            HttpContext ctx, SessionTokenService tokens, BlizzardService blizzard, WarcraftLogsService wcl,
+            BulkRefreshInput input) =>
+        {
+            var (_, error) = ctx.RequireOfficer(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            // Distinct, and capped: a signup is ~25 characters, and each id is one
+            // sequential Blizzard call, so the cap keeps a stray large body from tying
+            // up the request. A caller with more can chunk — each id is idempotent.
+            var ids = (input.Ids ?? new List<Guid>()).Distinct().Take(MaxBulkRefresh).ToList();
+
+            var results = new List<object>(ids.Count);
+            var updated = 0;
+            foreach (var id in ids)
+            {
+                var ch = await db.Characters.FirstOrDefaultAsync(x => x.Id == id);
+                if (ch is null)
+                {
+                    results.Add(new { id, name = (string?)null, ok = false, source = (string?)null, note = (string?)null, error = "No such character." });
+                    continue;
+                }
+                try
+                {
+                    var r = await CharacterGearRefresh.RefreshAsync(db, blizzard, wcl, ch);
+                    if (r.Ok) updated++;
+                    results.Add(new { id, name = ch.Name, ok = r.Ok, source = r.Source, note = r.Note, error = r.Error });
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new { id, name = ch.Name, ok = false, source = (string?)null, note = (string?)null, error = ex.Message });
+                }
+            }
+
+            return Results.Json(new { total = ids.Count, updated, results });
+        });
+
         // Set a character's spec by hand, for when no log has reported it yet or the
         // log-derived one is wrong. Owner-or-officer, like the gear refresh. This is a
         // manual fallback: a later attendance import can still overwrite Spec from a log
@@ -249,6 +298,11 @@ public static class CharacterSheetEndpoints
     /// <summary>The body of <c>POST /api/characters/sheet/spec</c>. An empty or missing
     /// spec clears it back to "not set".</summary>
     public record SpecInput(string? Spec);
+
+    /// <summary>The body of <c>POST /api/characters/sheet/refresh-bulk</c>: the character
+    /// ids the client resolved from a raid signup. Refreshed in order, capped at
+    /// <see cref="MaxBulkRefresh"/>.</summary>
+    public record BulkRefreshInput(List<Guid>? Ids);
 
     /// <summary>Owner-or-officer: an officer may edit anyone's character, a raider only
     /// the characters linked to their own Discord account. Gates both the gear refresh

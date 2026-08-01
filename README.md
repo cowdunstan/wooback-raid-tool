@@ -355,6 +355,15 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   the item (name, icon, quality, item level), who has it equipped in their latest
   gear snapshot, how often it dropped, and every award with its rolls. An id also
   picks up hand-typed awards that carry only the name, so both reach one page.
+- **Loot stats** (any signed-in session) — `GET /api/loot/stats` is the loot "Hall of
+  shame" (`loot-stats.html`): every leaderboard and one-off record — most rolls lost,
+  best and worst luck, the greediest, rivalries, the most-disenchanted item, the item
+  the guild fights over most — aggregated server-side from the whole award/roll history
+  and returned as ready-to-render cards (typed refs for names, items and plain text).
+  The page is a pure renderer; all the copy, thresholds, ranking and formatting live in
+  `Api/LootStatsEndpoints.cs`. `GET /api/loot/history` (also any session) is the same
+  rows newest-first that back the read-only `loot-history.html`. Ignored characters and
+  their rolls are out of both.
 - **Loot-sheet proxy** — `GET /sheet/loot?doc=&gid=`, any valid session (opened from
   officer-only now that `loot-prio.html` is member-visible). Returns one
   tab of one of the guild's Google loot sheets (cached 10 min per doc/tab/view)

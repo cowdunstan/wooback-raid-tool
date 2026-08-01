@@ -99,7 +99,12 @@
 
 <script src="menu.js"></script>
 <script>
-// API_BASE (the shared .NET backend host) is provided by menu.js.
+
+// The loot stats are computed server-side now — /api/loot/stats returns fully-assembled
+// cards, and this page does nothing but render them. Every value, blurb, threshold and
+// ranking lives in the backend (Api/LootStatsEndpoints.cs); all that is left here is
+// turning typed refs into class-coloured names, item links and plain text.
+// API_BASE, itemLink, loadWowhead, sessionToken and logout all come from menu.js.
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 // WoW class colours (Blizzard palette), shared with loot-history.html / loot.html.
@@ -113,238 +118,57 @@ function classColor(cls){
   if(!cls) return null;
   return CLASS_COLORS[String(cls).toLowerCase().replace(/[^a-z]/g,'')] || null;
 }
-function nameHtml(c){
-  const col = classColor(c && c.cls);
-  const inner = '<span' + (col ? ' style="color:' + col + '"' : '') + '>' + esc(c ? c.name : '?') + '</span>';
-  // Every name here is a character we hold an id for, so it links to its sheet.
-  return c && c.id ? '<a href="character.html?id=' + esc(c.id) + '" class="chr-link">' + inner + '</a>' : inner;
-}
 
-/* ───────────────────────── Aggregation ─────────────────────────
-   Everything below is derived client-side from the same award list the loot
-   history page renders — no extra endpoint. Characters are keyed by lower-cased
-   name because a winner and a bidder are resolved to the same Character server
-   side, so the names already agree; the key just makes the join case-proof. */
-const CHARS = new Map();
-function chr(name, cls, id){
-  const key = String(name || '').toLowerCase();
-  let c = CHARS.get(key);
-  if(!c){
-    c = { name: name, cls: cls || null, id: id || null, rolls:0, sum:0, wins:0, losses:0,
-          hundreds:0, ones:0, osWins:0, lostTo:new Map(), streak:0, worstStreak:0 };
-    CHARS.set(key, c);
+/* ───────────────────────── Rendering ─────────────────────────
+   A ref the backend sends is one of three kinds: a character (class-coloured, linked to
+   its sheet), an item (an itemLink that carries a Wowhead tooltip), or plain text (a
+   date, a name we hold no character for). Everything on the page is built from these. */
+function refHtml(r){
+  if(!r) return '';
+  if(r.kind === 'item') return itemLink(r.id, r.name);
+  if(r.kind === 'char'){
+    const col = classColor(r.cls);
+    const inner = '<span' + (col ? ' style="color:' + col + '"' : '') + '>' + esc(r.name) + '</span>';
+    return r.id ? '<a href="character.html?id=' + esc(r.id) + '" class="chr-link">' + inner + '</a>' : inner;
   }
-  if(!c.cls && cls) c.cls = cls;
-  if(!c.id && id) c.id = id;
-  return c;
+  return esc(r.text);
 }
+function segHtml(segs){ return (segs || []).map(refHtml).join(''); }
 
-let TOTALS = { awards:0, rolls:0, de:0 };
-// Single-fact records that aren't leaderboards (best story, not biggest number).
-let LUCKIEST = null, CONTESTED = null;
-
-function aggregate(rows){
-  // An award with no rolls was handed out, not won — a master-loot assignment, a
-  // trade, an export from before Gargul recorded bids. Counting it would hand the
-  // winner a free win nobody had the chance to lose, so it sits out of every stat.
-  // Oldest first: losing streaks only mean something in chronological order.
-  const awards = rows
-    .filter(a => (a.rolls || []).length > 0)
-    .sort((a,b) => new Date(a.awardedAt) - new Date(b.awardedAt));
-
-  awards.forEach(a => {
-    TOTALS.awards++;
-    if(a.disenchanted) TOTALS.de++;
-
-    const rolls = a.rolls || [];
-    TOTALS.rolls += rolls.length;
-    const winnerKey = a.disenchanted ? null : String(a.character || '').toLowerCase();
-
-    // The winner's own bid, when they placed one — its amount is the winning roll
-    // and its classification is the fallback for Gargul's award-level OS flag.
-    const winRoll = winnerKey ? rolls.find(r => String(r.player || '').toLowerCase() === winnerKey) : null;
-    const isOS = a.offSpec === true ||
-      (!!winRoll && String(winRoll.classification || '').toUpperCase() === 'OS');
-
-    if(winnerKey){
-      const w = chr(a.character, a.characterClass || (winRoll && winRoll.cls), a.characterId);
-      w.wins++;
-      if(isOS) w.osWins++;
-    }
-
-    if(rolls.length > (CONTESTED ? CONTESTED.count : 1)){
-      CONTESTED = { count: rolls.length, item: a.itemName, itemId: a.itemId,
-                    winner: a.disenchanted ? 'the shard pile' : a.character };
-    }
-
-    rolls.forEach(r => {
-      const c = chr(r.player, r.cls, r.playerId);
-      const amt = Number(r.amount);
-      c.rolls++;
-      if(isFinite(amt)){
-        c.sum += amt;
-        if(amt === 100) c.hundreds++;
-        if(amt === 1) c.ones++;
-      }
-
-      const won = winnerKey && String(r.player || '').toLowerCase() === winnerKey;
-      if(won){
-        c.streak = 0;
-        // Beating nobody isn't luck, so a lone bid doesn't count as a steal.
-        if(isFinite(amt) && rolls.length > 1 && (!LUCKIEST || amt < LUCKIEST.amount)){
-          LUCKIEST = { amount: amt, char: c, item: a.itemName, itemId: a.itemId, field: rolls.length };
-        }
-      }else{
-        c.losses++;
-        c.streak++;
-        if(c.streak > c.worstStreak) c.worstStreak = c.streak;
-        if(winnerKey) c.lostTo.set(winnerKey, (c.lostTo.get(winnerKey) || 0) + 1);
-      }
-    });
-  });
+// The winner of a card, given its own row so the name can breathe.
+function topHtml(e){
+  return '<div class="ls-top"><span class="ls-name">' + refHtml(e.ref) + '</span>' +
+         '<span class="ls-value">' + esc(e.value) + '</span></div>';
 }
-
-/* ───────────────────────── Cards ─────────────────────────
-   A card is either a leaderboard (value + optional per-entry detail, ranked) or
-   a one-off record rendered by hand. `min` guards the rate-based boards so one
-   lucky first-ever roll can't crown someone with a 100% win rate. */
-function board(opts){
-  const list = [...CHARS.values()]
-    .filter(c => !opts.eligible || opts.eligible(c))
-    .map(c => ({ c: c, v: opts.value(c) }))
-    .filter(e => isFinite(e.v) && (opts.keepZero || e.v > 0))
-    .sort((a,b) => (opts.asc ? a.v - b.v : b.v - a.v));
-  return list.slice(0, 3).map(e => ({
-    char: e.c,
-    value: opts.fmt ? opts.fmt(e.v, e.c) : String(e.v),
-    detail: opts.detail ? opts.detail(e.c, e.v) : ''
-  }));
-}
-
-function avg(c){ return c.rolls ? c.sum / c.rolls : NaN; }
-function pct(n){ return Math.round(n * 100) + '%'; }
-// `many` covers the words a trailing "s" gets wrong (loss → losses).
-function plural(n, word, many){ return n + ' ' + (n === 1 ? word : (many || word + 's')); }
-
-// Who has beaten this character the most — resolved late so every name is known.
-function nemesis(c){
-  let bestKey = null, best = 0;
-  c.lostTo.forEach((n, key) => { if(n > best){ best = n; bestKey = key; } });
-  return bestKey ? { foe: CHARS.get(bestKey), count: best } : null;
-}
-
-function cards(){
-  // 5 rolls is the smallest sample where a rate says anything at all.
-  const MIN = 5;
-  const enough = c => c.rolls >= MIN;
-  const out = [];
-
-  out.push({ emoji:'💔', title:'Most rolls lost', blurb:'Turned up, rolled, went home empty-handed. Again.',
-    entries: board({ value:c => c.losses, fmt:(v,c) => v,
-      detail:(c,v) => plural(c.rolls,'roll') + ' → ' + plural(c.wins,'win') }) });
-
-  out.push({ emoji:'🎯', title:'Most 100s', blurb:'The dice gods pick favourites, and it is these people.',
-    entries: board({ value:c => c.hundreds, detail:c => 'in ' + plural(c.rolls,'roll') }) });
-
-  out.push({ emoji:'💀', title:'Most 1s', blurb:'A perfect roll, just upside down.',
-    entries: board({ value:c => c.ones, detail:c => 'in ' + plural(c.rolls,'roll') }) });
-
-  out.push({ emoji:'🗑️', title:'Most off-spec pieces', blurb:'"It\'s only OS, I swear" — someone, every single week.',
-    entries: board({ value:c => c.osWins, detail:c => 'of ' + plural(c.wins,'item') + ' won' }) });
-
-  out.push({ emoji:'🏆', title:'Most items won', blurb:'Statistically, they are wearing your gear.',
-    entries: board({ value:c => c.wins, detail:c => 'from ' + plural(c.rolls,'roll') }) });
-
-  out.push({ emoji:'🤲', title:'Greediest', blurb:'Rolls on everything. Absolutely everything.',
-    entries: board({ value:c => c.rolls, detail:c => plural(c.wins,'win') + ', ' + plural(c.losses,'loss','losses') }) });
-
-  out.push({ emoji:'📉', title:'Worst average roll', blurb:'Cursed. There is no other explanation.',
-    entries: board({ eligible:enough, value:avg, asc:true, fmt:v => v.toFixed(1),
-      detail:c => 'over ' + plural(c.rolls,'roll') }) });
-
-  out.push({ emoji:'📈', title:'Suspiciously good average', blurb:'Nobody is accusing anyone of anything.',
-    entries: board({ eligible:enough, value:avg, fmt:v => v.toFixed(1),
-      detail:c => 'over ' + plural(c.rolls,'roll') }) });
-
-  out.push({ emoji:'🥈', title:'Perpetual bridesmaid', blurb:'Worst win rate of anyone who rolls regularly.',
-    entries: board({ eligible:enough, value:c => c.wins / c.rolls, asc:true, keepZero:true, fmt:pct,
-      detail:c => plural(c.wins,'win') + ' from ' + plural(c.rolls,'roll') }) });
-
-  out.push({ emoji:'🍀', title:'Best win rate', blurb:'Same raid, same boss, completely different luck.',
-    entries: board({ eligible:enough, value:c => c.wins / c.rolls, fmt:pct,
-      detail:c => plural(c.wins,'win') + ' from ' + plural(c.rolls,'roll') }) });
-
-  out.push({ emoji:'🌵', title:'Longest dry spell', blurb:'Consecutive losing rolls without a single win in between.',
-    entries: board({ value:c => c.worstStreak, fmt:v => plural(v,'loss','losses'),
-      detail:c => c.wins ? 'they did eventually win ' + plural(c.wins,'item') : 'still never won anything' }) });
-
-  out.push({ emoji:'😤', title:'Biggest nemesis', blurb:'The one person who keeps taking their loot.',
-    entries: board({
-      value:c => { const n = nemesis(c); return n ? n.count : 0; },
-      fmt:(v,c) => plural(v,'time'),
-      detail:c => { const n = nemesis(c); return n ? 'beaten by ' + n.foe.name : ''; } }) });
-
-  return out;
-}
-
-function entryHtml(e, i){
-  if(i === 0){
-    return '<div class="ls-top"><span class="ls-name">' + nameHtml(e.char) + '</span>' +
-           '<span class="ls-value">' + esc(e.value) + '</span></div>' +
-           (e.detail ? '<div class="ls-detail">' + esc(e.detail) + '</div>' : '');
-  }
-  return '<li><span class="rank">' + (i + 1) + '.</span>' + nameHtml(e.char) +
+// A runner-up line in the ranked list beneath the winner.
+function liHtml(e, rank){
+  return '<li><span class="rank">' + rank + '.</span>' + refHtml(e.ref) +
          '<span class="val">' + esc(e.value) + '</span></li>';
 }
 
 function cardHtml(c){
   const head = '<h2><span class="ls-emoji">' + c.emoji + '</span>' + esc(c.title) + '</h2>' +
-               '<p class="ls-blurb">' + c.blurb + '</p>';
-  if(c.html) return '<div class="ls-card">' + head + c.html + '</div>';
-  if(!c.entries.length) return '<div class="ls-card">' + head + '<div class="ls-none">Not enough data yet.</div></div>';
-  const rest = c.entries.slice(1);
-  return '<div class="ls-card">' + head + entryHtml(c.entries[0], 0) +
-    (rest.length ? '<ul class="ls-rest">' + rest.map((e, i) => entryHtml(e, i + 1)).join('') + '</ul>' : '') +
+               '<p class="ls-blurb">' + esc(c.blurb) + '</p>';
+  const entries = c.entries || [];
+  if(!entries.length) return '<div class="ls-card">' + head + '<div class="ls-none">Not enough data yet.</div></div>';
+  const rest = entries.slice(1);
+  return '<div class="ls-card">' + head + topHtml(entries[0]) +
+    (c.detail && c.detail.length ? '<div class="ls-detail">' + segHtml(c.detail) + '</div>' : '') +
+    (rest.length ? '<ul class="ls-rest">' + rest.map((e, i) => liHtml(e, i + 2)).join('') + '</ul>' : '') +
     '</div>';
 }
 
-// The story cards: one number each, but the interesting part is the item.
-function recordCards(){
-  const out = [];
-  if(LUCKIEST){
-    out.push({ emoji:'🎲', title:'Cheekiest win', blurb:'The lowest roll that somehow still won a contested item.',
-      html:'<div class="ls-top"><span class="ls-name">' + nameHtml(LUCKIEST.char) + '</span>' +
-           '<span class="ls-value">' + LUCKIEST.amount + '</span></div>' +
-           '<div class="ls-detail">won ' + itemLink(LUCKIEST.itemId, LUCKIEST.item) + ' against ' + (LUCKIEST.field - 1) +
-           ' other ' + (LUCKIEST.field === 2 ? 'roller' : 'rollers') + '</div>' });
-  }
-  if(CONTESTED){
-    out.push({ emoji:'⚔️', title:'Most contested item', blurb:'The item that started the most arguments.',
-      html:'<div class="ls-top"><span class="ls-name">' + itemLink(CONTESTED.itemId, CONTESTED.item) + '</span>' +
-           '<span class="ls-value">' + CONTESTED.count + '</span></div>' +
-           '<div class="ls-detail">rolls — it went to ' + esc(CONTESTED.winner || 'nobody') + '</div>' });
-  }
-  return out;
+function summaryHtml(items){
+  return (items || []).map(p => '<div><b>' + esc(p.value) + '</b>' + esc(p.label) + '</div>').join('');
 }
 
-function summaryHtml(){
-  const rollers = [...CHARS.values()].filter(c => c.rolls > 0).length;
-  return [
-    ['Items rolled for', TOTALS.awards],
-    ['Rolls placed', TOTALS.rolls],
-    ['Characters rolling', rollers],
-    ['Disenchanted', TOTALS.de]
-  ].map(p => '<div><b>' + p[1] + '</b>' + p[0] + '</div>').join('');
-}
-
-function render(){
-  const all = cards().concat(recordCards());
-  document.getElementById('grid').innerHTML = all.map(cardHtml).join('');
+function render(data){
+  document.getElementById('grid').innerHTML = (data.cards || []).map(cardHtml).join('');
   const s = document.getElementById('summary');
-  s.innerHTML = summaryHtml();
+  s.innerHTML = summaryHtml(data.summary);
   s.style.display = '';
   document.getElementById('msg').style.display = 'none';
-  loadWowhead(); // the story cards carry item links
+  loadWowhead(); // the cards carry item links
 }
 
 function fail(text){
@@ -353,17 +177,16 @@ function fail(text){
 
 async function load(){
   try{
-    const res = await fetch(API_BASE + '/api/loot/history', { headers:{ 'Authorization':'Bearer ' + sessionToken() } });
+    const res = await fetch(API_BASE + '/api/loot/stats', { headers:{ 'Authorization':'Bearer ' + sessionToken() } });
     if(res.status === 401){
       fail('Session expired — signing out…');
       setTimeout(logout, 1200);
       return;
     }
     if(!res.ok){ fail('Could not load loot (HTTP ' + res.status + ').'); return; }
-    const rows = await res.json();
-    if(!rows.length){ fail('No loot has been recorded yet — nothing to be smug about.'); return; }
-    aggregate(rows);
-    render();
+    const data = await res.json();
+    if(!data.cards || !data.cards.length){ fail('No loot has been recorded yet — nothing to be smug about.'); return; }
+    render(data);
   }catch(err){
     fail('Could not reach the guild database.');
   }

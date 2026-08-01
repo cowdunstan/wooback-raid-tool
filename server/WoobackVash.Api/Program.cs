@@ -141,6 +141,9 @@ app.MapMembersEndpoints();
 // Loot + attendance history (Phase 4).
 app.MapRaidLogEndpoints();
 
+// The loot "Hall of shame": every leaderboard and record, aggregated server-side.
+app.MapLootStatsEndpoints();
+
 // The character sheet: raid setup, gear snapshots, loot, rolls, attendance.
 app.MapCharacterSheetEndpoints();
 

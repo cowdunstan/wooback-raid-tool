@@ -50,7 +50,7 @@
     <div class="home-hero">
       <span class="eyebrow">Guild Tools</span>
       <h1>Warcraft Logs</h1>
-      <p class="subtitle">The wooback guild's 25 most recent logs, newest first. Click any raid to open it on Warcraft Logs.</p>
+      <p class="subtitle">The wooback guild's 25 most recent logs, newest first. Click any raid to open it on Warcraft Logs, tbc-audit, or This Is Fine.</p>
     </div>
 
     <div class="logs-toolbar">
@@ -82,6 +82,12 @@
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
+  // The same report can be audited in two community tools besides Warcraft Logs
+  // itself: tbc-audit reads it from a ?report= query, This Is Fine from a #/report/
+  // hash route. The WCL link comes ready-made from the server as r.url.
+  const TBC_AUDIT_URL    = 'https://www.tbc-audit.com/?report=';
+  const THIS_IS_FINE_URL = 'https://thisisfine.team/#/report/';
+
   // Warcraft Logs start/end times are epoch milliseconds.
   function fmtDate(ms){
     if(!ms) return '';
@@ -107,15 +113,29 @@
       const title = esc(r.title) || 'Untitled log';
       const zone  = r.zone ? '<span class="log-zone">' + esc(r.zone) + '</span>' : '';
       const owner = r.owner ? '<span class="log-owner">uploaded by ' + esc(r.owner) + '</span>' : '';
-      return '<a class="log-item" href="' + esc(r.url) + '" target="_blank" rel="noopener">' +
-               '<div class="log-item-main">' +
-                 '<span class="log-title">' + title + '</span>' + zone +
+      // WCL always links (r.url is server-supplied); the two audit tools key off the
+      // report code, so only offer them when the report carries one.
+      const link = function(href, label){
+        return '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + label + '</a>';
+      };
+      const audits = r.code
+        ? link(TBC_AUDIT_URL + encodeURIComponent(r.code), 'tbc-audit →') +
+          link(THIS_IS_FINE_URL + encodeURIComponent(r.code), 'This Is Fine →')
+        : '';
+      return '<div class="log-item">' +
+               '<button class="log-head" type="button" aria-expanded="false">' +
+                 '<div class="log-item-main">' +
+                   '<span class="log-title">' + title + '</span>' + zone +
+                 '</div>' +
+                 '<div class="log-item-meta">' +
+                   '<span class="log-date">' + esc(fmtDate(r.startTime)) + '</span>' + owner +
+                   '<span class="log-go">Open <span class="log-chevron">▾</span></span>' +
+                 '</div>' +
+               '</button>' +
+               '<div class="log-links">' +
+                 link(r.url, 'Warcraft Logs →') + audits +
                '</div>' +
-               '<div class="log-item-meta">' +
-                 '<span class="log-date">' + esc(fmtDate(r.startTime)) + '</span>' + owner +
-                 '<span class="log-go">Open →</span>' +
-               '</div>' +
-             '</a>';
+             '</div>';
     }).join('');
     setStatus(reports.length + (reports.length === 1 ? ' log' : ' logs'));
   }
@@ -153,6 +173,17 @@
       if(forceBtn) forceBtn.disabled = false;
     }
   }
+
+  // One delegated handler on the stable list container — render() replaces the
+  // rows' innerHTML on every refresh, so binding per-row would leak. A row toggles
+  // open to reveal its three links; the <button> head handles Enter/Space for free.
+  document.getElementById('logList').addEventListener('click', function(e){
+    const head = e.target.closest('.log-head');
+    if(!head) return;
+    const item = head.closest('.log-item');
+    const open = item.classList.toggle('open');
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
 
   loadLogs();
 </script>

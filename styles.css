@@ -311,12 +311,17 @@
     padding:20px 18px;color:var(--text-dim);font-size:13px;text-align:center;
   }
   .log-item{
-    display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px;
-    text-decoration:none;background:var(--panel);border:1px solid var(--panel-line);
+    display:flex;flex-direction:column;align-items:stretch;
+    background:var(--panel);border:1px solid var(--panel-line);
     border-left:4px solid var(--accent-dim);border-radius:10px;padding:14px 16px;
     transition:border-color .15s, transform .15s;
   }
   .log-item:hover{border-color:var(--accent-dim);border-left-color:var(--accent);transform:translateY(-1px);}
+  .log-head{
+    display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px;
+    width:100%;background:none;border:0;padding:0;margin:0;
+    color:inherit;font:inherit;text-align:left;cursor:pointer;
+  }
   .log-item-main{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;min-width:0;}
   .log-title{font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:var(--heading);letter-spacing:.3px;}
   .log-zone{
@@ -327,6 +332,17 @@
   .log-date{color:var(--text);}
   .log-owner{color:var(--text-dim);}
   .log-go{color:var(--accent);font-weight:700;letter-spacing:.3px;}
+  .log-chevron{display:inline-block;transition:transform .15s;}
+  .log-item.open .log-chevron{transform:rotate(180deg);}
+  .log-links{
+    display:none;flex-direction:column;align-items:flex-start;gap:8px;
+    margin-top:12px;padding-top:12px;border-top:1px solid var(--panel-line);
+  }
+  .log-item.open .log-links{display:flex;}
+  .log-links a{
+    color:var(--accent);text-decoration:none;font-weight:600;font-size:12.5px;letter-spacing:.3px;
+  }
+  .log-links a:hover{text-decoration:underline;}
 
   /* ── 2 group organisation (groups.html) ── */
   .picker{

@@ -19,7 +19,9 @@ board, identity links, loot, and attendance.
 - **`home.html`** — the default page after sign-in: a welcome hub with a hamburger
   menu and app cards. Open to any signed-in tier.
 - **`logs.html`** — the **Warcraft Logs** app: the guild's uploaded reports
-  (newest first), each linked straight to Warcraft Logs. Any signed-in tier.
+  (newest first). Each report expands on click to reveal links opening that raid on
+  Warcraft Logs, **tbc-audit**, and **This Is Fine** (the latter two audit gear,
+  enchants and consumables). Any signed-in tier.
 - **`board.html`** — the Lady Vashj assignment board (**officers only**); `app.js`
   + `styles.css` power it. Imports rosters from Raid-Helper, and **saves/loads**
   the whole board (roster + slot counts + assignments + hand-placed orb

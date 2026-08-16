@@ -1028,12 +1028,12 @@ const SR_METADATA_ID = 'wooback-loot-prio';
 // leaves open (a bare "MS > OS", a named chain that opens to the room after it, or a
 // row it gave no chain at all) reads as "MS > OS". This string is the reserver name a
 // soft reserve is filed under.
-const OPEN_ROLL = 'MS > OS';
+const OPEN_CHAIN = 'MS > OS';
 function prioChain(item){
-  if(item.openRoll) return OPEN_ROLL;
+  if(item.openRoll) return OPEN_CHAIN;
   const tiers = item.tiers.map(tier => tier.tokens.map(t => t.label).join(' = '));
-  if(item.openTail) tiers.push(OPEN_ROLL);
-  return tiers.join(' > ') || OPEN_ROLL;
+  if(item.openTail) tiers.push(OPEN_CHAIN);
+  return tiers.join(' > ') || OPEN_CHAIN;
 }
 
 
@@ -1101,7 +1101,7 @@ function buildReserves(resolved){
     if(!byChain.has(chain)) byChain.set(chain, new Set());
     byChain.get(chain).add(id);
     items++;
-    if(chain === OPEN_ROLL) open++;
+    if(chain === OPEN_CHAIN) open++;
   }));
 
   return { byChain, items, open, unpriced };
@@ -1173,7 +1173,7 @@ function showSrExport(str, stats){
   const box = document.getElementById('srExport');
   const unresolved = [...new Set(stats.unresolved)];
   const open = stats.open
-    ? ` ${stats.open} item${stats.open===1?'':'s'} the sheet leaves open read as <b>${OPEN_ROLL}</b>.`
+    ? ` ${stats.open} item${stats.open===1?'':'s'} the sheet leaves open read as <b>${OPEN_CHAIN}</b>.`
     : '';
   const warn = unresolved.length
     ? `<div class="prio-note">${unresolved.length} item${unresolved.length===1?'':'s'} left out — no item id could be found for ${whEsc(unresolved.slice(0,6).join(', '))}${unresolved.length>6?', …':''}. Fix the spelling on the sheet and rebuild.</div>`

@@ -198,7 +198,7 @@ board, identity links, loot, and attendance.
   Chestguard`), which is all the gear snapshots see. `TIER_TOKENS` in `loot-sheet.js`
   maps each token to the item ids of every class piece it turns into, so **a raider
   wearing the upgrade counts as holding the token** — HAS fires, they are struck out
-  and prio moves past them, and they drop from the soft-reserve export. The match is
+  and prio moves past them on the page. The match is
   per class and per slot: a paladin holding the Conqueror shoulder is detected by the
   paladin shoulder piece, not the priest's or a helm. P3 names its tier tokens in
   full; P2's shared tier-set tab writes them bare under a slot banner (`Tier sets —
@@ -206,18 +206,28 @@ board, identity links, loot, and attendance.
   the real item name (`Helm of the Vanquished Champion`) before parsing — otherwise
   all five slots collapse to one lookup and never resolve to an item id.
 
-  **Gargul SR string** turns the plan into a soft-reserve import. A soft reserve
-  is flat where the sheet's prio is ordered, so the rule is: **the top tier
-  reserves each item, minus anyone who already has it** — and when that empties a
-  whole tier, prio drops to the next one down. The page shows the same walk it
-  exports: someone skipped is struck through, and the tier that ended up
-  reserving has its rank badge lit. The sheet's spec token rides along as each
-  player's Gargul note, so the addon can say *why* they hold it.
+  **Gargul SR string** turns the plan into a soft-reserve import. It **does not name
+  raiders**: instead of resolving the sheet's chain down to whoever is signed up, each
+  item is reserved under its **priority chain as the reserver name** — the tokens the
+  way the sheet wrote them, tiers joined by `>` and ties by `=`
+  (`resto druid > holy priest = holy paladin`). Gargul shows that string against the
+  item when it drops, and the loot master reads the prio straight off it and applies
+  judgement to who is actually in the room. Attendance, per-item mutes and who already
+  holds the item don't enter into a list of specs. An item the sheet leaves open (bare
+  `MS > OS`, a named chain that opens to the room after it, or a row with no chain) is
+  filed under `MS > OS`. Items that share a chain merge into one reserve entry, since
+  Gargul keys reservers by name.
+
+  This differs from the on-screen walk, which still resolves the chain to the raiders
+  holding each item tonight (top tier minus anyone who already has it, dropping a tier
+  when one empties). The page is the officer's view; the export is the prio the loot
+  master applies by hand.
 
   The string is `base64(zlib(JSON))` — the current format from Gargul's
   `Classes/SoftRes.lua` (`importGargulData`), not the CSV one it warns is
   deprecated. `CompressionStream('deflate')` supplies the zlib wrapper
-  `LibDeflate:DecompressZlib` expects. Item **ids** come from
+  `LibDeflate:DecompressZlib` expects. `class` is always `priest` (Gargul rewrites any
+  class it doesn't know, and a prio chain is not one). Item **ids** come from
   `POST /api/items/resolve`, because the sheet carries names only. `plusOnes` is
   0 for everyone since we track none — Gargul asks before overwriting plus-ones
   it already has, and the page says to answer **No**.

@@ -60,7 +60,7 @@ function utcTimestamp(addDays, [h, min]) {
 async function createEvent(serverId, channelId, apiKey, body, label) {
   let res;
   try {
-    res = await fetch(`${API}/v2/servers/${serverId}/channels/${channelId}/event`, {
+    res = await fetch(`${API}/v4/servers/${serverId}/channels/${channelId}/event`, {
       method: 'POST',
       headers: { Authorization: apiKey, 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify(body),

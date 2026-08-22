@@ -16,11 +16,10 @@ name: Create weekend raid events
 #              RH_SAT_TITLE / RH_SUN_TITLE / RH_DESCRIPTION
 #
 # Times are absolute UTC — the event lands at exactly that instant regardless of
-# the server's Raid-Helper timezone. The script targets the *coming* Saturday
-# and the Sunday after it, so the cron day only decides how much signup lead
-# time there is — move it earlier in the week and it still posts the same
-# weekend. Run it once via "Run workflow" and check the posted times before
-# relying on the schedule.
+# the server's Raid-Helper timezone. The script posts *next* week's Saturday and
+# Sunday (the weekend after the run), so the Saturday cron gives a full week of
+# signup lead time. Run it once via "Run workflow" and check the posted times
+# before relying on the schedule.
 on:
   schedule:
     - cron: '0 6 * * 6'   # 06:00 UTC every Saturday — adjust to taste

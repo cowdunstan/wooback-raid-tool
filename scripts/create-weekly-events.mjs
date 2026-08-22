@@ -82,12 +82,12 @@ const serverId = process.env.RH_SERVER_ID || '1462481995119722649';
 const leaderId = need('RH_LEADER_ID');
 const templateId = process.env.RH_TEMPLATE_ID || '';
 
-// Target the coming weekend as a consecutive pair: the next Saturday (today, if
-// the cron fires on Saturday) and the Sunday right after it. Computing it this
-// way means an earlier-in-the-week cron or a manual run still produces the same
-// upcoming Sat/Sun rather than drifting.
+// Target next week's weekend, not this one: the run posts the Saturday and
+// Sunday of the calendar week *after* it fires. The cron runs Saturday morning,
+// so this gives a full week of signup lead time rather than creating that same
+// day's raid. Adding 7 to the coming Saturday keeps that true from any run day.
 const today = new Date().getUTCDay(); // 0=Sun … 6=Sat
-const satOffset = (6 - today + 7) % 7;
+const satOffset = ((6 - today + 7) % 7) + 7;
 const sunOffset = satOffset + 1;
 
 const days = [

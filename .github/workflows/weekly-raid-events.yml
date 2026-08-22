@@ -1,0 +1,55 @@
+name: Create weekend raid events
+
+# Posts the coming weekend's two Raid-Helper events (Saturday + Sunday) by
+# calling the Raid-Helper API directly — no backend involvement. The API key is
+# the same `/apikey` server token the backend uses to read signups; it also
+# creates events, so nothing new needs authorising.
+#
+# Configure under Settings → Secrets and variables → Actions:
+#   Secret     RAIDHELPER_API_KEY   the /apikey token
+#   Variables  RH_SAT_CHANNEL_ID    channel the Saturday event posts in (required)
+#              RH_SUN_CHANNEL_ID    channel the Sunday event posts in   (required)
+#              RH_LEADER_ID         Discord user id of the leader       (required)
+#              RH_TEMPLATE_ID       Raid-Helper template id             (optional)
+#              RH_SAT_TIME          "HH:MM" UTC   (default 13:30)
+#              RH_SUN_TIME          "HH:MM" UTC   (default 13:30)
+#              RH_SAT_TITLE / RH_SUN_TITLE / RH_DESCRIPTION
+#
+# Times are absolute UTC — the event lands at exactly that instant regardless of
+# the server's Raid-Helper timezone. The script posts *next* week's Saturday and
+# Sunday (the weekend after the run), so the Saturday cron gives a full week of
+# signup lead time. Run it once via "Run workflow" and check the posted times
+# before relying on the schedule.
+on:
+  schedule:
+    - cron: '0 6 * * 6'   # 06:00 UTC every Saturday — adjust to taste
+  workflow_dispatch: {}
+
+# One run at a time; never post a weekend twice by racing.
+concurrency:
+  group: weekly-raid-events
+  cancel-in-progress: false
+
+jobs:
+  create-events:
+    name: Post Sat + Sun events
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Create events
+        run: node scripts/create-weekly-events.mjs
+        env:
+          RAIDHELPER_API_KEY: ${{ secrets.RAIDHELPER_API_KEY }}
+          RH_SERVER_ID: ${{ vars.RH_SERVER_ID || '1462481995119722649' }}
+          RH_SAT_CHANNEL_ID: ${{ vars.RH_SAT_CHANNEL_ID }}
+          RH_SUN_CHANNEL_ID: ${{ vars.RH_SUN_CHANNEL_ID }}
+          RH_LEADER_ID: ${{ vars.RH_LEADER_ID }}
+          RH_TEMPLATE_ID: ${{ vars.RH_TEMPLATE_ID }}
+          RH_SAT_TIME: ${{ vars.RH_SAT_TIME || '13:30' }}
+          RH_SUN_TIME: ${{ vars.RH_SUN_TIME || '13:30' }}
+          RH_SAT_TITLE: ${{ vars.RH_SAT_TITLE || 'Saturday Raid' }}
+          RH_SUN_TITLE: ${{ vars.RH_SUN_TITLE || 'Sunday Raid' }}
+          RH_DESCRIPTION: ${{ vars.RH_DESCRIPTION }}

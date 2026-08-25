@@ -30,6 +30,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <style>
+  /* Phase toggle — the guild raids two at once, so the hall of shame can be narrowed
+     to either. "All" is the default and keeps the whole history. */
+  .ls-phase{
+    display:inline-flex;gap:2px;margin-bottom:16px;
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:20px;padding:3px;
+  }
+  .ls-seg{
+    background:transparent;border:0;border-radius:16px;padding:5px 15px;cursor:pointer;
+    font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;color:var(--text-dim);
+  }
+  .ls-seg:hover{color:var(--text)}
+  .ls-seg.is-on{background:var(--accent);color:var(--on-accent)}
+
   .ls-summary{
     display:flex;flex-wrap:wrap;gap:22px;margin-bottom:18px;
     background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;padding:14px 18px;
@@ -47,7 +60,9 @@
     color:var(--heading);letter-spacing:.3px;
   }
   .ls-emoji{font-size:17px;margin-right:7px;font-family:'Inter',sans-serif}
-  .ls-blurb{font-size:11.5px;color:var(--text-dim);margin:4px 0 12px;line-height:1.45}
+  .ls-blurb{font-size:11.5px;color:var(--text-dim);margin:4px 0 5px;line-height:1.45}
+  /* The plain "what this measures" line, set apart from the joke above it. */
+  .ls-desc{font-size:11px;color:var(--text-dim);font-style:italic;opacity:.8;margin:0 0 12px;line-height:1.4}
 
   /* The winner of each award, given its own row so the name can breathe. */
   .ls-top{display:flex;align-items:baseline;gap:8px;margin-bottom:2px}
@@ -88,6 +103,12 @@
 
     <h1>Loot stats</h1>
     <p class="subtitle">Everything the loot database knows about who is lucky, who is greedy, and who should stop rolling. Computed from every award and every roll ever recorded.</p>
+
+    <div id="phase" class="ls-phase" role="group" aria-label="Raid phase">
+      <button type="button" class="ls-seg is-on" data-phase="">All</button>
+      <button type="button" class="ls-seg" data-phase="p2">Phase 2</button>
+      <button type="button" class="ls-seg" data-phase="p3">Phase 3</button>
+    </div>
 
     <div id="summary" class="ls-summary" style="display:none"></div>
     <div id="grid" class="ls-grid"></div>
@@ -148,7 +169,8 @@ function liHtml(e, rank){
 
 function cardHtml(c){
   const head = '<h2><span class="ls-emoji">' + c.emoji + '</span>' + esc(c.title) + '</h2>' +
-               '<p class="ls-blurb">' + esc(c.blurb) + '</p>';
+               '<p class="ls-blurb">' + esc(c.blurb) + '</p>' +
+               (c.desc ? '<p class="ls-desc">' + esc(c.desc) + '</p>' : '');
   const entries = c.entries || [];
   if(!entries.length) return '<div class="ls-card">' + head + '<div class="ls-none">Not enough data yet.</div></div>';
   const rest = entries.slice(1);
@@ -173,11 +195,21 @@ function render(data){
 
 function fail(text){
   document.getElementById('msg').textContent = text;
+  document.getElementById('msg').style.display = '';
 }
 
+// The selected raid phase: '' (all), 'p2' or 'p3'. The backend splits by item level;
+// here it is only a query param and which button is lit.
+let phase = '';
+
 async function load(){
+  // Clear the previous view so a phase switch reads as a reload, not a silent no-op.
+  document.getElementById('grid').innerHTML = '';
+  document.getElementById('summary').style.display = 'none';
+  fail('Loading…');
   try{
-    const res = await fetch(API_BASE + '/api/loot/stats', { headers:{ 'Authorization':'Bearer ' + sessionToken() } });
+    const url = API_BASE + '/api/loot/stats' + (phase ? '?phase=' + phase : '');
+    const res = await fetch(url, { headers:{ 'Authorization':'Bearer ' + sessionToken() } });
     if(res.status === 401){
       fail('Session expired — signing out…');
       setTimeout(logout, 1200);
@@ -185,12 +217,24 @@ async function load(){
     }
     if(!res.ok){ fail('Could not load loot (HTTP ' + res.status + ').'); return; }
     const data = await res.json();
-    if(!data.cards || !data.cards.length){ fail('No loot has been recorded yet — nothing to be smug about.'); return; }
+    if(!data.cards || !data.cards.length){
+      fail(phase ? 'No loot recorded for this phase yet — nothing to be smug about.'
+                 : 'No loot has been recorded yet — nothing to be smug about.');
+      return;
+    }
     render(data);
   }catch(err){
     fail('Could not reach the guild database.');
   }
 }
+
+document.getElementById('phase').addEventListener('click', e => {
+  const btn = e.target.closest('.ls-seg');
+  if(!btn || btn.dataset.phase === phase) return;
+  phase = btn.dataset.phase;
+  document.querySelectorAll('#phase .ls-seg').forEach(b => b.classList.toggle('is-on', b === btn));
+  load();
+});
 
 load();
 </script>

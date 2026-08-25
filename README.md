@@ -373,7 +373,14 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   the guild fights over most — aggregated server-side from the whole award/roll history
   and returned as ready-to-render cards (typed refs for names, items and plain text).
   The page is a pure renderer; all the copy, thresholds, ranking and formatting live in
-  `Api/LootStatsEndpoints.cs`. `GET /api/loot/history` (also any session) is the same
+  `Api/LootStatsEndpoints.cs`. A **P2 / P3 / All** toggle on the page passes `?phase=p2`
+  or `?phase=p3` (anything else, including the default, is the whole history), narrowing
+  the hall of shame to one of the two raids the guild runs at once. An award records no
+  phase, so the split is by the item's **level** — Phase 2 (SSC/TK) drops sit below
+  ilvl 137 and Phase 3 (BT/MH) at or above it — read from the gear snapshots, the same
+  place `items.html` learns each item's ilvl. An item never seen worn (nobody kept it,
+  or a hand-typed award with no id) has no known level and shows only in the All view.
+  `GET /api/loot/history` (also any session) is the same
   rows newest-first that back the read-only `loot-history.html`. Ignored characters and
   their rolls are out of both.
 - **Loot-sheet proxy** — `GET /sheet/loot?doc=&gid=`, any valid session (opened from

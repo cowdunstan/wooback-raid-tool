@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using WoobackVash.Api.Auth;
 using WoobackVash.Api.Data;
@@ -16,6 +17,13 @@ public static class LootStatsEndpoints
 {
     // A roll needs a real sample before a rate (average, win %, spread) says anything.
     private const int MinRolls = 5;
+
+    // The item-level line the guild's two phases fall either side of. The guild raids
+    // Phase 2 (Serpentshrine Cavern / Tempest Keep, epics ilvl 120–133) and Phase 3
+    // (Black Temple / Mount Hyjal, epics ilvl 141–156) at once; there is a clear gap
+    // between the two, so a single floor at 137 splits every raid drop cleanly. An
+    // award carries no phase of its own — the item's level is the only signal we hold.
+    private const int P3ItemLevelFloor = 137;
 
     public static void MapLootStatsEndpoints(this IEndpointRouteBuilder app)
     {
@@ -53,8 +61,57 @@ public static class LootStatsEndpoints
                         .ToList()))
                 .ToListAsync();
 
+            // ?phase=p2|p3 narrows the hall of shame to one of the guild's two raids;
+            // anything else (including the default) keeps the whole history, so an older
+            // client that never asks sees exactly what it always has. The split is by the
+            // item's level (see P3ItemLevelFloor) — the only phase signal an award holds —
+            // read from the gear snapshots, where every equipped item carries its ilvl.
+            // An item we have never seen worn (nobody kept it, or a hand-typed award with
+            // no id) has no known level, so it only shows in the combined "all" view.
+            var phase = ctx.Request.Query["phase"].ToString().Trim().ToLowerInvariant();
+            if (phase is "p2" or "p3")
+            {
+                var levels = await BuildItemLevels(db);
+                bool wantP3 = phase == "p3";
+                awards = awards.Where(a =>
+                    a.ItemId is long id && levels.TryGetValue(id, out var lv)
+                    && (lv >= P3ItemLevelFloor) == wantP3).ToList();
+            }
+
             return Results.Json(Aggregate(awards));
         });
+    }
+
+    // Item id → item level, gathered from every gear snapshot. The level of a given item
+    // is fixed, so a stray low/zero reading is shrugged off by keeping the highest seen.
+    // At guild scale this is a few dozen snapshots of ~19 items each — cheap in memory,
+    // the same source items.html reads to show what people are wearing.
+    private static async Task<Dictionary<long, double>> BuildItemLevels(AppDbContext db)
+    {
+        var jsons = await db.GearSnapshots.AsNoTracking()
+            .Where(s => s.Character != null && !s.Character.Ignored)
+            .Select(s => s.Items)
+            .ToListAsync();
+
+        var levels = new Dictionary<long, double>();
+        foreach (var json in jsons)
+        {
+            JsonElement root;
+            try { root = JsonDocument.Parse(json).RootElement; }
+            catch (JsonException) { continue; }
+            if (root.ValueKind != JsonValueKind.Array) continue;
+
+            foreach (var e in root.EnumerateArray())
+            {
+                if (e.ValueKind != JsonValueKind.Object) continue;
+                if (!e.TryGetProperty("id", out var idEl) || !idEl.TryGetInt64(out var id) || id <= 0) continue;
+                if (!e.TryGetProperty("ilvl", out var lvlEl) || lvlEl.ValueKind != JsonValueKind.Number) continue;
+                var lvl = lvlEl.GetDouble();
+                if (lvl <= 0) continue;
+                if (!levels.TryGetValue(id, out var prev) || lvl > prev) levels[id] = lvl;
+            }
+        }
+        return levels;
     }
 
     // ── Loaded shapes ───────────────────────────────────────────────────────

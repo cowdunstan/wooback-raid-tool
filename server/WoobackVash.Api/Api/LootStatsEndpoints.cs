@@ -1,8 +1,9 @@
 using System.Globalization;
-using System.Text.Json;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using WoobackVash.Api.Auth;
 using WoobackVash.Api.Data;
+using WoobackVash.Api.Services;
 
 namespace WoobackVash.Api.Api;
 
@@ -18,16 +19,28 @@ public static class LootStatsEndpoints
     // A roll needs a real sample before a rate (average, win %, spread) says anything.
     private const int MinRolls = 5;
 
-    // The item-level line the guild's two phases fall either side of. The guild raids
-    // Phase 2 (Serpentshrine Cavern / Tempest Keep, epics ilvl 120–133) and Phase 3
-    // (Black Temple / Mount Hyjal, epics ilvl 141–156) at once; there is a clear gap
-    // between the two, so a single floor at 137 splits every raid drop cleanly. An
-    // award carries no phase of its own — the item's level is the only signal we hold.
-    private const int P3ItemLevelFloor = 137;
+    // The Google-sheet tabs that list each phase's loot, by document key and tab gid —
+    // the same tabs loot-sheet.js's RAID_TABS drives, mirrored here so the stats page can
+    // split the hall of shame the way every other page splits everything else. An award
+    // carries no phase of its own and item level can't tell them apart (Serpentshrine /
+    // Tempest Keep's final bosses drop ilvl-141 gear that Black Temple / Mount Hyjal also
+    // sits on), so the sheets — which list each item under its raid — are the only
+    // authority. Keep in sync with RAID_TABS: p2 is SSC + TK (one tab per boss, plus the
+    // shared Tier Sets tab), p3 is Black Temple and Mount Hyjal (one tab each).
+    private static readonly Dictionary<string, string[]> PhaseTabs = new()
+    {
+        ["p2"] = new[]
+        {
+            "324929599", "8551419", "420793116", "152003569", "821616370", "1241401949",
+            "1405398559", "649478556", "1032392127", "1216905087", "2111072609",
+            "1959598972", "1626986966",
+        },
+        ["p3"] = new[] { "1226096003", "1714599159" },
+    };
 
     public static void MapLootStatsEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/loot/stats", async (HttpContext ctx, SessionTokenService tokens) =>
+        app.MapGet("/api/loot/stats", async (HttpContext ctx, SessionTokenService tokens, LootSheetService sheets) =>
         {
             var (_, error) = ctx.RequireSession(tokens);
             if (error is not null) return error;
@@ -63,55 +76,101 @@ public static class LootStatsEndpoints
 
             // ?phase=p2|p3 narrows the hall of shame to one of the guild's two raids;
             // anything else (including the default) keeps the whole history, so an older
-            // client that never asks sees exactly what it always has. The split is by the
-            // item's level (see P3ItemLevelFloor) — the only phase signal an award holds —
-            // read from the gear snapshots, where every equipped item carries its ilvl.
-            // An item we have never seen worn (nobody kept it, or a hand-typed award with
-            // no id) has no known level, so it only shows in the combined "all" view.
+            // client that never asks sees exactly what it always has. Phase is decided by
+            // the loot sheets: an award is in a phase when that phase's sheets list its
+            // item. An item the sheets don't carry (an off-list drop, or a name typed a
+            // little differently) matches neither and shows only in the combined "all"
+            // view. If the sheets can't be read at all there is nothing to filter on, so
+            // the page is told rather than shown a silently-wrong split.
             var phase = ctx.Request.Query["phase"].ToString().Trim().ToLowerInvariant();
             if (phase is "p2" or "p3")
             {
-                var levels = await BuildItemLevels(db);
-                bool wantP3 = phase == "p3";
-                awards = awards.Where(a =>
-                    a.ItemId is long id && levels.TryGetValue(id, out var lv)
-                    && (lv >= P3ItemLevelFloor) == wantP3).ToList();
+                var names = await BuildPhaseItemNames(sheets, phase);
+                if (names.Count == 0)
+                    return Results.Json(new { error = "sheets_unavailable",
+                        detail = "Couldn't read the loot sheets to split by phase." }, statusCode: 502);
+                awards = awards.Where(a => names.Contains(NameKey(a.ItemName))).ToList();
             }
 
             return Results.Json(Aggregate(awards));
         });
     }
 
-    // Item id → item level, gathered from every gear snapshot. The level of a given item
-    // is fixed, so a stray low/zero reading is shrugged off by keeping the highest seen.
-    // At guild scale this is a few dozen snapshots of ~19 items each — cheap in memory,
-    // the same source items.html reads to show what people are wearing.
-    private static async Task<Dictionary<long, double>> BuildItemLevels(AppDbContext db)
+    // The set of item names one phase's sheets list, normalised for matching. Built from
+    // column A of every tab — the item-name column — skipping the header row. Boss banners
+    // and stray notes come through too, but they never match a real award's item name, so
+    // they cost nothing; only a missing item would, and that just leaves it in "all". Each
+    // tab is a ~9 KB CSV the LootSheetService already caches for ten minutes.
+    private static async Task<HashSet<string>> BuildPhaseItemNames(LootSheetService sheets, string phase)
     {
-        var jsons = await db.GearSnapshots.AsNoTracking()
-            .Where(s => s.Character != null && !s.Character.Ignored)
-            .Select(s => s.Items)
-            .ToListAsync();
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        if (!PhaseTabs.TryGetValue(phase, out var gids)) return names;
 
-        var levels = new Dictionary<long, double>();
-        foreach (var json in jsons)
+        var tabs = await Task.WhenAll(gids.Select(g => sheets.GetTabAsync(phase, g, html: false)));
+        foreach (var (status, body, _) in tabs)
         {
-            JsonElement root;
-            try { root = JsonDocument.Parse(json).RootElement; }
-            catch (JsonException) { continue; }
-            if (root.ValueKind != JsonValueKind.Array) continue;
-
-            foreach (var e in root.EnumerateArray())
+            if (status != 200 || body is null) continue;
+            foreach (var row in ParseCsv(body))
             {
-                if (e.ValueKind != JsonValueKind.Object) continue;
-                if (!e.TryGetProperty("id", out var idEl) || !idEl.TryGetInt64(out var id) || id <= 0) continue;
-                if (!e.TryGetProperty("ilvl", out var lvlEl) || lvlEl.ValueKind != JsonValueKind.Number) continue;
-                var lvl = lvlEl.GetDouble();
-                if (lvl <= 0) continue;
-                if (!levels.TryGetValue(id, out var prev) || lvl > prev) levels[id] = lvl;
+                if (row.Count == 0) continue;
+                var a = row[0].Trim();
+                if (a.Length == 0) continue;
+                var b = row.Count > 1 ? row[1].Trim() : "";
+                // The header row — col B "Bias", or col A "Item Name…" — is not an item.
+                if (b.Equals("Bias", StringComparison.OrdinalIgnoreCase) ||
+                    a.StartsWith("Item Name", StringComparison.OrdinalIgnoreCase)) continue;
+                var key = NameKey(a);
+                if (key.Length > 0) names.Add(key);
             }
         }
-        return levels;
+        return names;
+    }
+
+    // A minimal RFC-4180 CSV reader (quotes, "" escapes, embedded newlines), matching the
+    // one loot-sheet.js parses the same export with. Only the field text matters here.
+    private static List<List<string>> ParseCsv(string body)
+    {
+        var rows = new List<List<string>>();
+        var row = new List<string>();
+        var cell = new StringBuilder();
+        bool quoted = false;
+        for (int i = 0; i < body.Length; i++)
+        {
+            var ch = body[i];
+            if (quoted)
+            {
+                if (ch == '"')
+                {
+                    if (i + 1 < body.Length && body[i + 1] == '"') { cell.Append('"'); i++; }
+                    else quoted = false;
+                }
+                else cell.Append(ch);
+                continue;
+            }
+            if (ch == '"') { quoted = true; continue; }
+            if (ch == ',') { row.Add(cell.ToString()); cell.Clear(); continue; }
+            if (ch == '\n') { row.Add(cell.ToString()); rows.Add(row); row = new(); cell.Clear(); continue; }
+            if (ch == '\r') continue;
+            cell.Append(ch);
+        }
+        row.Add(cell.ToString());
+        rows.Add(row);
+        return rows;
+    }
+
+    // Fold an item name to a match key: lower-case, letters and digits only, single spaces.
+    // Punctuation the sheet and Gargul disagree on (apostrophes, hyphens) drops out, so
+    // "Kael'thas" and "Kaelthas" meet. Both the sheet cell and the award name run through it.
+    private static string NameKey(string s)
+    {
+        var sb = new StringBuilder(s.Length);
+        bool pendingSpace = false;
+        foreach (var ch in s.Trim().ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(ch)) { if (pendingSpace) { sb.Append(' '); pendingSpace = false; } sb.Append(ch); }
+            else if (char.IsWhiteSpace(ch) || ch == '-') { if (sb.Length > 0) pendingSpace = true; }
+        }
+        return sb.ToString();
     }
 
     // ── Loaded shapes ───────────────────────────────────────────────────────

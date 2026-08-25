@@ -78,6 +78,10 @@ change as cosmetic (and say so).
 - A contract change between the HTML and `menu.js` (renaming `API_BASE`, changing what
   `renderNav` expects) ships under a ~10-minute GitHub Pages cache-skew window — ship
   it, wait it out, then rely on it. See README → *Asset caching*.
+- `RAID_TABS` in `loot-sheet.js` ↔ `PhaseTabs` in
+  `server/WoobackVash.Api/Api/LootStatsEndpoints.cs`. Both name the same per-phase Google
+  sheet tab gids — the frontend to render the sheets, the backend to split the loot-stats
+  hall of shame by phase. Add or move a raid tab in one and the other drifts.
 - `WOWHEAD_DOMAIN` in `menu.js` and `LEVEL_CAP` in `groups.js` both track the current
   expansion — flip them together when the guild moves on (item tooltips ↔ the max-level
   filter on the 2-group page).

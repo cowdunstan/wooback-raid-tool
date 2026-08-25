@@ -22,7 +22,7 @@ name: Create weekend raid events
 # before relying on the schedule.
 on:
   schedule:
-    - cron: '0 6 * * 6'   # 06:00 UTC every Saturday — adjust to taste
+    - cron: '0 13 * * 6'   # 13:00 UTC every Saturday — adjust to taste
   workflow_dispatch: {}
 
 # One run at a time; never post a weekend twice by racing.

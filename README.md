@@ -372,8 +372,9 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   best and worst luck, the greediest, rivalries, the most-disenchanted item, the item
   the guild fights over most — aggregated server-side from the whole award/roll history
   and returned as ready-to-render cards (typed refs for names, items and plain text).
-  The page is a pure renderer; all the copy, thresholds, ranking and formatting live in
-  `Api/LootStatsEndpoints.cs`. A **P2 / P3 / All** toggle on the page passes `?phase=p2`
+  Each card carries both a joke `blurb` and a plain `desc` line saying what the number
+  actually measures. The page is a pure renderer; all the copy, thresholds, ranking and
+  formatting live in `Api/LootStatsEndpoints.cs`. A **P2 / P3 / All** toggle on the page passes `?phase=p2`
   or `?phase=p3` (anything else, including the default, is the whole history), narrowing
   the hall of shame to one of the two raids the guild runs at once. An award records no
   phase, so the split is by the item's **level** — Phase 2 (SSC/TK) drops sit below

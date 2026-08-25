@@ -60,7 +60,9 @@
     color:var(--heading);letter-spacing:.3px;
   }
   .ls-emoji{font-size:17px;margin-right:7px;font-family:'Inter',sans-serif}
-  .ls-blurb{font-size:11.5px;color:var(--text-dim);margin:4px 0 12px;line-height:1.45}
+  .ls-blurb{font-size:11.5px;color:var(--text-dim);margin:4px 0 5px;line-height:1.45}
+  /* The plain "what this measures" line, set apart from the joke above it. */
+  .ls-desc{font-size:11px;color:var(--text-dim);font-style:italic;opacity:.8;margin:0 0 12px;line-height:1.4}
 
   /* The winner of each award, given its own row so the name can breathe. */
   .ls-top{display:flex;align-items:baseline;gap:8px;margin-bottom:2px}
@@ -167,7 +169,8 @@ function liHtml(e, rank){
 
 function cardHtml(c){
   const head = '<h2><span class="ls-emoji">' + c.emoji + '</span>' + esc(c.title) + '</h2>' +
-               '<p class="ls-blurb">' + esc(c.blurb) + '</p>';
+               '<p class="ls-blurb">' + esc(c.blurb) + '</p>' +
+               (c.desc ? '<p class="ls-desc">' + esc(c.desc) + '</p>' : '');
   const entries = c.entries || [];
   if(!entries.length) return '<div class="ls-card">' + head + '<div class="ls-none">Not enough data yet.</div></div>';
   const rest = entries.slice(1);

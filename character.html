@@ -118,6 +118,9 @@
     font-size:9px;font-weight:700;letter-spacing:.5px;border-radius:3px;padding:1px 4px;
     text-transform:uppercase;background:rgba(var(--amber-rgb),.22);color:var(--amber);margin-left:5px;
   }
+  /* Raid-phase tag (P2/P3) — its own colours so it reads apart from the amber OS/SR tags. */
+  .cs-tag.cs-phase{background:rgba(105,204,240,.16);color:#69ccf0}
+  .cs-tag.cs-phase.cs-p3{background:rgba(168,117,232,.18);color:var(--fel)}
   .cs-won{color:var(--accent);font-weight:600}
   .cs-lost{color:var(--text-dim)}
   .cs-msg{color:var(--text-dim);padding:26px 4px;font-size:13.5px}
@@ -481,6 +484,13 @@ function renderGear(gear, history){
 const ENCHANTABLE = ['head','shoulder','back','chest','wrist','hands','legs','feet','mainhand'];
 
 /* ───────────────────────── Loot & rolls ───────────────────────── */
+// The raid-phase pill (P2/P3) shown beside an item, or nothing when the loot sheets
+// don't place it. Phase comes from the backend (LootPhases), so the two pages agree.
+function phaseTag(phase){
+  if(phase !== 'P2' && phase !== 'P3') return '';
+  return '<span class="cs-tag cs-phase' + (phase === 'P3' ? ' cs-p3' : '') + '">' + phase + '</span>';
+}
+
 function renderLoot(loot){
   const box = document.getElementById('loot');
   if(!loot || !loot.length){
@@ -495,7 +505,7 @@ function renderLoot(loot){
                    + (l.softReserve ? '<span class="cs-tag">SR</span>' : '')
                    + (l.wishlist ? '<span class="cs-tag">WL</span>' : '')
                    + (l.tmb ? '<span class="cs-tag">TMB</span>' : '');
-        return '<tr><td>' + (l.itemId ? itemLink(l.itemId, l.itemName) : esc(l.itemName)) + tags + '</td>'
+        return '<tr><td>' + (l.itemId ? itemLink(l.itemId, l.itemName) : esc(l.itemName)) + phaseTag(l.phase) + tags + '</td>'
              + '<td>' + esc(l.raid || (l.awardedBy ? 'from ' + l.awardedBy : '')) + '</td>'
              + '<td class="num">' + (l.roll == null ? '—' : esc(l.roll)) + '</td>'
              + '<td class="num">' + (l.contested ? esc(Math.max(0, l.contested - 1)) : '—') + '</td>'
@@ -528,6 +538,7 @@ function renderRolls(rolls, s){
                          + (winnerCol ? ' style="color:' + winnerCol + '"' : '') + '>' + esc(r.lostTo) + '</a>'
                        : '<span class="cs-lost">Lost</span>';
         return '<tr><td>' + (r.itemId ? itemLink(r.itemId, r.itemName) : esc(r.itemName))
+             + phaseTag(r.phase)
              + (r.classification ? '<span class="cs-tag">' + esc(r.classification) + '</span>' : '') + '</td>'
              + '<td class="num">' + esc(r.amount) + '</td>'
              + '<td>' + result + '</td>'

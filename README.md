@@ -80,7 +80,10 @@ board, identity links, loot, and attendance.
   one character's raid setup (class/spec/role), the gear it last raided in —
   every item with its **enchant and gems** — plus everything it has won, every
   roll it has made, and its attendance, with an alt switcher across the member's
-  characters. Reached from a name anywhere on the roster, loot history or loot
+  characters. Each won or rolled item carries a **P2 / P3 tag** where the loot sheets
+  place it (the shared `LootPhases` classifier the loot-stats toggle uses), so a phase
+  is legible per item; an item the sheets don't list shows no tag. Reached from a name
+  anywhere on the roster, loot history or loot
   stats; opened bare (`character.html`) it resolves to your own main. **Spec** can be
   set by hand from the header (owner or officer) — for a character no log has reported
   a spec for yet, or when the log-derived one is wrong; a later attendance import can
@@ -379,11 +382,12 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   the hall of shame to one of the two raids the guild runs at once. An award records no
   phase, and item level can't recover it — SSC/TK's final bosses drop ilvl-141 gear that
   BT/MH sits on too — so the split reads two **baked item-name sets** (`P2Items` /
-  `P3Items` in `LootStatsEndpoints.cs`): an award is in a phase when that phase lists its
-  item, matched on a folded name. The sets are the loot sheets' item column lifted once,
-  since a raid's drop table never changes — **regenerate them from the sheets when the
-  guild changes raids** (a code change either way). An item neither set carries — an
-  off-list drop, or a name typed a little differently — shows only in the All view.
+  `P3Items` in `Services/LootPhases.cs`, shared with the character sheet's tag below):
+  an award is in a phase when that phase lists its item, matched on a folded name. The
+  sets are the loot sheets' item column lifted once, since a raid's drop table never
+  changes — **regenerate them from the sheets when the guild changes raids** (a code
+  change either way). An item neither set carries — an off-list drop, or a name typed a
+  little differently — shows only in the All view.
   `GET /api/loot/history` (also any session) is the same
   rows newest-first that back the read-only `loot-history.html`. Ignored characters and
   their rolls are out of both.

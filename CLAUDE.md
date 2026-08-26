@@ -79,10 +79,11 @@ change as cosmetic (and say so).
   `renderNav` expects) ships under a ~10-minute GitHub Pages cache-skew window — ship
   it, wait it out, then rely on it. See README → *Asset caching*.
 - The loot sheets ↔ `P2Items` / `P3Items` in
-  `server/WoobackVash.Api/Api/LootStatsEndpoints.cs`. Those sets are the sheets' item
-  column, baked in to split the loot-stats hall of shame by phase. They don't drift with
-  a sheet edit (a raid's drop table is fixed), but **regenerate them from the sheets when
-  the guild moves to a new tier**, the same time `RAID_TABS`/`SHEET_DOCS` change.
+  `server/WoobackVash.Api/Services/LootPhases.cs`. Those sets are the sheets' item
+  column, baked in to split the loot-stats hall of shame **and** tag each item P2/P3 on
+  the character sheet. They don't drift with a sheet edit (a raid's drop table is fixed),
+  but **regenerate them from the sheets when the guild moves to a new tier**, the same
+  time `RAID_TABS`/`SHEET_DOCS` change.
 - `WOWHEAD_DOMAIN` in `menu.js` and `LEVEL_CAP` in `groups.js` both track the current
   expansion — flip them together when the guild moves on (item tooltips ↔ the max-level
   filter on the 2-group page).

@@ -64,7 +64,7 @@ public static class CharacterSheetEndpoints
             var canEdit = await CanEdit(db, session!, c);
 
             // Awards won by this character, newest first, with the roll that took it.
-            var loot = await db.LootAwards.AsNoTracking()
+            var lootRows = await db.LootAwards.AsNoTracking()
                 .Where(l => l.CharacterId == c.Id)
                 .OrderByDescending(l => l.AwardedAt)
                 .Select(l => new
@@ -87,8 +87,18 @@ public static class CharacterSheetEndpoints
                 })
                 .ToListAsync();
 
+            // Tag each won item with its raid phase (P2/P3) — the same LootPhases classifier
+            // the loot-stats toggle uses, null for anything the sheets don't list. Done in
+            // memory because the name-fold it matches on can't run in SQL.
+            var loot = lootRows.Select(l => new
+            {
+                l.id, l.itemName, l.itemId, l.awardedAt, l.awardedBy, l.note, l.offSpec,
+                l.softReserve, l.tmb, l.wishlist, l.raid, l.roll, l.contested,
+                phase = LootPhases.Of(l.itemName)
+            }).ToList();
+
             // Every roll they have made, with what happened to the item.
-            var rolls = await db.LootRolls.AsNoTracking()
+            var rollRows = await db.LootRolls.AsNoTracking()
                 .Where(r => r.CharacterId == c.Id)
                 .OrderByDescending(r => r.RolledAt)
                 .Select(r => new
@@ -112,6 +122,15 @@ public static class CharacterSheetEndpoints
                     disenchanted = r.LootAward!.Disenchanted
                 })
                 .ToListAsync();
+
+            // Same phase tag on the rolls list, so an item reads P2/P3 whether it was won
+            // or only rolled on.
+            var rolls = rollRows.Select(r => new
+            {
+                r.id, r.itemName, r.itemId, r.amount, r.classification, r.rolledAt, r.won,
+                r.lostTo, r.lostToId, r.lostToClass, r.disenchanted,
+                phase = LootPhases.Of(r.itemName)
+            }).ToList();
 
             var wins = rolls.Count(r => r.won);
             var summary = new

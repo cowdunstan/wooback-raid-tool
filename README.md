@@ -377,10 +377,13 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   formatting live in `Api/LootStatsEndpoints.cs`. A **P2 / P3 / All** toggle on the page passes `?phase=p2`
   or `?phase=p3` (anything else, including the default, is the whole history), narrowing
   the hall of shame to one of the two raids the guild runs at once. An award records no
-  phase, so the split is by the item's **level** — Phase 2 (SSC/TK) drops sit below
-  ilvl 137 and Phase 3 (BT/MH) at or above it — read from the gear snapshots, the same
-  place `items.html` learns each item's ilvl. An item never seen worn (nobody kept it,
-  or a hand-typed award with no id) has no known level and shows only in the All view.
+  phase, and item level can't recover it — SSC/TK's final bosses drop ilvl-141 gear that
+  BT/MH sits on too — so the split reads two **baked item-name sets** (`P2Items` /
+  `P3Items` in `LootStatsEndpoints.cs`): an award is in a phase when that phase lists its
+  item, matched on a folded name. The sets are the loot sheets' item column lifted once,
+  since a raid's drop table never changes — **regenerate them from the sheets when the
+  guild changes raids** (a code change either way). An item neither set carries — an
+  off-list drop, or a name typed a little differently — shows only in the All view.
   `GET /api/loot/history` (also any session) is the same
   rows newest-first that back the read-only `loot-history.html`. Ignored characters and
   their rolls are out of both.

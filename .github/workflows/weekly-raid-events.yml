@@ -22,7 +22,8 @@ name: Create weekend raid events
 # before relying on the schedule.
 on:
   schedule:
-    - cron: '0 13 * * 6'   # 13:00 UTC every Saturday — adjust to taste
+    - cron: '7 11 * * 6'   # 11:07 UTC every Saturday — 2h earlier, and off the
+                           # top of the hour to dodge GitHub's cron dispatch lag
   workflow_dispatch: {}
 
 # One run at a time; never post a weekend twice by racing.

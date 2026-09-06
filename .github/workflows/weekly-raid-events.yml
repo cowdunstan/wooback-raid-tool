@@ -17,13 +17,13 @@ name: Create weekend raid events
 #
 # Times are absolute UTC — the event lands at exactly that instant regardless of
 # the server's Raid-Helper timezone. The script posts *next* week's Saturday and
-# Sunday (the weekend after the run), so the Saturday cron gives a full week of
+# Sunday (the weekend after the run), so the Friday cron gives a full week of
 # signup lead time. Run it once via "Run workflow" and check the posted times
 # before relying on the schedule.
 on:
   schedule:
-    - cron: '7 11 * * 6'   # 11:07 UTC every Saturday — 2h earlier, and off the
-                           # top of the hour to dodge GitHub's cron dispatch lag
+    - cron: '7 11 * * 5'   # 11:07 UTC every Friday — off the top of the hour to
+                           # dodge GitHub's cron dispatch lag
   workflow_dispatch: {}
 
 # One run at a time; never post a weekend twice by racing.

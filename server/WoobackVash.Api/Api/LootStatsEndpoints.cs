@@ -81,13 +81,23 @@ public static class LootStatsEndpoints
         public Guid Id;
         public string Name = "?";
         public string? Cls;
-        public int Rolls, Wins, Losses, Hundreds, Ones, OsWins, NearMiss, BigWins, Streak, WorstStreak;
+        // All-roll tallies (every bid, MS or OS). The dice-luck cards (100s, 1s, average,
+        // spread), the greed/attendance cards and the win-count boards read these — a d100
+        // is a d100 whatever spec it was rolled for, and a win is a win.
+        public int Rolls, Wins, Losses, Hundreds, Ones, OsWins, BigWins;
         public int WinStreak, BestWinStreak, LowWins, Robbery, TieWins;
-        public double Sum, SumSq, LossMarginSum;
+        public double Sum, SumSq;
+        // MS-only tallies (OS bids excluded). The competitive cards read these, because an
+        // off-spec bid plays a different, lower-priority game: it only wins when nothing beats
+        // it on main-spec, so counting it as a lost contest — or comparing its number against
+        // the main-spec field — is nonsense. Win rate, most rolls lost, dry spell, the 99 club,
+        // death by inches and the nemesis/taxman/rivalry web are all built from these.
+        public int MsRolls, MsWins, MsLosses, NearMiss, Streak, WorstStreak;
+        public double LossMarginSum;
         public int LossMarginCount;
-        public readonly HashSet<Guid> Victims = new();
+        public readonly HashSet<Guid> Victims = new();   // MS-only: who they beat in a real contest
         public readonly HashSet<string> WonItems = new();
-        public readonly Dictionary<Guid, int> LostTo = new();
+        public readonly Dictionary<Guid, int> LostTo = new();   // MS-only: who kept beating them
         public readonly HashSet<DateTime> Nights = new();
         // Every item this character rolled on, with how many times — the raw material
         // for their personal white whale (the one they chased most and never won).
@@ -97,9 +107,11 @@ public static class LootStatsEndpoints
 
         public double Avg => Rolls > 0 ? Sum / Rolls : double.NaN;
         public double Std => Rolls > 0 ? Math.Sqrt(Math.Max(0, SumSq / Rolls - Avg * Avg)) : double.NaN;
-        public double WinRate => Rolls > 0 ? (double)Wins / Rolls : double.NaN;
-        // Average points the winning roll beat them by, across their losses — how close
-        // they habitually come. Lower is crueller.
+        // Main-spec win rate: off-spec bids can't win against a main, so they're kept out of
+        // both the wins and the roll count here.
+        public double MsWinRate => MsRolls > 0 ? (double)MsWins / MsRolls : double.NaN;
+        // Average points the winning roll beat them by, across their main-spec losses — how
+        // close they habitually come. Lower is crueller.
         public double AvgLossMargin => LossMarginCount > 0 ? LossMarginSum / LossMarginCount : double.NaN;
     }
 
@@ -223,7 +235,14 @@ public static class LootStatsEndpoints
             {
                 var c = Get(r.PlayerId, r.PlayerName, r.PlayerCls);
                 bool firstRoll = c.Rolls == 0;  // their maiden roll, before this one is counted
+                // An off-spec bid is a different, lower-priority game. Its dice value still
+                // counts toward the luck cards, but it stays out of every competitive tally
+                // (win rate, losses, dry spell, near-misses, margins, the rivalry web) — an
+                // unclassified bid is treated as main-spec, the competitive default.
+                bool osRoll = string.Equals(r.Classification, "OS", StringComparison.OrdinalIgnoreCase);
+                bool msRoll = !osRoll;
                 c.Rolls++;
+                if (msRoll) c.MsRolls++;
                 c.Sum += r.Amount;
                 c.SumSq += (double)r.Amount * r.Amount;
                 if (r.Amount == 100) c.Hundreds++;
@@ -235,48 +254,58 @@ public static class LootStatsEndpoints
                 bool won = winnerId is Guid wk && r.PlayerId == wk;
                 if (won)
                 {
-                    c.Streak = 0;
-                    c.WinStreak++;
+                    c.WinStreak++;   // any win extends the on-fire streak, off-spec included
                     if (c.WinStreak > c.BestWinStreak) c.BestWinStreak = c.WinStreak;
                     if (contestedAward && r.Amount <= 50) c.LowWins++;
-                    // Beating nobody isn't luck, so a lone bid doesn't count as a steal.
-                    if (contestedAward && (luckiest is null || r.Amount < luckiest.Amount))
-                        luckiest = new Luckiest(r.Amount, c.Id, c.Name, c.Cls, a.ItemName, a.ItemId, a.Rolls.Count);
                     // Winning the biggest crowd you ever faced, on the first roll you ever placed.
                     if (firstRoll && contestedAward && (firstWin is null || a.Rolls.Count > firstWin.Field))
                         firstWin = new FirstWin(c.Id, c.Name, c.Cls, a.ItemName, a.ItemId, a.Rolls.Count);
+                    if (msRoll)
+                    {
+                        c.MsWins++;
+                        c.Streak = 0;   // a main-spec win ends the dry spell
+                        // Beating nobody isn't luck, so a lone bid doesn't count as a steal; and
+                        // an off-spec grab isn't a cheeky main-spec win either.
+                        if (contestedAward && (luckiest is null || r.Amount < luckiest.Amount))
+                            luckiest = new Luckiest(r.Amount, c.Id, c.Name, c.Cls, a.ItemName, a.ItemId, a.Rolls.Count);
+                    }
                 }
                 else
                 {
                     c.Losses++;
-                    c.Streak++;
                     c.WinStreak = 0;
-                    if (c.Streak > c.WorstStreak) c.WorstStreak = c.Streak;
-                    if (r.Amount >= 90) c.NearMiss++;   // a 90-something that still lost
-                    if (r.Amount > maxLoser) maxLoser = r.Amount;
+                    if (r.Amount > maxLoser) maxLoser = r.Amount;   // blowout margin uses the whole field
                     if (string.Equals(r.Classification, "MS", StringComparison.OrdinalIgnoreCase)) beatAnMs = true;
-                    if (winnerId is not null)
+                    // A tie the winner won — the photo-finish card, which counts any tied roll.
+                    if (winAmount is int wat && r.Amount == wat) survivedTie = true;
+                    if (msRoll)
                     {
-                        if (winAmount is int wa)
+                        c.MsLosses++;
+                        c.Streak++;
+                        if (c.Streak > c.WorstStreak) c.WorstStreak = c.Streak;
+                        if (r.Amount >= 90) c.NearMiss++;   // a 90-something that still lost
+                        if (winnerId is not null)
                         {
-                            var margin = wa - r.Amount;
-                            if (margin >= 0) { c.LossMarginSum += margin; c.LossMarginCount++; }
-                            if (r.Amount == wa) survivedTie = true;   // a tie the winner won
+                            if (winAmount is int wa)
+                            {
+                                var margin = wa - r.Amount;
+                                if (margin >= 0) { c.LossMarginSum += margin; c.LossMarginCount++; }
+                            }
+                            // The highest main-spec roll anyone has ever lost with, to a real winner.
+                            if (soClose is null || r.Amount > soClose.Amount)
+                                soClose = new SoClose(r.Amount, c.Id, c.Name, c.Cls, a.ItemName, a.ItemId);
                         }
-                        // The highest roll anyone has ever lost with, to a real winner.
-                        if (soClose is null || r.Amount > soClose.Amount)
-                            soClose = new SoClose(r.Amount, c.Id, c.Name, c.Cls, a.ItemName, a.ItemId);
-                    }
-                    if (winnerId is Guid wk2)
-                    {
-                        c.LostTo[wk2] = c.LostTo.GetValueOrDefault(wk2) + 1;
-                        w!.Victims.Add(r.PlayerId);
-                        if (r.PlayerId != wk2)
+                        if (winnerId is Guid wk2)
                         {
-                            var (lo, hi) = wk2.CompareTo(r.PlayerId) <= 0 ? (wk2, r.PlayerId) : (r.PlayerId, wk2);
-                            if (!pairs.TryGetValue((lo, hi), out var p))
-                                pairs[(lo, hi)] = p = new Pair { Lo = lo, Hi = hi };
-                            if (wk2 == lo) p.LoWins++; else p.HiWins++;
+                            c.LostTo[wk2] = c.LostTo.GetValueOrDefault(wk2) + 1;
+                            w!.Victims.Add(r.PlayerId);
+                            if (r.PlayerId != wk2)
+                            {
+                                var (lo, hi) = wk2.CompareTo(r.PlayerId) <= 0 ? (wk2, r.PlayerId) : (r.PlayerId, wk2);
+                                if (!pairs.TryGetValue((lo, hi), out var p))
+                                    pairs[(lo, hi)] = p = new Pair { Lo = lo, Hi = hi };
+                                if (wk2 == lo) p.LoWins++; else p.HiWins++;
+                            }
                         }
                     }
                 }
@@ -305,6 +334,8 @@ public static class LootStatsEndpoints
                     { c.WhaleCount = bid.Count; c.WhaleName = bid.Name; c.WhaleId = bid.Id; }
 
         bool Enough(Agg c) => c.Rolls >= MinRolls;
+        // The competitive rate cards need a real main-spec sample, not just a lot of off-spec bids.
+        bool EnoughMs(Agg c) => c.MsRolls >= MinRolls;
 
         // A looter is an award-level name string; render it class-coloured only when the
         // roster holds a character by exactly that name, matching the old page's fallback.
@@ -339,8 +370,8 @@ public static class LootStatsEndpoints
         }
 
         cards.Add(Board("💔", "Most rolls lost", "Turned up, rolled, went home empty-handed. Again.",
-            "Rolls placed that didn't win the item.",
-            null, c => c.Losses, false, false, Int, c => Text($"{Plural(c.Rolls, "roll")} → {Plural(c.Wins, "win")}")));
+            "Main-spec rolls placed that didn't win the item.",
+            null, c => c.MsLosses, false, false, Int, c => Text($"{Plural(c.MsRolls, "roll")} → {Plural(c.MsWins, "win")}")));
         cards.Add(Board("🎯", "Most 100s", "The dice gods pick favourites, and it is these people.",
             "Rolls that came up a natural 100.",
             null, c => c.Hundreds, false, false, Int, c => Text($"in {Plural(c.Rolls, "roll")}")));
@@ -363,13 +394,13 @@ public static class LootStatsEndpoints
             "Highest mean roll (min 5 rolls).",
             Enough, c => c.Avg, false, false, F1, c => Text($"over {Plural(c.Rolls, "roll")}")));
         cards.Add(Board("🥈", "Perpetual bridesmaid", "Worst win rate of anyone who rolls regularly.",
-            "Lowest win rate (min 5 rolls).",
-            Enough, c => c.WinRate, true, true, Pct, c => Text($"{Plural(c.Wins, "win")} from {Plural(c.Rolls, "roll")}")));
+            "Lowest main-spec win rate (min 5 rolls).",
+            EnoughMs, c => c.MsWinRate, true, true, Pct, c => Text($"{Plural(c.MsWins, "win")} from {Plural(c.MsRolls, "roll")}")));
         cards.Add(Board("🍀", "Best win rate", "Same raid, same boss, completely different luck.",
-            "Highest win rate (min 5 rolls).",
-            Enough, c => c.WinRate, false, false, Pct, c => Text($"{Plural(c.Wins, "win")} from {Plural(c.Rolls, "roll")}")));
-        cards.Add(Board("🌵", "Longest dry spell", "Consecutive losing rolls without a single win in between.",
-            "Longest run of losing rolls in a row.",
+            "Highest main-spec win rate (min 5 rolls).",
+            EnoughMs, c => c.MsWinRate, false, false, Pct, c => Text($"{Plural(c.MsWins, "win")} from {Plural(c.MsRolls, "roll")}")));
+        cards.Add(Board("🌵", "Longest dry spell", "Consecutive losing main-spec rolls without a single win in between.",
+            "Longest run of losing main-spec rolls in a row.",
             null, c => c.WorstStreak, false, false, v => Plural((int)v, "loss", "losses"),
             c => Text(c.Wins > 0 ? $"they did eventually win {Plural(c.Wins, "item")}" : "still never won anything")));
         cards.Add(Board("🔥", "On fire", "Quit while you're ahead. Nobody ever does.",
@@ -377,7 +408,7 @@ public static class LootStatsEndpoints
             null, c => c.BestWinStreak, false, false, v => Plural((int)v, "win"),
             c => Text($"of {Plural(c.Wins, "win")} total")));
         cards.Add(Board("😤", "Biggest nemesis", "The one person who keeps taking their loot.",
-            "Most losses to one other player.",
+            "Most main-spec losses to one other player.",
             null, c => Nemesis(c)?.count ?? 0, false, false, v => Plural((int)v, "time"),
             c => { var n = Nemesis(c); return Text(n is null ? "" : $"beaten by {n.Value.foe.Name}"); }));
         cards.Add(Board("🎢", "Feast or famine", "No middle gear. A 97 or a 4, and nothing in between.",
@@ -389,14 +420,14 @@ public static class LootStatsEndpoints
             Enough, c => c.Std, true, false, v => "±" + v.ToString("F1", CultureInfo.InvariantCulture),
             c => Text($"over {Plural(c.Rolls, "roll")}")));
         cards.Add(Board("😩", "The 99 club", "A 90-something, and it still wasn't enough. Again.",
-            "Losing rolls of 90 or more.",
-            null, c => c.NearMiss, false, false, Int, c => Text($"of {Plural(c.Losses, "loss", "losses")}")));
+            "Main-spec losing rolls of 90 or more.",
+            null, c => c.NearMiss, false, false, Int, c => Text($"of {Plural(c.MsLosses, "loss", "losses")}")));
         cards.Add(Board("💢", "Death by inches", "Always close. Never quite close enough.",
-            "Smallest average losing margin (min 5 losses).",
+            "Smallest average main-spec losing margin (min 5 losses).",
             c => c.LossMarginCount >= MinRolls, c => c.AvgLossMargin, true, true, F1,
             c => Text($"points, averaged over {Plural(c.LossMarginCount, "loss", "losses")}")));
         cards.Add(Board("🧛", "The taxman", "Everyone pays, sooner or later. No exemptions.",
-            "Number of different players beaten.",
+            "Number of different players beaten in a main-spec contest.",
             null, c => c.Victims.Count, false, false, v => Plural((int)v, "victim"), c => Text($"across {Plural(c.Wins, "win")}")));
         cards.Add(Board("🦅", "Master-spec robbery", "Grabbed it for off-spec, right out from under someone's main.",
             "Off-spec wins that beat a main-spec roller.",
@@ -466,15 +497,15 @@ public static class LootStatsEndpoints
 
         // ── One-off records ──────────────────────────────────────────────────
         if (luckiest is not null)
-            cards.Add(Record("🎲", "Cheekiest win", "The lowest roll that somehow still won a contested item.",
-                "Lowest roll that won a contested item.",
+            cards.Add(Record("🎲", "Cheekiest win", "The lowest main-spec roll that somehow still won a contested item.",
+                "Lowest main-spec roll that won a contested item.",
                 CharRef(luckiest.Id, luckiest.Name, luckiest.Cls), luckiest.Amount.ToString(),
                 new[] { TextSeg("won "), ItemRef(luckiest.ItemId, luckiest.ItemName),
                         TextSeg($" against {luckiest.Field - 1} other {(luckiest.Field == 2 ? "roller" : "rollers")}") }));
 
         if (soClose is not null)
-            cards.Add(Record("😱", "So close", "The single highest roll that still went home with nothing.",
-                "The highest roll that ever lost.",
+            cards.Add(Record("😱", "So close", "The single highest main-spec roll that still went home with nothing.",
+                "The highest main-spec roll that ever lost.",
                 CharRef(soClose.Id, soClose.Name, soClose.Cls), soClose.Amount.ToString(),
                 new[] { TextSeg("rolled it on "), ItemRef(soClose.ItemId, soClose.ItemName), TextSeg(" — beaten anyway") }));
 
@@ -508,7 +539,7 @@ public static class LootStatsEndpoints
             var lo = aggs[loLeads ? riv.Hi : riv.Lo];
             int hiN = loLeads ? riv.LoWins : riv.HiWins, loN = loLeads ? riv.HiWins : riv.LoWins;
             cards.Add(Record("🥊", "Bitterest rivalry", "Two names that turn up in each other's losses again and again.",
-                "The pair who beat each other most often.",
+                "The pair who beat each other most often on main-spec.",
                 CharRef(hi), $"{hiN}–{loN}",
                 new[] { TextSeg("over "), CharRef(lo), TextSeg($", across {Plural(riv.LoWins + riv.HiWins, "contest")}") }));
         }

@@ -377,7 +377,13 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   and returned as ready-to-render cards (typed refs for names, items and plain text).
   Each card carries both a joke `blurb` and a plain `desc` line saying what the number
   actually measures. The page is a pure renderer; all the copy, thresholds, ranking and
-  formatting live in `Api/LootStatsEndpoints.cs`. A **P2 / P3 / All** toggle on the page passes `?phase=p2`
+  formatting live in `Api/LootStatsEndpoints.cs`. The **competitive** cards — win rate,
+  most rolls lost, dry spell, the 99 club, death by inches, cheekiest win, so close, and
+  the nemesis/taxman/rivalry web — count **main-spec rolls only** (an unclassified bid
+  counts as main-spec); an off-spec bid plays a lower-priority game where its number isn't
+  comparable, so folding it in was misleading. The dice-luck cards (100s, 1s, average,
+  spread), the greed/attendance cards and the win counts still read every roll, and the
+  off-spec/robbery cards stay about off-spec by design. A **P2 / P3 / All** toggle on the page passes `?phase=p2`
   or `?phase=p3` (anything else, including the default, is the whole history), narrowing
   the hall of shame to one of the two raids the guild runs at once. An award records no
   phase, and item level can't recover it — SSC/TK's final bosses drop ilvl-141 gear that

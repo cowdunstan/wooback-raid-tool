@@ -83,9 +83,9 @@ const leaderId = need('RH_LEADER_ID');
 const templateId = process.env.RH_TEMPLATE_ID || '';
 
 // Target next week's weekend, not this one: the run posts the Saturday and
-// Sunday of the calendar week *after* it fires. The cron runs Saturday morning,
-// so this gives a full week of signup lead time rather than creating that same
-// day's raid. Adding 7 to the coming Saturday keeps that true from any run day.
+// Sunday of the calendar week *after* it fires. The cron runs Friday morning,
+// so this gives a full week of signup lead time rather than posting the imminent
+// weekend. Adding 7 to the coming Saturday keeps that true from any run day.
 const today = new Date().getUTCDay(); // 0=Sun … 6=Sat
 const satOffset = ((6 - today + 7) % 7) + 7;
 const sunOffset = satOffset + 1;

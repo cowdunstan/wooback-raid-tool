@@ -73,7 +73,13 @@ public static class PollEndpoints
         // Officer-only drill-down: the raw per-voter rows so officers can see who voted for
         // what. This is the one door that lets individual answers leave the server, so it is
         // gated by RequireOfficer — the client hides the affordance, but the enforcement is
-        // here. Rows are ordered by name so the "who picked this" lists read stably.
+        // here.
+        //
+        // A voter is identified by their WoW main, not their Discord name: officers plan
+        // around characters, so we resolve each response's Discord uid to that member's main
+        // character (name + id, so the page can link to the sheet). The stored Discord name
+        // rides along as a fallback for voters with no linked main. Rows are ordered by the
+        // name that will show — main where known — so the "who picked this" lists read stably.
         group.MapGet("/detail", async (HttpContext ctx, SessionTokenService tokens) =>
         {
             var (_, error) = ctx.RequireOfficer(tokens);
@@ -82,15 +88,31 @@ public static class PollEndpoints
             if (db is null) return DbUnavailable();
 
             var rows = await db.PollResponses.AsNoTracking().ToListAsync();
+
+            // Discord uid → that member's main character. One main per member (DemoteOthermains
+            // keeps it so); ignored characters can't be the shown main, so skip them.
+            var mainByUid = await db.Characters.AsNoTracking()
+                .Where(c => c.IsMain && !c.Ignored && c.MemberId != null)
+                .Join(db.Members.AsNoTracking(),
+                    c => c.MemberId, m => m.Id,
+                    (c, m) => new { m.DiscordUserId, c.Id, c.Name })
+                .ToDictionaryAsync(x => x.DiscordUserId, x => new { x.Id, x.Name }, StringComparer.Ordinal);
+
             var voters = rows
-                .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(r => new
+                .Select(r =>
                 {
-                    name = r.Name,
-                    answers = Deserialize(r.Answers),
-                    comment = string.IsNullOrWhiteSpace(r.Comment) ? null : r.Comment.Trim(),
-                    updatedAt = r.UpdatedAt
+                    mainByUid.TryGetValue(r.Uid, out var main);
+                    return new
+                    {
+                        name = r.Name,                 // Discord name — fallback only
+                        mainName = main?.Name,         // null when no linked main
+                        mainId = main?.Id,             // for the character-sheet link
+                        answers = Deserialize(r.Answers),
+                        comment = string.IsNullOrWhiteSpace(r.Comment) ? null : r.Comment.Trim(),
+                        updatedAt = r.UpdatedAt
+                    };
                 })
+                .OrderBy(v => v.mainName ?? v.name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             return Results.Json(new { total = voters.Count, voters });

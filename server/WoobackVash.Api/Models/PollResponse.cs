@@ -4,8 +4,8 @@ namespace WoobackVash.Api.Models;
 /// One member's answers to the "WoW Forever" interest poll (<c>forever.html</c>). One row
 /// per Discord user — the poll is a snapshot of intent, not a log, so a re-vote upserts on
 /// <see cref="Uid"/> rather than piling up. Any signed-in member may vote and everyone sees
-/// the aggregate tallies; the raw rows never leave the server (PollEndpoints counts them in
-/// memory), so who voted what stays private.
+/// the aggregate tallies; the raw rows only leave the server through the officer-gated
+/// <c>GET /api/poll/detail</c>, so who voted what stays private from the rank and file.
 ///
 /// <see cref="Answers"/> is stored as jsonb (see AppDbContext config) the same way
 /// <see cref="BoardLayout.State"/> and <see cref="CharacterGearSnapshot.Items"/> are — a raw

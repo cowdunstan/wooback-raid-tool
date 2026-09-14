@@ -83,6 +83,48 @@
     white-space:pre-wrap;
   }
   .comments .none{font-size:12.5px;color:var(--text-dim);font-style:italic;}
+
+  /* Officer-only drill-down. Hidden for the rank and file by menu.js's [data-officer-only]
+     pass, and the /api/poll/detail fetch is officer-gated regardless. */
+  .officer-detail{margin-top:32px;padding-top:22px;border-top:1px solid var(--panel-line);}
+  .officer-detail h2{
+    font-family:'Cinzel',serif;font-size:15px;font-weight:700;margin:0 0 6px;
+    color:var(--heading);letter-spacing:.3px;display:flex;align-items:center;gap:10px;
+  }
+  .officer-tag{
+    font-family:'Inter',sans-serif;font-size:10px;font-weight:700;letter-spacing:.6px;
+    text-transform:uppercase;color:var(--amber);border:1px solid var(--amber);
+    border-radius:999px;padding:2px 8px;
+  }
+  .officer-note{font-size:12.5px;color:var(--text-dim);margin:0 0 16px;}
+  .officer-note b{color:var(--accent);}
+  .detail-q{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
+    padding:14px 16px;margin-bottom:12px;
+  }
+  .detail-q h3{
+    font-family:'Cinzel',serif;font-size:13.5px;font-weight:700;margin:0 0 10px;
+    color:var(--heading);letter-spacing:.2px;
+  }
+  .detail-opt{padding:7px 0;border-top:1px solid var(--panel-line);}
+  .detail-opt:first-of-type{border-top:none;}
+  .detail-opt.empty{opacity:.5;}
+  .detail-opt-head{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;}
+  .detail-opt-label{font-size:12.5px;color:var(--heading);font-weight:600;}
+  .detail-opt-count{font-size:11px;color:var(--text-dim);font-variant-numeric:tabular-nums;}
+  .detail-names{font-size:12px;color:var(--text);line-height:1.5;}
+  .detail-names .none{color:var(--text-dim);font-style:italic;}
+  .detail-comments{margin-top:6px;}
+  .detail-comments h3{
+    font-family:'Cinzel',serif;font-size:13.5px;font-weight:700;margin:0 0 10px;
+    color:var(--heading);letter-spacing:.2px;
+  }
+  .detail-comment{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:8px;
+    padding:9px 12px;margin-bottom:7px;font-size:12.5px;color:var(--text);line-height:1.45;
+  }
+  .detail-comment .who{color:var(--accent);font-weight:600;}
+  .detail-comment .said{white-space:pre-wrap;}
 </style>
 
 <div class="app">
@@ -126,6 +168,12 @@
       <h2>What people said</h2>
       <ul id="comments"></ul>
     </div>
+
+    <section id="officerDetail" class="officer-detail" data-officer-only hidden>
+      <h2>Who voted for what <span class="officer-tag">officers only</span></h2>
+      <p class="officer-note">The rest of the guild sees only the tallies above. This drills into who picked each option — <b id="detailCount"></b>.</p>
+      <div id="detailBody"></div>
+    </section>
 
     <footer>wooback guild tools — a bit of forward planning.</footer>
   </div>
@@ -271,6 +319,53 @@ function collect(){
   return { answers, comment: document.getElementById('comment').value.trim() || null };
 }
 
+// Officer-only drill-down. The section is hidden for the rank and file (menu.js's
+// [data-officer-only] pass), and /api/poll/detail is officer-gated — so a home-tier member
+// who forced the fetch would still get a 403 and see nothing. Labels reuse the one QUESTIONS
+// array so this view never drifts from the public form.
+function detailRender(data){
+  const voters = data.voters || [];
+  document.getElementById('detailCount').textContent =
+    (data.total || 0) + ((data.total === 1) ? ' response' : ' responses');
+
+  const questionsHtml = QUESTIONS.map(function(q){
+    const opts = q.options.map(function(o){
+      const optId = o[0], label = o[1];
+      const names = voters
+        .filter(function(v){ return (v.answers && v.answers[q.id] || []).indexOf(optId) !== -1; })
+        .map(function(v){ return v.name; });
+      return '<div class="detail-opt' + (names.length ? '' : ' empty') + '">' +
+        '<div class="detail-opt-head">' +
+          '<span class="detail-opt-label">' + esc(label) + '</span>' +
+          '<span class="detail-opt-count">' + (names.length ? names.length + (names.length === 1 ? ' vote' : ' votes') : 'no votes') + '</span>' +
+        '</div>' +
+        '<div class="detail-names">' + (names.length ? names.map(esc).join(', ') : '<span class="none">—</span>') + '</div>' +
+      '</div>';
+    }).join('');
+    return '<div class="detail-q"><h3>' + esc(q.q) + '</h3>' + opts + '</div>';
+  }).join('');
+
+  const withComments = voters.filter(function(v){ return v.comment; });
+  const commentsHtml = withComments.length
+    ? '<div class="detail-comments"><h3>Comments</h3>' + withComments.map(function(v){
+        return '<div class="detail-comment"><span class="who">' + esc(v.name) + '</span> — ' +
+          '<span class="said">' + esc(v.comment) + '</span></div>';
+      }).join('') + '</div>'
+    : '';
+
+  document.getElementById('detailBody').innerHTML = questionsHtml + commentsHtml;
+  document.getElementById('officerDetail').hidden = false;
+}
+
+async function loadDetail(){
+  if(!isOfficer()) return;
+  try{
+    const res = await api('/api/poll/detail');
+    if(!res.ok) return;              // 403 for non-officers, or a transient error — stay hidden.
+    detailRender(await res.json());
+  }catch(err){ /* leave the officer panel hidden on any failure */ }
+}
+
 async function load(){
   try{
     const res = await api('/api/poll');
@@ -279,6 +374,7 @@ async function load(){
   }catch(err){
     if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
   }
+  loadDetail();
 }
 
 document.getElementById('pollForm').addEventListener('submit', async function(e){

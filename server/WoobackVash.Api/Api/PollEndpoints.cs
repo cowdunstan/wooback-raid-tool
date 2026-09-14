@@ -14,8 +14,10 @@ namespace WoobackVash.Api.Api;
 /// The backend is deliberately generic: it never hard-codes the questions. A response is a
 /// <c>{ questionId: [optionId, …] }</c> map (see <see cref="PollResponse"/>); the GET tallies
 /// whatever keys it finds, so adding or changing a question is a frontend-only edit. Tallies
-/// are computed here in memory and only counts (plus the free-text comments) are returned —
-/// the individual rows never leave the server, so who voted what stays private.
+/// are computed here in memory and only counts (plus anonymous free-text comments) are returned
+/// from <c>GET /api/poll</c> — the individual rows never leave the server, so who voted what
+/// stays private from the rank and file. Officers alone may drill in: <c>GET /api/poll/detail</c>
+/// is officer-gated and returns the per-voter rows so they can see who picked what.
 /// </summary>
 public static class PollEndpoints
 {
@@ -66,6 +68,32 @@ public static class PollEndpoints
                 : new { answers = Deserialize(mineRow.Answers), comment = mineRow.Comment };
 
             return Results.Json(new { total = rows.Count, mine, results, comments });
+        });
+
+        // Officer-only drill-down: the raw per-voter rows so officers can see who voted for
+        // what. This is the one door that lets individual answers leave the server, so it is
+        // gated by RequireOfficer — the client hides the affordance, but the enforcement is
+        // here. Rows are ordered by name so the "who picked this" lists read stably.
+        group.MapGet("/detail", async (HttpContext ctx, SessionTokenService tokens) =>
+        {
+            var (_, error) = ctx.RequireOfficer(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            var rows = await db.PollResponses.AsNoTracking().ToListAsync();
+            var voters = rows
+                .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(r => new
+                {
+                    name = r.Name,
+                    answers = Deserialize(r.Answers),
+                    comment = string.IsNullOrWhiteSpace(r.Comment) ? null : r.Comment.Trim(),
+                    updatedAt = r.UpdatedAt
+                })
+                .ToList();
+
+            return Results.Json(new { total = voters.Count, voters });
         });
 
         // Cast or change the caller's own vote. Upserts on the unique Uid index.

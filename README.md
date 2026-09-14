@@ -115,11 +115,14 @@ board, identity links, loot, and attendance.
   either faction), preferred class, what you're looking forward to, server type,
   commitment, and whether you'd stick with the guild, plus a free-text comment. One
   response per Discord user, editable — a re-vote upserts, it doesn't pile up. Everyone
-  who can open the page sees the **running tallies** (a bar per option) and the comments;
-  the raw per-person answers never leave the server, so who voted what stays private. The
-  question set lives entirely in `forever.html`'s `QUESTIONS` array — the backend
-  (`/api/poll`) is generic and tallies whatever it's sent, so tweaking a question is a
-  frontend-only edit.
+  who can open the page sees the **running tallies** (a bar per option) and the anonymous
+  comments; the raw per-person answers stay private from the rank and file. **Officers**
+  get an extra drill-down section on the same page — *Who voted for what* — listing, per
+  option, the names who picked it, plus each comment attributed to its author. The section
+  is hidden for non-officers and its data comes from an officer-gated route, so it's the
+  API that keeps it private, not the page. The question set lives entirely in
+  `forever.html`'s `QUESTIONS` array — the backend (`/api/poll`) is generic and tallies
+  whatever it's sent, so tweaking a question is a frontend-only edit.
 - **`sheet.html`** — a read-only `<iframe>` of the guild's loot / BIS sheets
   (`SHEET_DOCS`, one per phase with a button to switch between them), open to any
   signed-in tier. Reads the live sheets via their "anyone with the link" share
@@ -447,11 +450,14 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   tier token) doesn't carry the mute across.
 - **WoW Forever poll** (any signed-in session) — `GET /api/poll` returns the caller's own
   response (to pre-fill the form), the guild-wide tallies (`results[questionId][optionId]`
-  = count), the total respondent count, and the free-text comments; `POST /api/poll`
+  = count), the total respondent count, and the anonymous free-text comments; `POST /api/poll`
   `{ answers, comment }` upserts the caller's response on their Discord uid (one per user).
   Tallies are computed server-side in memory so individual rows never reach the browser.
   The endpoint is question-agnostic — the answer map (`{ questionId: [optionId, …] }`) is
   stored as jsonb and `forever.html` owns the question set; see it above.
+  `GET /api/poll/detail` (**officer only**) returns the raw per-voter rows
+  (`voters[] = { name, answers, comment, updatedAt }`, ordered by name) for the officer
+  drill-down; this is the only route that lets individual answers leave the server.
 - **Health** — `/healthz` (liveness), `/readyz` (DB reachability + error detail).
 
 Non-secret config (Discord client id, guild id, role ids, WCL guild identity)

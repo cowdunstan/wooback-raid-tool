@@ -114,6 +114,11 @@
   .detail-opt-count{font-size:11px;color:var(--text-dim);font-variant-numeric:tabular-nums;}
   .detail-names{font-size:12px;color:var(--text);line-height:1.5;}
   .detail-names .none{color:var(--text-dim);font-style:italic;}
+  /* Voters read as their WoW main, linked to the sheet; a mainless voter falls back to
+     their (dimmed) Discord name. */
+  .officer-detail .chr-link{color:var(--accent);text-decoration:none;font-weight:600;}
+  .officer-detail .chr-link:hover{text-decoration:underline;}
+  .detail-noname{color:var(--text-dim);font-style:italic;}
   .detail-comments{margin-top:6px;}
   .detail-comments h3{
     font-family:'Cinzel',serif;font-size:13.5px;font-weight:700;margin:0 0 10px;
@@ -323,6 +328,14 @@ function collect(){
 // [data-officer-only] pass), and /api/poll/detail is officer-gated — so a home-tier member
 // who forced the fetch would still get a 403 and see nothing. Labels reuse the one QUESTIONS
 // array so this view never drifts from the public form.
+// A voter shows as their WoW main, linked to the character sheet (the site's chr-link
+// convention). Voters with no linked main fall back to their plain Discord name.
+function voterLabel(v){
+  if(v.mainName && v.mainId)
+    return '<a class="chr-link" href="character.html?id=' + esc(v.mainId) + '">' + esc(v.mainName) + '</a>';
+  return '<span class="detail-noname">' + esc(v.name) + '</span>';
+}
+
 function detailRender(data){
   const voters = data.voters || [];
   document.getElementById('detailCount').textContent =
@@ -331,15 +344,14 @@ function detailRender(data){
   const questionsHtml = QUESTIONS.map(function(q){
     const opts = q.options.map(function(o){
       const optId = o[0], label = o[1];
-      const names = voters
-        .filter(function(v){ return (v.answers && v.answers[q.id] || []).indexOf(optId) !== -1; })
-        .map(function(v){ return v.name; });
-      return '<div class="detail-opt' + (names.length ? '' : ' empty') + '">' +
+      const picks = voters
+        .filter(function(v){ return (v.answers && v.answers[q.id] || []).indexOf(optId) !== -1; });
+      return '<div class="detail-opt' + (picks.length ? '' : ' empty') + '">' +
         '<div class="detail-opt-head">' +
           '<span class="detail-opt-label">' + esc(label) + '</span>' +
-          '<span class="detail-opt-count">' + (names.length ? names.length + (names.length === 1 ? ' vote' : ' votes') : 'no votes') + '</span>' +
+          '<span class="detail-opt-count">' + (picks.length ? picks.length + (picks.length === 1 ? ' vote' : ' votes') : 'no votes') + '</span>' +
         '</div>' +
-        '<div class="detail-names">' + (names.length ? names.map(esc).join(', ') : '<span class="none">—</span>') + '</div>' +
+        '<div class="detail-names">' + (picks.length ? picks.map(voterLabel).join(', ') : '<span class="none">—</span>') + '</div>' +
       '</div>';
     }).join('');
     return '<div class="detail-q"><h3>' + esc(q.q) + '</h3>' + opts + '</div>';
@@ -348,7 +360,7 @@ function detailRender(data){
   const withComments = voters.filter(function(v){ return v.comment; });
   const commentsHtml = withComments.length
     ? '<div class="detail-comments"><h3>Comments</h3>' + withComments.map(function(v){
-        return '<div class="detail-comment"><span class="who">' + esc(v.name) + '</span> — ' +
+        return '<div class="detail-comment"><span class="who">' + voterLabel(v) + '</span> — ' +
           '<span class="said">' + esc(v.comment) + '</span></div>';
       }).join('') + '</div>'
     : '';

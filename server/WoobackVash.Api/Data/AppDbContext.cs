@@ -17,6 +17,7 @@ public class AppDbContext : DbContext
     public DbSet<CharacterGearSnapshot> GearSnapshots => Set<CharacterGearSnapshot>();
     public DbSet<RosterImportCandidate> RosterImportCandidates => Set<RosterImportCandidate>();
     public DbSet<LootPrioExclusion> LootPrioExclusions => Set<LootPrioExclusion>();
+    public DbSet<PollResponse> PollResponses => Set<PollResponse>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -113,6 +114,14 @@ public class AppDbContext : DbContext
              .WithMany()
              .HasForeignKey(x => x.CharacterId)
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PollResponse>(e =>
+        {
+            // One response per Discord user — POST upserts on it.
+            e.HasIndex(x => x.Uid).IsUnique();
+            // Same treatment as BoardLayout.State — the answers map is jsonb, not text.
+            e.Property(x => x.Answers).HasColumnType("jsonb");
         });
 
         b.Entity<CharacterGearSnapshot>(e =>

@@ -490,7 +490,8 @@ const NAV_LINKS = [
   { href:'loot-stats.html',  label:'Loot stats' },
   { href:'my-priority.html', label:'My raid loot priority' },
   { href:'members.html',     label:'Roster & alts' },
-  { href:'board.html',       label:'Vash assignments',     officer:true }
+  { href:'board.html',       label:'Vash assignments',     officer:true },
+  { href:'forever.html',     label:'WoW Forever poll' }
 ];
 
 function renderNav(drawer){

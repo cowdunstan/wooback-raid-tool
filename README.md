@@ -109,6 +109,17 @@ board, identity links, loot, and attendance.
   and every roll on it, plus its icon, hover tooltip and a Wowhead link. Every item
   name on the site links here — the loot log, loot history, loot stats, and each
   item, gem and "also worn" entry on a character sheet.
+- **`forever.html`** — the **WoW Forever poll**, open to any signed-in tier: a short
+  interest survey ahead of a possible move to WoW Forever — whether you're playing,
+  faction, role, race (the vanilla eight plus **Skyborne**, the new race, playable by
+  either faction), preferred class, what you're looking forward to, server type,
+  commitment, and whether you'd stick with the guild, plus a free-text comment. One
+  response per Discord user, editable — a re-vote upserts, it doesn't pile up. Everyone
+  who can open the page sees the **running tallies** (a bar per option) and the comments;
+  the raw per-person answers never leave the server, so who voted what stays private. The
+  question set lives entirely in `forever.html`'s `QUESTIONS` array — the backend
+  (`/api/poll`) is generic and tallies whatever it's sent, so tweaking a question is a
+  frontend-only edit.
 - **`sheet.html`** — a read-only `<iframe>` of the guild's loot / BIS sheets
   (`SHEET_DOCS`, one per phase with a button to switch between them), open to any
   signed-in tier. Reads the live sheets via their "anyone with the link" share
@@ -434,6 +445,13 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   key). Keyed by the sheet's item name, lowercased — the identity the sheet and page use
   throughout — and scoped by raid so an item name shared across two raids of a phase (a
   tier token) doesn't carry the mute across.
+- **WoW Forever poll** (any signed-in session) — `GET /api/poll` returns the caller's own
+  response (to pre-fill the form), the guild-wide tallies (`results[questionId][optionId]`
+  = count), the total respondent count, and the free-text comments; `POST /api/poll`
+  `{ answers, comment }` upserts the caller's response on their Discord uid (one per user).
+  Tallies are computed server-side in memory so individual rows never reach the browser.
+  The endpoint is question-agnostic — the answer map (`{ questionId: [optionId, …] }`) is
+  stored as jsonb and `forever.html` owns the question set; see it above.
 - **Health** — `/healthz` (liveness), `/readyz` (DB reachability + error detail).
 
 Non-secret config (Discord client id, guild id, role ids, WCL guild identity)

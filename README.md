@@ -118,7 +118,9 @@ board, identity links, loot, and attendance.
   who can open the page sees the **running tallies** (a bar per option) and the anonymous
   comments; the raw per-person answers stay private from the rank and file. **Officers**
   get an extra drill-down section on the same page — *Who voted for what* — listing, per
-  option, the names who picked it, plus each comment attributed to its author. The section
+  option, who picked it, plus each comment attributed to its author. Voters show as their
+  WoW **main** (resolved from their Discord id and linked to the character sheet), not their
+  Discord name, falling back to the Discord name only where no main is linked. The section
   is hidden for non-officers and its data comes from an officer-gated route, so it's the
   API that keeps it private, not the page. The question set lives entirely in
   `forever.html`'s `QUESTIONS` array — the backend (`/api/poll`) is generic and tallies
@@ -456,8 +458,10 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   The endpoint is question-agnostic — the answer map (`{ questionId: [optionId, …] }`) is
   stored as jsonb and `forever.html` owns the question set; see it above.
   `GET /api/poll/detail` (**officer only**) returns the raw per-voter rows
-  (`voters[] = { name, answers, comment, updatedAt }`, ordered by name) for the officer
-  drill-down; this is the only route that lets individual answers leave the server.
+  (`voters[] = { name, mainName, mainId, answers, comment, updatedAt }`, ordered by the
+  shown name) for the officer drill-down — each voter's Discord uid resolved to their
+  linked WoW main (`mainName`/`mainId`), with `name` (Discord) kept as a fallback. This is
+  the only route that lets individual answers leave the server.
 - **Health** — `/healthz` (liveness), `/readyz` (DB reachability + error detail).
 
 Non-secret config (Discord client id, guild id, role ids, WCL guild identity)

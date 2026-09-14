@@ -153,6 +153,9 @@ app.MapItemEndpoints();
 // Per-item roll mutes for the loot-prio page.
 app.MapLootPrioEndpoints();
 
+// The "WoW Forever" interest poll (forever.html).
+app.MapPollEndpoints();
+
 app.Run();
 
 // Converts postgres://user:pass@host:port/db[?sslmode=...] into an Npgsql keyword

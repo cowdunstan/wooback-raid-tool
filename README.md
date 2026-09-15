@@ -61,7 +61,8 @@ Everything below `index.html` and `apply.html` lives under **`legacy/`** and req
 session.
 
 - **`index.html`** *(root, public)* — landing page. "Sign in with Discord" for a
-  stranger; for someone already holding a session the button is swapped for **Open
+  stranger, with a note under it that access needs membership of the wooback Discord
+  server; for someone already holding a session the button is swapped for **Open
   guild tools →** into `legacy/home.html` rather than redirecting, so the Apply link
   stays reachable for a member pointing a recruit at it.
 - **`apply.html`** *(root, public)* — the **WoW Forever application form**. The one page

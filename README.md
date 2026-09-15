@@ -22,8 +22,10 @@ under **`/legacy/`**.
 
 ```
 /index.html          public landing — sign in, or (already signed in) a way through to the tools
-/apply.html          public — recruitment, no session, talks to no API
+/apply.html          public — WoW Forever application form, no session, one anonymous POST
+/applications.html   officers — review of those applications (WoW Forever, so not in legacy/)
 /styles.css /menu.js /app.js /groups.js /loot-prio.js /my-priority.js /loot-sheet.js
+/apply-questions.js  the application's question list, shared by the two pages above
 /<page>.html × 16    redirect stubs, one per moved page → legacy/<page>.html
 /legacy/<page>.html  the gated apps, listed below
 ```
@@ -62,9 +64,22 @@ session.
   stranger; for someone already holding a session the button is swapped for **Open
   guild tools →** into `legacy/home.html` rather than redirecting, so the Apply link
   stays reachable for a member pointing a recruit at it.
-- **`apply.html`** *(root, public)* — recruitment. The one page with **no gate script
-  at all** and no API call: an applicant has no Discord session and no guild role yet.
-  Placeholder until the form lands.
+- **`apply.html`** *(root, public)* — the **WoW Forever application form**. The one page
+  with **no gate script at all**: an applicant has no Discord session and no guild role
+  yet. It makes a single anonymous call, `POST /api/applications` (see the API list). The
+  questions live in **`apply-questions.js`** (`APPLY_SECTIONS`), shared with
+  `applications.html` so the form and the review can't drift. Where a question is also on
+  the members' poll (class, role, race, focus, commitment) its ids match
+  `legacy/forever.html`'s `QUESTIONS`, so an applicant lines up against the guild's own
+  answers. We're going Alliance, so there's no faction question and race is Alliance-only.
+  Starred questions are checked by the form; the server only insists on the Discord
+  username. An optional slider (`sweaty`, 1–5) counts as unanswered until it is moved.
+- **`applications.html`** *(root, officers only)* — review of those applications, newest
+  first: a summary line per applicant (class · role · commitment · timezone · sweaty), every
+  answer behind a toggle, and Delete for spam. It sits at the root rather than `legacy/`
+  because `legacy/` is the TBC tools; for the same reason it isn't in the `legacy/` nav.
+  Officers reach it from the Discord ping's link. The page's officer gate is cosmetic; the
+  routes are `RequireOfficer`.
 - **`home.html`** — the default page after sign-in: a welcome hub with a hamburger
   menu and app cards. Open to any signed-in tier.
 - **`logs.html`** — the **Warcraft Logs** app: the guild's uploaded reports
@@ -518,6 +533,22 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   shown name) for the officer drill-down — each voter's Discord uid resolved to their
   linked WoW main (`mainName`/`mainId`), with `name` (Discord) kept as a fallback. This is
   the only route that lets individual answers leave the server.
+- **Applications** — `POST /api/applications` is **anonymous**, the one write on the API
+  that takes no session (an applicant isn't in the Discord yet). Body:
+  `{ discord, choices: { questionId: [value, …] }, text: { questionId: "…" }, website }`.
+  `discord` is required (≤ 64 chars). Answers are bounded like the poll's (≤ 40 keys, ids
+  ≤ 64 chars, ≤ 4000 chars per text answer), blank text answers are dropped, and every
+  submission is a new `GuildApplication` row, since there's no identity to upsert on.
+  `website` is a **honeypot**: if it's filled in, the reply is `200 {ok:true}` and nothing is
+  stored. Standing in for auth is a **rate limit** of 3 submissions per IP per hour (the
+  `Fly-Client-IP` header behind Fly, else the socket address) → `429`. After saving, the API
+  pings the officers' Discord channel through `Recruitment:DiscordWebhookUrl`. That's a
+  short embed (handle, class, role, commitment, sweaty, raid nights, timezone, and a link to
+  `applications.html`), sent with `allowed_mentions.parse = []` so applicant text can't ping
+  anyone. It's fire-and-forget: a webhook failure is logged and never fails the submission,
+  and with no URL configured it's skipped. `GET /api/applications` (**officer only**)
+  returns `{ total, applications[] = { id, discord, choices, text, submittedAt } }`, newest
+  first. `DELETE /api/applications/{id}` (**officer only**) removes one.
 - **Health** — `/healthz` (liveness), `/readyz` (DB reachability + error detail).
 
 Non-secret config (Discord client id, guild id, role ids, WCL guild identity)
@@ -578,8 +609,14 @@ fly secrets set -a wooback-vash-api `
   "WarcraftLogs__ClientId=<wcl v2 client id>" `
   "WarcraftLogs__ClientSecret=<wcl v2 client secret>" `
   "Blizzard__ClientId=<battle.net client id>" `
-  "Blizzard__ClientSecret=<battle.net client secret>"
+  "Blizzard__ClientSecret=<battle.net client secret>" `
+  "Recruitment__DiscordWebhookUrl=<officer channel webhook URL>"
 ```
+`Recruitment__DiscordWebhookUrl` is the officer-channel webhook pinged for each new
+application (channel settings → **Integrations → Webhooks → New Webhook → Copy URL**).
+It's a secret, since anyone holding it can post to that channel. Leave it unset and
+applications are still stored; only the ping is skipped. Locally it's the
+`Recruitment:DiscordWebhookUrl` user-secret; a throwaway test channel is the way to try it.
 `Discord__BotToken` powers **Import from Discord** on the roster page. Create a bot
 under the same Discord application (**Bot → Reset Token**), enable the **Server
 Members Intent** (Bot → Privileged Gateway Intents), and add the bot to the guild.

@@ -317,6 +317,91 @@
   .landing-apply a{color:var(--accent);font-weight:600;}
   .landing-note{margin-top:34px;font-size:11px;color:var(--text-dim);}
 
+  /* WoW Forever application form (apply.html). Prefixed apply- so nothing collides with
+     the legacy pages, which also load this file. */
+  .wrap.apply-wrap{max-width:680px;margin:4vh auto 0;}
+  .apply-wrap [hidden]{display:none !important;}
+  .apply-head{text-align:center;margin-bottom:26px;}
+  .apply-head h1{font-size:32px;margin-bottom:8px;}
+  .apply-head .subtitle{margin:0 auto;max-width:520px;line-height:1.5;}
+  .apply-section{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
+    padding:18px 20px 6px;margin-bottom:16px;
+  }
+  .apply-section h2{
+    font-family:'Cinzel',serif;font-size:16px;font-weight:700;margin:0 0 4px;
+    color:var(--heading);letter-spacing:.3px;
+  }
+  .apply-blurb{font-size:12.5px;color:var(--text-dim);margin:0 0 4px;}
+  .apply-q{border:0;margin:0;padding:12px 0 14px;min-width:0;border-top:1px solid var(--panel-line);}
+  .apply-q:first-of-type{border-top:none;}
+  .apply-label{display:block;padding:0;font-size:13.5px;font-weight:600;color:var(--heading);margin-bottom:4px;}
+  .apply-req{color:var(--accent);margin-left:3px;}
+  .apply-hint{font-size:12px;color:var(--text-dim);margin:0 0 6px;}
+  .apply-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:6px;}
+  .apply-opt{
+    display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--panel-line);
+    border-radius:7px;background:var(--well);cursor:pointer;font-size:13px;color:var(--text);
+  }
+  .apply-opt:hover{border-color:var(--accent-dim);}
+  .apply-opt:has(input:checked){border-color:var(--accent);background:rgba(var(--accent-rgb),.12);color:var(--heading);}
+  .apply-opt input{accent-color:var(--accent);width:16px;height:16px;margin:0;flex:none;cursor:pointer;}
+  .apply-input{
+    width:100%;background:var(--well);border:1px solid var(--panel-line);color:var(--text);
+    border-radius:7px;padding:9px 11px;font-family:'Inter',sans-serif;font-size:13.5px;margin-top:4px;
+  }
+  .apply-input:focus{outline:none;border-color:var(--accent);}
+  textarea.apply-input{min-height:96px;resize:vertical;line-height:1.45;}
+  select.apply-input{max-width:260px;}
+  .apply-range{margin-top:8px;}
+  .apply-range input{width:100%;accent-color:var(--accent);margin:0;}
+  /* Untouched, the slider is dimmed and sends nothing — see apply.html. */
+  .apply-range.is-unset input{opacity:.45;}
+  .apply-range-read{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:13px;color:var(--heading);font-weight:600;min-height:22px;}
+  .apply-range.is-unset .apply-range-read{color:var(--text-dim);font-weight:400;font-style:italic;}
+  .apply-range-clear{background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;padding:0;font-style:normal;}
+  .apply-range-ends{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:var(--text-dim);margin-top:2px;}
+  .apply-q.invalid .apply-label{color:var(--amber);}
+  .apply-q.invalid .apply-input,.apply-q.invalid .apply-opt{border-color:var(--amber);}
+  .apply-err{font-size:12px;color:var(--amber);margin:6px 0 0;}
+  /* The honeypot: off-screen rather than display:none, which some bots skip. */
+  .apply-hp{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden;}
+  .apply-actions{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin:8px 0 10px;}
+  .apply-status{font-size:12.5px;color:var(--text-dim);margin:0;}
+  .apply-status.err{color:var(--amber);}
+  .apply-thanks{
+    text-align:center;background:var(--panel);border:1px solid var(--panel-line);
+    border-radius:10px;padding:32px 22px;
+  }
+  .apply-thanks h2{font-family:'Cinzel',serif;color:var(--heading);margin:0 0 8px;font-size:20px;}
+  .apply-thanks p{color:var(--text-dim);font-size:13.5px;margin:0;line-height:1.5;}
+  .apply-wrap .landing-apply{text-align:center;}
+
+  /* Officer review of those applications (applications.html). */
+  .wrap.review-wrap{max-width:860px;}
+  .review-wrap [hidden]{display:none !important;}
+  .review-card{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
+    padding:14px 18px;margin-bottom:12px;
+  }
+  .review-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+  .review-handle{font-family:'Cinzel',serif;font-weight:700;font-size:16px;color:var(--heading);overflow-wrap:anywhere;}
+  .review-char{font-size:12.5px;color:var(--accent);margin-left:6px;}
+  .review-when{font-size:11.5px;color:var(--text-dim);margin-top:2px;}
+  .review-summary{font-size:13px;color:var(--text);margin:10px 0 8px;}
+  .review-details summary{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:600;}
+  .review-section h3{font-family:'Cinzel',serif;font-size:13.5px;color:var(--heading);margin:14px 0 6px;}
+  .review-section dl{margin:0;}
+  .review-row{
+    display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);gap:12px;
+    padding:6px 0;border-top:1px solid var(--panel-line);font-size:12.5px;
+  }
+  .review-row dt{color:var(--text-dim);}
+  .review-row dd{margin:0;color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;}
+  .review-row dd a{color:var(--accent);}
+  .review-none{color:var(--text-dim);}
+  @media (max-width:560px){ .review-row{grid-template-columns:1fr;gap:2px;} }
+
   /* Warcraft Logs list */
   .logs-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px;}
   .logs-toolbar .btn-ghost{text-decoration:none;}

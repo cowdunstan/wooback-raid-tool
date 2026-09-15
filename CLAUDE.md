@@ -92,7 +92,7 @@ change as cosmetic (and say so).
   the character sheet. They don't drift with a sheet edit (a raid's drop table is fixed),
   but **regenerate them from the sheets when the guild moves to a new tier**, the same
   time `RAID_TABS`/`SHEET_DOCS` change.
-- The shared question ids in `apply-questions.js` (class, role, race, focus, commitment)
+- The shared question ids in `apply-questions.js` (class, role, focus, commitment)
   ↔ `QUESTIONS` in `legacy/forever.html`. They match on purpose, so an applicant's answers
   line up with the members' poll; rename an id or option in one, rename it in both.
 - `WOWHEAD_DOMAIN` in `menu.js` and `LEVEL_CAP` in `groups.js` both track the current

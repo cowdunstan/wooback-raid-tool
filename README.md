@@ -75,6 +75,9 @@ session.
   from and, separately, which timezone they'd prefer to raid in (`raidTimezone`).
   Starred questions are checked by the form; the server only insists on the Discord
   username. An optional slider (`sweaty`, 1–5) counts as unanswered until it is moved.
+  Once the application is in, the thank-you panel hands the applicant the guild's Discord
+  invite (**discord.gg/wooback**) as a button, so they can join while an officer gets to
+  their application rather than waiting to be found.
 - **`applications.html`** *(root, officers only)* — review of those applications, newest
   first: a summary line per applicant (class · role · commitment · timezone · sweaty), every
   answer behind a toggle, and Delete for spam. It sits at the root rather than `legacy/`

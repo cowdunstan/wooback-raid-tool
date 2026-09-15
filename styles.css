@@ -315,7 +315,7 @@
   /* The public way in: no session needed, so it sits apart from the sign-in button. */
   .landing-apply{margin-top:26px;font-size:13.5px;color:var(--text-dim);}
   .landing-apply a{color:var(--accent);font-weight:600;}
-  .landing-note{margin-top:34px;font-size:11px;color:var(--text-dim);}
+  .landing-signin-note{margin:12px auto 0;max-width:400px;font-size:12px;color:var(--text-dim);}
 
   /* WoW Forever application form (apply.html). Prefixed apply- so nothing collides with
      the legacy pages, which also load this file. */

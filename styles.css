@@ -375,6 +375,14 @@
   }
   .apply-thanks h2{font-family:'Cinzel',serif;color:var(--heading);margin:0 0 8px;font-size:20px;}
   .apply-thanks p{color:var(--text-dim);font-size:13.5px;margin:0;line-height:1.5;}
+  .apply-thanks .apply-thanks-invite{margin:18px 0 10px;}
+  .apply-invite-btn{
+    display:inline-block;
+    background:linear-gradient(180deg,var(--accent-bright),var(--accent-deep));
+    color:var(--on-accent);border-radius:7px;padding:10px 18px;text-decoration:none;
+    font-weight:700;font-size:13px;letter-spacing:.3px;
+  }
+  .apply-invite-btn:hover{filter:brightness(1.08);}
   .apply-wrap .landing-apply{text-align:center;}
 
   /* Officer review of those applications (applications.html). */

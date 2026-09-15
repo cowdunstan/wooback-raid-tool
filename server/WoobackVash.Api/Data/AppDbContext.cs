@@ -18,9 +18,19 @@ public class AppDbContext : DbContext
     public DbSet<RosterImportCandidate> RosterImportCandidates => Set<RosterImportCandidate>();
     public DbSet<LootPrioExclusion> LootPrioExclusions => Set<LootPrioExclusion>();
     public DbSet<PollResponse> PollResponses => Set<PollResponse>();
+    public DbSet<GuildApplication> GuildApplications => Set<GuildApplication>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<GuildApplication>(e =>
+        {
+            // Same treatment as PollResponse.Answers — both answer maps are jsonb, not text.
+            e.Property(x => x.Choices).HasColumnType("jsonb");
+            e.Property(x => x.Text).HasColumnType("jsonb");
+            // The review page lists newest first.
+            e.HasIndex(x => x.SubmittedAt);
+        });
+
         b.Entity<Member>(e =>
         {
             e.HasIndex(m => m.DiscordUserId).IsUnique();

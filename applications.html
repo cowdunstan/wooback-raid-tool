@@ -1,0 +1,181 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Officer gate. This page sits at the site root, not under legacy/ (that folder is the TBC
+   tools), so its bounces go to index.html. Hiding the page is only cosmetic: GET and DELETE
+   /api/applications are officer-gated on the API regardless. */
+(function(){
+  function payload(tok){
+    if(!tok) return null;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      return JSON.parse(atob(p));
+    }catch(e){ return null; }
+  }
+  var tok = null;
+  try{ tok = localStorage.getItem('vashj_session'); }catch(e){}
+  var p = payload(tok);
+  if(!p || !p.exp || p.exp <= Math.floor(Date.now()/1000)){
+    try{ localStorage.removeItem('vashj_session'); }catch(e){}
+    location.replace('index.html');
+  }else if(!p.officer){
+    location.replace('index.html');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<title>Applications — wooback</title>
+
+<div class="app">
+  <div class="wrap review-wrap">
+    <div class="authbar">
+      <span class="authbar-left">
+        <span class="eyebrow">Recruitment · officers only</span>
+      </span>
+      <span class="authbar-right">
+        <span id="authWho" class="auth-who"></span>
+        <a class="btn-ghost" href="legacy/home.html">Guild tools</a>
+        <button class="btn-ghost" onclick="logout()">Sign out</button>
+      </span>
+    </div>
+
+    <h1>Applications</h1>
+    <p class="subtitle">WoW Forever applications from the public form, newest first. The Discord usernames are whatever the applicant typed, so double-check before you message anyone.</p>
+
+    <p id="status" class="apply-status"></p>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script src="menu.js"></script>
+<script src="apply-questions.js"></script>
+<script>
+// Every label here is read off APPLY_SECTIONS (apply-questions.js), the same list that builds the
+// public form, so this view can't drift from what applicants were actually asked. API_BASE,
+// sessionToken and logout come from menu.js.
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function api(path, opts){
+  const res = await fetch(API_BASE + path, Object.assign({
+    headers: { 'Authorization': 'Bearer ' + sessionToken() }
+  }, opts));
+  if(res.status === 401){ setStatus('Session expired — signing out…', 'err'); setTimeout(logout, 1200); throw new Error('401'); }
+  return res;
+}
+
+function setStatus(msg, kind){
+  const el = document.getElementById('status');
+  el.textContent = msg || '';
+  el.className = 'apply-status' + (kind ? ' ' + kind : '');
+}
+
+const byId = id => APPLY_QUESTIONS.find(q => q.id === id);
+
+function optionLabel(q, value){
+  if(q.type === 'range') return value + '/' + q.max + (q.labels[value] ? ' · ' + q.labels[value] : '');
+  const o = (q.options || []).find(o => o[0] === value);
+  return o ? o[1] : value;       // an id the form no longer offers still shows, raw
+}
+
+function answerHtml(q, app){
+  if(APPLY_TEXT_TYPES.indexOf(q.type) !== -1){
+    const v = q.id === 'discord' ? app.discord : app.text[q.id];
+    if(!v) return null;
+    if(q.type === 'url' && /^https?:\/\//i.test(v))
+      return '<a href="' + esc(v) + '" target="_blank" rel="noopener noreferrer">' + esc(v) + '</a>';
+    return esc(v);
+  }
+  const picked = app.choices[q.id] || [];
+  return picked.length ? picked.map(v => esc(optionLabel(q, v))).join(', ') : null;
+}
+
+function when(iso){
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
+}
+
+function card(app){
+  app.choices = app.choices || {};
+  app.text = app.text || {};
+
+  // The at-a-glance line: the answers an officer sorts applicants by.
+  const summary = ['class', 'role', 'commitment', 'timezone', 'sweaty']
+    .map(function(id){
+      const q = byId(id), picked = app.choices[id];
+      if(!q || !picked || !picked.length) return null;
+      return (id === 'sweaty' ? 'Sweaty ' : '') + picked.map(v => optionLabel(q, v).split(' · ')[0]).join(', ');
+    })
+    .filter(Boolean);
+
+  const sections = APPLY_SECTIONS.map(function(s){
+    const rows = s.questions.map(function(q){
+      const a = answerHtml(q, app);
+      return '<div class="review-row"><dt>' + esc(q.q) + '</dt><dd>' +
+        (a == null ? '<span class="review-none">—</span>' : a) + '</dd></div>';
+    }).join('');
+    return '<section class="review-section"><h3>' + esc(s.title) + '</h3><dl>' + rows + '</dl></section>';
+  }).join('');
+
+  return '<article class="review-card" data-id="' + esc(app.id) + '" data-handle="' + esc(app.discord) + '">' +
+    '<header class="review-head">' +
+      '<div><span class="review-handle">' + esc(app.discord) + '</span>' +
+        (app.text.charName ? '<span class="review-char">' + esc(app.text.charName) + '</span>' : '') +
+        '<div class="review-when">' + esc(when(app.submittedAt)) + '</div></div>' +
+      '<button type="button" class="btn-ghost review-delete">Delete</button>' +
+    '</header>' +
+    (summary.length ? '<p class="review-summary">' + esc(summary.join(' · ')) + '</p>' : '') +
+    '<details class="review-details"><summary>All answers</summary>' + sections + '</details>' +
+  '</article>';
+}
+
+function countLine(){
+  const n = document.querySelectorAll('.review-card').length;
+  if(!n){
+    document.getElementById('list').innerHTML = '';
+    setStatus('No applications yet.');
+  }else{
+    setStatus(n + (n === 1 ? ' application' : ' applications') + '.');
+  }
+}
+
+async function load(){
+  setStatus('Loading…');
+  try{
+    const res = await api('/api/applications');
+    if(res.status === 403){ setStatus('Officers only.', 'err'); return; }
+    if(!res.ok){ setStatus('Could not load applications (HTTP ' + res.status + ').', 'err'); return; }
+    const data = await res.json();
+    document.getElementById('list').innerHTML = (data.applications || []).map(card).join('');
+    countLine();
+  }catch(err){
+    if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
+  }
+}
+
+document.getElementById('list').addEventListener('click', async function(e){
+  const btn = e.target.closest('.review-delete');
+  if(!btn) return;
+  const cardEl = btn.closest('.review-card');
+  if(!confirm('Delete the application from ' + cardEl.dataset.handle + "? This can't be undone.")) return;
+  btn.disabled = true;
+  try{
+    const res = await api('/api/applications/' + encodeURIComponent(cardEl.dataset.id), { method:'DELETE' });
+    if(!res.ok && res.status !== 404){
+      setStatus('Could not delete (HTTP ' + res.status + ').', 'err');
+      btn.disabled = false;
+      return;
+    }
+    cardEl.remove();
+    countLine();
+  }catch(err){
+    if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
+    btn.disabled = false;
+  }
+});
+
+load();
+</script>

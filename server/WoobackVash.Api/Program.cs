@@ -1,3 +1,5 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Npgsql;
@@ -45,6 +47,19 @@ builder.Services.AddSingleton<LootSheetService>();
 builder.Services.Configure<BlizzardOptions>(builder.Configuration.GetSection(BlizzardOptions.SectionName));
 builder.Services.AddSingleton<BlizzardService>();
 
+// The public application form: a Discord webhook ping per application, and a per-IP rate
+// limit standing in for auth on the one write that takes no session.
+builder.Services.Configure<RecruitmentOptions>(builder.Configuration.GetSection(RecruitmentOptions.SectionName));
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.OnRejected = (ctx, ct) => new ValueTask(ctx.HttpContext.Response.WriteAsJsonAsync(
+        new { error = "rate_limited", detail = "Too many applications from here. Try again in an hour." }, ct));
+    o.AddPolicy(ApplicationEndpoints.RateLimitPolicy, http => RateLimitPartition.GetFixedWindowLimiter(
+        ClientIp(http),
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 3, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
+});
+
 // CORS: only the app's own origins may call the API from a browser. Kept in sync
 // with the origins the old Worker allowed (see raidhelper-proxy.worker.js).
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
@@ -57,6 +72,8 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
 var app = builder.Build();
 
 app.UseCors();
+// After CORS, so a 429 still carries the CORS headers the form needs to read it.
+app.UseRateLimiter();
 
 // ── Static frontend (local dev only) ───────────────────────────────────────
 // In Development, serve the static site (the repo root, two levels up from this
@@ -156,7 +173,20 @@ app.MapLootPrioEndpoints();
 // The "WoW Forever" interest poll (forever.html).
 app.MapPollEndpoints();
 
+// The public WoW Forever application form (apply.html) and its officer review.
+app.MapApplicationEndpoints();
+
 app.Run();
+
+// The caller's IP, for per-IP rate limiting. Behind Fly's proxy RemoteIpAddress is the proxy,
+// so prefer the Fly-Client-IP header it sets; locally there is no proxy and no header.
+static string ClientIp(HttpContext http)
+{
+    var fly = http.Request.Headers["Fly-Client-IP"].ToString();
+    return !string.IsNullOrWhiteSpace(fly)
+        ? fly
+        : http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+}
 
 // Converts postgres://user:pass@host:port/db[?sslmode=...] into an Npgsql keyword
 // connection string. SSL handling: honor an explicit sslmode from the URL (Fly's

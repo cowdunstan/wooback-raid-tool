@@ -45,7 +45,7 @@ const APPLY_SECTIONS = [
 
   { title:'Availability', questions:[
     { id:'raidNights', type:'checkbox', req:true, q:'Which days can you usually raid?',
-      hint:'Our main raid starts at 9:30am EST. Tick every day you could usually make it.', options:[
+      hint:'Our main raids are Saturday and Sunday at 9:30am EST. Tick every day you could usually make it.', options:[
       ['mon','Mon'], ['tue','Tue'], ['wed','Wed'], ['thu','Thu'], ['fri','Fri'],
       ['sat','Sat'], ['sun','Sun'] ] },
     { id:'raidTimezone', type:'select', q:'Which timezone would you prefer to raid in?', options:[

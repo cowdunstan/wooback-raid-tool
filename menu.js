@@ -1,6 +1,12 @@
 /* ───────────────────────── Shared nav + session ─────────────────────────
-   Loaded by home.html and board.html. Provides the session helpers used to
-   authorize Raid-Helper calls and to drive the shared hamburger menu.
+   Loaded by every gated page under /legacy/ (as `../menu.js`) and by the public
+   landing page at the site root, which only wants API_BASE and validSession().
+   Provides the session helpers used to authorize Raid-Helper calls and to drive
+   the shared hamburger menu.
+
+   Every link it emits — NAV_LINKS, itemHref() — is a bare filename, so it
+   resolves against whatever directory the calling page sits in. That is what
+   lets the whole app move under /legacy/ without touching a single href.
 
    The session token is `base64url(payloadJSON).base64url(HMAC)`. Only the
    Worker verifies the signature (on every API call); here we just decode the
@@ -36,9 +42,12 @@ function isOfficer(){
   const p = sessionPayload();
   return !!(p && p.officer);
 }
+/* The tools live under /legacy/, the landing page at the site root, so signing out
+   climbs one level. A browser clamps `../` at the origin root, so this still lands
+   on the landing page if it is ever called from a page sitting at the root. */
 function logout(){
   try{ localStorage.removeItem('vashj_session'); }catch(e){}
-  location.replace('index.html');
+  location.replace('../index.html');
 }
 
 /* Sliding renewal. A token expires on a fixed window, so without this an active

@@ -1,0 +1,240 @@
+<meta charset="utf-8">
+<script>
+/* Access gate. Same as loot-history.html: the hall of shame is open to any
+   signed-in tier — it is built entirely from /api/loot/history, which is
+   session-gated; this only decides whether the page renders at all. */
+(function(){
+  var m = location.hash.match(/(?:^#|&)session=([^&]+)/);
+  if(m){
+    try{ localStorage.setItem('vashj_session', decodeURIComponent(m[1])); }catch(e){}
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  function valid(tok){
+    if(!tok) return false;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      var payload = JSON.parse(atob(p));
+      return payload.exp && payload.exp > Math.floor(Date.now()/1000);
+    }catch(e){ return false; }
+  }
+  var tok = null;
+  try{ tok = localStorage.getItem('vashj_session'); }catch(e){}
+  if(!valid(tok)){
+    try{ localStorage.removeItem('vashj_session'); }catch(e){}
+    location.replace('../index.html');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  /* Phase toggle — the guild raids two at once, so the hall of shame can be narrowed
+     to either. "All" is the default and keeps the whole history. */
+  .ls-phase{
+    display:inline-flex;gap:2px;margin-bottom:16px;
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:20px;padding:3px;
+  }
+  .ls-seg{
+    background:transparent;border:0;border-radius:16px;padding:5px 15px;cursor:pointer;
+    font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;color:var(--text-dim);
+  }
+  .ls-seg:hover{color:var(--text)}
+  .ls-seg.is-on{background:var(--accent);color:var(--on-accent)}
+
+  .ls-summary{
+    display:flex;flex-wrap:wrap;gap:22px;margin-bottom:18px;
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;padding:14px 18px;
+  }
+  .ls-summary div{font-size:12px;color:var(--text-dim)}
+  .ls-summary b{display:block;font-size:20px;color:var(--text);font-weight:700;font-family:'Cinzel',serif}
+
+  .ls-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+  .ls-card{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
+    padding:14px 16px 12px;display:flex;flex-direction:column;
+  }
+  .ls-card h2{
+    font-family:'Cinzel',serif;font-size:14.5px;font-weight:700;margin:0;
+    color:var(--heading);letter-spacing:.3px;
+  }
+  .ls-emoji{font-size:17px;margin-right:7px;font-family:'Inter',sans-serif}
+  .ls-blurb{font-size:11.5px;color:var(--text-dim);margin:4px 0 5px;line-height:1.45}
+  /* The plain "what this measures" line, set apart from the joke above it. */
+  .ls-desc{font-size:11px;color:var(--text-dim);font-style:italic;opacity:.8;margin:0 0 12px;line-height:1.4}
+
+  /* The winner of each award, given its own row so the name can breathe. */
+  .ls-top{display:flex;align-items:baseline;gap:8px;margin-bottom:2px}
+  .ls-name{font-size:16px;font-weight:700;color:var(--text)}
+  .ls-value{margin-left:auto;font-size:18px;font-weight:700;color:var(--accent);font-family:'Cinzel',serif;white-space:nowrap}
+  .ls-detail{font-size:11.5px;color:var(--text-dim);margin-bottom:8px}
+
+  .ls-rest{margin:auto 0 0;padding:8px 0 0;border-top:1px solid rgba(71,71,79,.5);list-style:none}
+  .ls-rest li{display:flex;align-items:baseline;gap:8px;font-size:12px;padding:2px 0;color:var(--text-dim)}
+  .ls-rest .rank{min-width:16px;color:var(--text-dim);font-size:11px}
+  .ls-rest .val{margin-left:auto;color:var(--text);font-weight:600;white-space:nowrap}
+
+  .ls-none{font-size:12.5px;color:var(--text-dim);padding:4px 0 10px}
+  .ls-msg{color:var(--text-dim);padding:26px 4px;font-size:13.5px}
+
+  /* Names link to the character sheet; the class colour stays the only colour. */
+  .chr-link{text-decoration:none}
+  .chr-link:hover span{text-decoration:underline}
+</style>
+
+<div class="app">
+  <div class="wrap">
+    <div class="authbar">
+      <span class="authbar-left">
+        <div class="nav">
+          <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navDrawer">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-drawer" id="navDrawer"></nav>
+        </div>
+        <span class="eyebrow">Hall of shame</span>
+      </span>
+      <span class="authbar-right">
+        <span id="authWho" class="auth-who"></span>
+        <button class="btn-ghost" onclick="logout()">Sign out</button>
+      </span>
+    </div>
+
+    <h1>Loot stats</h1>
+    <p class="subtitle">Everything the loot database knows about who is lucky, who is greedy, and who should stop rolling. Computed from every award and every roll ever recorded.</p>
+
+    <div id="phase" class="ls-phase" role="group" aria-label="Raid phase">
+      <button type="button" class="ls-seg is-on" data-phase="">All</button>
+      <button type="button" class="ls-seg" data-phase="p2">Phase 2</button>
+      <button type="button" class="ls-seg" data-phase="p3">Phase 3</button>
+    </div>
+
+    <div id="summary" class="ls-summary" style="display:none"></div>
+    <div id="grid" class="ls-grid"></div>
+    <div id="msg" class="ls-msg">Loading…</div>
+
+    <footer>wooback guild tools — all in good fun. Mostly.</footer>
+  </div>
+</div>
+
+<script src="../menu.js"></script>
+<script>
+
+// The loot stats are computed server-side now — /api/loot/stats returns fully-assembled
+// cards, and this page does nothing but render them. Every value, blurb, threshold and
+// ranking lives in the backend (Api/LootStatsEndpoints.cs); all that is left here is
+// turning typed refs into class-coloured names, item links and plain text.
+// API_BASE, itemLink, loadWowhead, sessionToken and logout all come from menu.js.
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// WoW class colours (Blizzard palette), shared with loot-history.html / loot.html.
+const CLASS_COLORS = {
+  warrior:'#c79c6e', paladin:'#f58cba', hunter:'#abd473', rogue:'#fff569',
+  priest:'#ffffff', deathknight:'#e0475f', shaman:'#3b8de0', mage:'#69ccf0',
+  warlock:'#a99ce0', monk:'#00ff96', druid:'#ff7d0a', demonhunter:'#a330c9',
+  evoker:'#33937f'
+};
+function classColor(cls){
+  if(!cls) return null;
+  return CLASS_COLORS[String(cls).toLowerCase().replace(/[^a-z]/g,'')] || null;
+}
+
+/* ───────────────────────── Rendering ─────────────────────────
+   A ref the backend sends is one of three kinds: a character (class-coloured, linked to
+   its sheet), an item (an itemLink that carries a Wowhead tooltip), or plain text (a
+   date, a name we hold no character for). Everything on the page is built from these. */
+function refHtml(r){
+  if(!r) return '';
+  if(r.kind === 'item') return itemLink(r.id, r.name);
+  if(r.kind === 'char'){
+    const col = classColor(r.cls);
+    const inner = '<span' + (col ? ' style="color:' + col + '"' : '') + '>' + esc(r.name) + '</span>';
+    return r.id ? '<a href="character.html?id=' + esc(r.id) + '" class="chr-link">' + inner + '</a>' : inner;
+  }
+  return esc(r.text);
+}
+function segHtml(segs){ return (segs || []).map(refHtml).join(''); }
+
+// The winner of a card, given its own row so the name can breathe.
+function topHtml(e){
+  return '<div class="ls-top"><span class="ls-name">' + refHtml(e.ref) + '</span>' +
+         '<span class="ls-value">' + esc(e.value) + '</span></div>';
+}
+// A runner-up line in the ranked list beneath the winner.
+function liHtml(e, rank){
+  return '<li><span class="rank">' + rank + '.</span>' + refHtml(e.ref) +
+         '<span class="val">' + esc(e.value) + '</span></li>';
+}
+
+function cardHtml(c){
+  const head = '<h2><span class="ls-emoji">' + c.emoji + '</span>' + esc(c.title) + '</h2>' +
+               '<p class="ls-blurb">' + esc(c.blurb) + '</p>' +
+               (c.desc ? '<p class="ls-desc">' + esc(c.desc) + '</p>' : '');
+  const entries = c.entries || [];
+  if(!entries.length) return '<div class="ls-card">' + head + '<div class="ls-none">Not enough data yet.</div></div>';
+  const rest = entries.slice(1);
+  return '<div class="ls-card">' + head + topHtml(entries[0]) +
+    (c.detail && c.detail.length ? '<div class="ls-detail">' + segHtml(c.detail) + '</div>' : '') +
+    (rest.length ? '<ul class="ls-rest">' + rest.map((e, i) => liHtml(e, i + 2)).join('') + '</ul>' : '') +
+    '</div>';
+}
+
+function summaryHtml(items){
+  return (items || []).map(p => '<div><b>' + esc(p.value) + '</b>' + esc(p.label) + '</div>').join('');
+}
+
+function render(data){
+  document.getElementById('grid').innerHTML = (data.cards || []).map(cardHtml).join('');
+  const s = document.getElementById('summary');
+  s.innerHTML = summaryHtml(data.summary);
+  s.style.display = '';
+  document.getElementById('msg').style.display = 'none';
+  loadWowhead(); // the cards carry item links
+}
+
+function fail(text){
+  document.getElementById('msg').textContent = text;
+  document.getElementById('msg').style.display = '';
+}
+
+// The selected raid phase: '' (all), 'p2' or 'p3'. The backend splits by item level;
+// here it is only a query param and which button is lit.
+let phase = '';
+
+async function load(){
+  // Clear the previous view so a phase switch reads as a reload, not a silent no-op.
+  document.getElementById('grid').innerHTML = '';
+  document.getElementById('summary').style.display = 'none';
+  fail('Loading…');
+  try{
+    const url = API_BASE + '/api/loot/stats' + (phase ? '?phase=' + phase : '');
+    const res = await fetch(url, { headers:{ 'Authorization':'Bearer ' + sessionToken() } });
+    if(res.status === 401){
+      fail('Session expired — signing out…');
+      setTimeout(logout, 1200);
+      return;
+    }
+    if(!res.ok){ fail('Could not load loot (HTTP ' + res.status + ').'); return; }
+    const data = await res.json();
+    if(!data.cards || !data.cards.length){
+      fail(phase ? 'No loot recorded for this phase yet — nothing to be smug about.'
+                 : 'No loot has been recorded yet — nothing to be smug about.');
+      return;
+    }
+    render(data);
+  }catch(err){
+    fail('Could not reach the guild database.');
+  }
+}
+
+document.getElementById('phase').addEventListener('click', e => {
+  const btn = e.target.closest('.ls-seg');
+  if(!btn || btn.dataset.phase === phase) return;
+  phase = btn.dataset.phase;
+  document.querySelectorAll('#phase .ls-seg').forEach(b => b.classList.toggle('is-on', b === btn));
+  load();
+});
+
+load();
+</script>

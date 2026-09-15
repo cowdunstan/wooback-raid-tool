@@ -1,0 +1,616 @@
+<meta charset="utf-8">
+<script>
+/* Access gate (home tier) — same as logs.html. Any signed-in tier may read the
+   roster; managing the identity links is officers only, and the .NET API enforces
+   that on every write. This just bounces anyone without a session to the landing
+   page; the read-only trim for non-officers happens further down. */
+(function(){
+  var m = location.hash.match(/(?:^#|&)session=([^&]+)/);
+  if(m){
+    try{ localStorage.setItem('vashj_session', decodeURIComponent(m[1])); }catch(e){}
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  function payload(tok){
+    if(!tok) return null;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      return JSON.parse(atob(p));
+    }catch(e){ return null; }
+  }
+  var tok = null;
+  try{ tok = localStorage.getItem('vashj_session'); }catch(e){}
+  var pl = payload(tok);
+  if(!pl || !pl.exp || pl.exp <= Math.floor(Date.now()/1000)){
+    try{ localStorage.removeItem('vashj_session'); }catch(e){}
+    location.replace('../index.html');
+  } else if(!pl.officer){
+    // Every control that writes is hidden by the .read-only rules below. Set on
+    // <html> because the gate runs before <body> exists.
+    document.documentElement.className += ' read-only';
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  .rl-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:8px}
+  .rl-card{background:var(--panel,#26262b);border:1px solid var(--panel-line,#47474f);border-radius:10px;padding:16px;margin-top:14px}
+  .rl-card h2{font-family:'Cinzel',serif;font-size:16px;margin:0 0 4px}
+  .rl-card .card-sub{color:var(--text-dim,#a8a8b2);font-size:12px;margin:0 0 12px}
+  /* The import card is a collapsed <details>: a clickable header row with its own
+     caret, the h2 kept inline so it reads as the summary rather than a stacked title. */
+  /* The page runs in quirks mode (BackCompat), where the UA stylesheet doesn't hide a
+     closed <details>'s content — it overflows below the summary. Hide it explicitly. */
+  details.rl-card:not([open]) > :not(summary){display:none}
+  details.rl-card > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;margin:0 0 4px}
+  details.rl-card > summary::-webkit-details-marker{display:none}
+  details.rl-card > summary::before{content:'\25B6';color:var(--text-dim,#a8a8b2);font-size:10px;transition:transform .12s}
+  details.rl-card[open] > summary::before{transform:rotate(90deg)}
+  details.rl-card > summary h2{margin:0;display:inline}
+  details.rl-card[open] > summary{margin-bottom:8px}
+  .cand-summary-count{color:var(--text-dim,#a8a8b2);font-family:'Inter',sans-serif;font-size:12px;font-weight:500}
+  /* Member roster — three cards per row, dropping to two then one as space runs out. */
+  #members{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+  @media (max-width:1200px){ #members{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  @media (max-width:780px){ #members{grid-template-columns:minmax(0,1fr)} }
+  .mem{border:1px solid var(--panel-line,#47474f);border-radius:10px;overflow:hidden;background:var(--panel,#26262b);min-width:0}
+  .mem-head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:11px 14px;border-bottom:1px solid var(--panel-line,#47474f)}
+  .mem-head .mem-name{font-family:'Cinzel',serif;font-size:15px;font-weight:700}
+  .mem-head .mem-user{color:var(--text-dim,#a8a8b2);font-size:12px;overflow:hidden;text-overflow:ellipsis}
+  .mem-head .mem-seen{margin-left:auto;color:var(--text-dim,#a8a8b2);font-size:11px}
+  /* One character per stacked block rather than a wide table row — a 5-column table
+     with an inline reassign <select> is what stopped these cards from narrowing. */
+  .chr{padding:9px 14px;border-bottom:1px solid rgba(71,71,79,.5)}
+  .chr:last-child{border-bottom:none}
+  .chr-top{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px}
+  .chr-meta{color:var(--text-dim,#a8a8b2);font-size:11.5px;margin-top:2px}
+  /* Names link to the character sheet; the class colour stays the only colour. */
+  .chr-link{text-decoration:none}
+  .chr-link:hover strong{text-decoration:underline}
+  .chr-actions{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:6px}
+  .chr-actions select{flex:1 1 120px;min-width:0;background:var(--well);border:1px solid var(--panel-line,#47474f);color:var(--text,#f0f0f4);border-radius:6px;padding:4px 6px;font-size:12px;font-family:'Inter'}
+  table.rl{width:100%;border-collapse:collapse;font-size:13px}
+  table.rl th{text-align:left;color:var(--text-dim,#a8a8b2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:6px 12px;border-bottom:1px solid var(--panel-line,#47474f)}
+  /* Explicit colour: the page runs in quirks mode, where a <table> drops colour
+     inheritance, so plain cells would fall back to black. */
+  table.rl td{padding:8px 12px;border-bottom:1px solid rgba(71,71,79,.5);vertical-align:middle;color:var(--text,#f0f0f4)}
+  table.rl tr:last-child td{border-bottom:none}
+  table.rl .muted{color:var(--text-dim,#a8a8b2)}
+  table.rl input,table.rl select{background:var(--well);border:1px solid var(--panel-line,#47474f);color:var(--text,#f0f0f4);border-radius:6px;padding:5px 7px;font-size:12.5px;font-family:'Inter';max-width:100%}
+  .rl-empty{color:var(--text-dim,#a8a8b2);padding:12px;font-size:13px}
+  .row-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+  .rl-del{background:none;border:none;color:var(--amber);cursor:pointer;font-size:13px;padding:2px 6px}
+  .lnk{background:none;border:none;color:var(--text-dim,#a8a8b2);cursor:pointer;font-size:12px;padding:2px 6px;text-decoration:underline}
+  .lnk:hover{color:var(--text,#f0f0f4)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+  .pill-main{background:rgba(var(--accent-rgb),.16);color:var(--accent)}
+  .pill-alt{background:rgba(127,176,242,.14);color:#7fb0f2}
+  .pill-guild{background:rgba(168,117,232,.12);color:#c9aef5}
+  .pill-warn{background:rgba(var(--amber-rgb),.16);color:var(--amber)}
+  .pill-unknown{background:rgba(127,127,138,.14);color:#a8a8b2}
+  table.rl td strong{font-weight:600}
+  .cls{color:#a8a8b2}
+  /* Read-only view for non-officers: same lists, minus every control that writes.
+     Cosmetic only — the API is what actually refuses the writes. */
+  html.read-only .chr-actions,
+  html.read-only .acts,
+  html.read-only .officer-copy{display:none}
+  html:not(.read-only) .ro-copy{display:none}
+</style>
+
+<div class="app">
+  <div class="wrap">
+    <div class="authbar">
+      <span class="authbar-left">
+        <div class="nav">
+          <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navDrawer">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-drawer" id="navDrawer"></nav>
+        </div>
+        <span class="eyebrow">Identity links</span>
+      </span>
+      <span class="authbar-right">
+        <span id="authWho" class="auth-who"></span>
+        <button class="btn-ghost" onclick="logout()">Sign out</button>
+      </span>
+    </div>
+
+    <h1>Roster &amp; Alts</h1>
+    <p class="subtitle"><span class="ro-copy">Who plays what: every member's Discord name alongside their main and alts, the characters nobody has claimed yet, and the ones the guild ignores. Officers keep these links up to date &#8212; for everyone else this page is read-only.</span><span class="officer-copy">Manage the Discord &#8596; WoW main &#8596; alts links. Characters arrive on their own &#8212; from the Blizzard roster, loot logs and raid attendance &#8212; so there's nothing to type in here. Set each member's main, edit a character's details, reassign one to another member, and claim the unlinked &#8212; members with nothing attached are listed below the unlinked characters. Sync the Blizzard roster to see who is still in the guild, and ignore the characters that aren't.</span></p>
+
+    <div class="rl-toolbar">
+      <button class="btn-primary" onclick="loadAll()">Reload</button>
+      <button class="btn-ghost" data-officer-only onclick="importDiscord()" title="Create identity-link rows for every Discord member holding the member or officer role">Import from Discord</button>
+      <button class="btn-ghost" data-officer-only onclick="syncGuild()" title="Pull the wooback guild roster from the Blizzard API and update each character's guild">Sync guild from Blizzard</button>
+      <span id="guildSynced" style="font-size:11.5px;color:var(--text-dim)"></span>
+      <span id="rlStatus" style="font-size:11.5px;color:var(--text-dim);min-height:15px;"></span>
+    </div>
+
+    <div id="members"></div>
+
+    <details class="rl-card" data-officer-only id="importCard">
+      <summary><h2>On the Blizzard roster, not imported<span id="candSummaryCount" class="cand-summary-count"></span></h2></summary>
+      <p class="card-sub">Guild characters the last sync found that we hold no record of. Tick the ones to bring in &#8212; each is created unclaimed, stamped with its guild rank, and has its gear pulled from Blizzard (or a recent Warcraft Logs report). Claim them onto members from the unlinked list once imported.</p>
+      <div class="rl-toolbar" style="margin:0 0 8px">
+        <button class="btn-primary" id="importSelBtn" onclick="importGuild()" disabled>Import selected</button>
+        <label style="font-size:12px;color:var(--text-dim);display:inline-flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" id="candAll" onchange="toggleAllCandidates(this.checked)"> Select all
+        </label>
+        <span id="candCount" style="font-size:11.5px;color:var(--text-dim)"></span>
+      </div>
+      <table class="rl"><thead><tr><th class="acts" style="width:1%"></th><th>Character</th><th>Class</th><th>Level</th><th>Rank</th></tr></thead>
+        <tbody id="candidateBody"><tr><td colspan="5" class="rl-empty">Sync the guild to see who's on the roster but not yet imported.</td></tr></tbody>
+      </table>
+    </details>
+
+    <div class="rl-card">
+      <h2>Unlinked characters</h2>
+      <p class="card-sub">Characters created by loot &amp; attendance that aren't attached to any member yet.<span class="officer-copy"> Assign one to claim it onto a member.</span></p>
+      <table class="rl"><thead><tr><th>Character</th><th>Class / spec</th><th>Realm</th><th class="acts" style="width:38%">Assign to member</th></tr></thead>
+        <tbody id="orphanBody"><tr><td colspan="4" class="rl-empty">Nothing loaded.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="rl-card">
+      <h2>Members without characters</h2>
+      <p class="card-sub">Identity links with nothing attached &#8212; imported from Discord, or everything they had is ignored.<span class="officer-copy"> Claim a character onto them from the unlinked list above.</span></p>
+      <table class="rl"><thead><tr><th>Member</th><th>Discord</th><th>Last seen</th></tr></thead>
+        <tbody id="emptyMemberBody"><tr><td colspan="3" class="rl-empty">Nothing loaded.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="rl-card">
+      <h2>Ignored characters</h2>
+      <p class="card-sub">Characters marked as not part of the guild &#8212; bank alts, transfers, ex-guildies. They're hidden from the roster above and their loot &amp; attendance are left out of the history and stats pages. Nothing is deleted<span class="officer-copy">: un-ignore to bring it all back</span>.</p>
+      <table class="rl"><thead><tr><th>Character</th><th>Class / spec</th><th>Guild</th><th>Was on</th><th class="acts" style="width:1%"></th></tr></thead>
+        <tbody id="ignoredBody"><tr><td colspan="5" class="rl-empty">Nothing loaded.</td></tr></tbody>
+      </table>
+    </div>
+
+    <footer>wooback guild tools — identity links are saved to the guild database.</footer>
+  </div>
+</div>
+
+<script src="../menu.js"></script>
+<script>
+// API_BASE (the shared .NET backend host) is provided by menu.js.
+function authHeaders(extra){ return Object.assign({ 'Authorization': 'Bearer ' + sessionToken() }, extra || {}); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// WoW class colours (Blizzard palette, a couple brightened for contrast on the
+// dark panel). Class is stored as its WCL subType, e.g. "Warrior"/"DeathKnight".
+const CLASS_COLORS = {
+  warrior:'#c79c6e', paladin:'#f58cba', hunter:'#abd473', rogue:'#fff569',
+  priest:'#ffffff', deathknight:'#e0475f', shaman:'#3b8de0', mage:'#69ccf0',
+  warlock:'#a99ce0', monk:'#00ff96', druid:'#ff7d0a', demonhunter:'#a330c9',
+  evoker:'#33937f'
+};
+function classColor(cls){
+  if(!cls) return null;
+  return CLASS_COLORS[String(cls).toLowerCase().replace(/[^a-z]/g,'')] || null;
+}
+// A character name, coloured by class so it's legible and identifiable at a glance.
+// With an id, the name links to the character's sheet (gear, loot, rolls).
+function charName(name, cls, id){
+  const c = classColor(cls);
+  const inner = '<strong' + (c ? ' style="color:' + c + '"' : '') + '>' + esc(name) + '</strong>';
+  return id ? '<a href="character.html?id=' + esc(id) + '" class="chr-link">' + inner + '</a>' : inner;
+}
+function setStatus(msg, isErr){ const el = document.getElementById('rlStatus'); el.textContent = msg || ''; el.style.color = isErr ? 'var(--amber)' : 'var(--text-dim)'; }
+
+// A fetch wrapper that maps the shared auth failures to friendly UX.
+async function api(path, opts){
+  const res = await fetch(API_BASE + path, Object.assign({ headers: authHeaders(opts && opts.body ? {'Content-Type':'application/json'} : null) }, opts));
+  if(res.status === 401){ setStatus('Session expired — signing out…', true); setTimeout(logout, 1200); throw new Error('401'); }
+  if(res.status === 403){ setStatus('Officer access required.', true); throw new Error('403'); }
+  return res;
+}
+
+function fmtWhen(iso){ try{ const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }catch(e){ return ''; } }
+
+// In-memory copies, so we can build member dropdowns and reassign without re-fetching.
+let MEMBERS = [];
+// The same members, ordered by the label the dropdowns show. Kept apart from
+// MEMBERS so the cards keep the order the API sent them in.
+let MEMBER_OPTIONS = [];
+let ORPHANS = [];
+let IGNORED = [];
+// Blizzard-roster characters staged for import by the last sync (officers only).
+let CANDIDATES = [];
+
+// The name a member is known by here: their server nickname when they have one,
+// which is why the API's DisplayName ordering isn't the order officers read.
+function memberLabel(m){
+  return m.nickname || m.displayName || m.discordUsername || '(unknown)';
+}
+
+// Build a <select> of members with one preselected (or "— none —"). Sorted A→Z on
+// the label shown, so scanning a list this long is possible; see MEMBER_OPTIONS.
+function memberSelect(selectedId, onchange){
+  let html = '<select onchange="' + onchange + '">';
+  html += '<option value="">— unassigned —</option>';
+  for(const m of MEMBER_OPTIONS){
+    const sel = m.id === selectedId ? ' selected' : '';
+    html += '<option value="' + esc(m.id) + '"' + sel + '>' + esc(memberLabel(m)) + '</option>';
+  }
+  return html + '</select>';
+}
+
+function clsSpec(c){
+  const parts = [c.cls, c.spec].filter(Boolean).map(esc);
+  return parts.length ? '<span class="cls">' + parts.join(' · ') + '</span>' : '<span class="muted">—</span>';
+}
+
+// Guild membership as of the last Blizzard sync. Never synced reads "guild ?" rather
+// than "no guild" — an empty guild only means something once we've actually looked.
+function guildBadge(c){
+  if(!c.guildSyncedAt) return '<span class="pill pill-unknown" title="Not synced with Blizzard yet">guild ?</span>';
+  if(c.guildName){
+    const rank = (c.guildRank === 0 || c.guildRank) ? ' (rank ' + c.guildRank + ')' : '';
+    return '<span class="pill pill-guild" title="On the Blizzard guild roster' + rank + '">' + esc(c.guildName) + '</span>';
+  }
+  return '<span class="pill pill-warn" title="Not on the Blizzard guild roster at the last sync">no guild</span>';
+}
+
+function renderMembers(members){
+  MEMBERS = members;
+  MEMBER_OPTIONS = members.slice()
+    .sort((a, b) => memberLabel(a).localeCompare(memberLabel(b), undefined, { sensitivity:'base' }));
+  // Members with nothing attached get their own compact section further down rather
+  // than a card each — an imported Discord roster is mostly these, and they were
+  // burying the members who actually have characters.
+  const withChars = members.filter(m => (m.characters || []).length);
+  renderEmptyMembers(members.filter(m => !(m.characters || []).length));
+  const root = document.getElementById('members');
+  if(!members.length){ root.innerHTML = '<div class="rl-card"><p class="rl-empty">No members yet. Members are created automatically when someone signs in.</p></div>'; return; }
+  if(!withChars.length){ root.innerHTML = '<div class="rl-card"><p class="rl-empty">No member has a character linked yet — everyone is listed below.</p></div>'; return; }
+  root.innerHTML = withChars.map(m => {
+    const label = esc(memberLabel(m));
+    const user = m.discordUsername ? '@' + esc(m.discordUsername) : '';
+    const seen = m.lastSeenAt ? 'Last seen ' + esc(fmtWhen(m.lastSeenAt)) : '';
+    const rows = m.characters.map(c => {
+      const meta = [clsSpec(c), c.realm ? esc(c.realm) : null].filter(Boolean).join(' <span class="muted">·</span> ');
+      const quoted = esc(c.name).replace(/'/g,"\\'");
+      return '<div class="chr">' +
+        '<div class="chr-top">' + charName(c.name, c.cls, c.id) +
+          (c.isMain ? '<span class="pill pill-main">Main</span>' : '<span class="pill pill-alt">Alt</span>') +
+          guildBadge(c) +
+        '</div>' +
+        '<div class="chr-meta">' + meta + '</div>' +
+        '<div class="chr-actions">' +
+          memberSelect(m.id, 'reassign(\'' + c.id + '\', this.value)') +
+          (c.isMain ? '' : '<button class="lnk" onclick="setMain(\'' + c.id + '\')">Make main</button>') +
+          '<button class="lnk" onclick="editChar(\'' + c.id + '\')">Edit</button>' +
+          '<button class="lnk" title="Not a guild character — hide it and leave it out of loot &amp; attendance stats" onclick="ignoreChar(\'' + c.id + '\',\'' + quoted + '\')">Ignore</button>' +
+          '<button class="rl-del" title="Delete" onclick="delChar(\'' + c.id + '\',\'' + quoted + '\')">✕</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    const count = m.characters.length;
+    return '<div class="mem">' +
+      '<div class="mem-head"><span class="mem-name">' + label + '</span>' +
+        (user ? '<span class="mem-user">' + user + '</span>' : '') +
+        '<span class="mem-seen">' + count + ' char' + (count === 1 ? '' : 's') + (seen ? ' · ' + seen : '') + '</span>' +
+      '</div>' +
+      rows +
+    '</div>';
+  }).join('');
+}
+
+// Members holding no character at all — including those whose every character is
+// ignored, since the API leaves those out of the member's list. Sorted by the label
+// officers read, like the dropdowns; the cards above keep the API's order.
+function renderEmptyMembers(rows){
+  const b = document.getElementById('emptyMemberBody');
+  if(!rows.length){ b.innerHTML = '<tr><td colspan="3" class="rl-empty">Every member has at least one character linked.</td></tr>'; return; }
+  b.innerHTML = rows.slice()
+    .sort((a, b2) => memberLabel(a).localeCompare(memberLabel(b2), undefined, { sensitivity:'base' }))
+    .map(m =>
+      '<tr>' +
+        '<td><strong>' + esc(memberLabel(m)) + '</strong></td>' +
+        '<td class="muted">' + (m.discordUsername ? '@' + esc(m.discordUsername) : '—') + '</td>' +
+        '<td class="muted">' + (m.lastSeenAt ? esc(fmtWhen(m.lastSeenAt)) : 'never') + '</td>' +
+      '</tr>'
+    ).join('');
+}
+
+function renderOrphans(rows){
+  ORPHANS = rows;
+  const b = document.getElementById('orphanBody');
+  if(!rows.length){ b.innerHTML = '<tr><td colspan="4" class="rl-empty">No unlinked characters — every character is attached to a member.</td></tr>'; return; }
+  b.innerHTML = rows.map(c =>
+    '<tr>' +
+      '<td>' + charName(c.name, c.cls, c.id) + ' ' + guildBadge(c) + '</td>' +
+      '<td>' + clsSpec(c) + '</td>' +
+      '<td class="muted">' + (c.realm ? esc(c.realm) : '—') + '</td>' +
+      '<td class="acts"><div class="row-actions">' + memberSelect('', 'reassign(\'' + c.id + '\', this.value)') +
+        '<button class="lnk" onclick="ignoreChar(\'' + c.id + '\',\'' + esc(c.name).replace(/'/g,"\\'") + '\')">Ignore</button>' +
+      '</div></td>' +
+    '</tr>'
+  ).join('');
+}
+
+// The bottom section: everything marked "not a guild character", linked or not.
+function renderIgnored(rows){
+  IGNORED = rows;
+  const b = document.getElementById('ignoredBody');
+  if(!rows.length){ b.innerHTML = '<tr><td colspan="5" class="rl-empty">Nothing ignored — every character counts towards the roster and stats.</td></tr>'; return; }
+  b.innerHTML = rows.map(c => {
+    const quoted = esc(c.name).replace(/'/g,"\\'");
+    return '<tr>' +
+      '<td>' + charName(c.name, c.cls, c.id) + '</td>' +
+      '<td>' + clsSpec(c) + '</td>' +
+      '<td>' + guildBadge(c) + '</td>' +
+      '<td class="muted">' + (c.member ? esc(c.member) : '<span class="muted">unlinked</span>') + '</td>' +
+      '<td class="acts"><div class="row-actions">' +
+        '<button class="lnk" onclick="unignoreChar(\'' + c.id + '\',\'' + quoted + '\')">Un-ignore</button>' +
+        '<button class="rl-del" title="Delete" onclick="delChar(\'' + c.id + '\',\'' + quoted + '\')">✕</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function loadAll(){
+  setStatus('Loading…');
+  try{
+    const [mRes, oRes, iRes] = await Promise.all([
+      api('/api/members'),
+      api('/api/characters?linked=false'),
+      api('/api/characters?ignored=true')
+    ]);
+    if(!mRes.ok){ setStatus('Could not load members (HTTP ' + mRes.status + ').', true); return; }
+    renderMembers(await mRes.json());
+    if(oRes.ok){ renderOrphans(await oRes.json()); }
+    if(iRes.ok){ renderIgnored(await iRes.json()); }
+    if(isOfficer()) await loadCandidates();
+    showGuildSynced();
+    setStatus('Loaded ' + MEMBERS.length + ' member' + (MEMBERS.length === 1 ? '' : 's') + '.');
+  }catch(err){ if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true); }
+}
+
+// Officer tool: seed the roster from Discord. Pulls everyone in the guild holding
+// the member (home) or officer role and creates their Discord↔member link rows,
+// so officers can attach characters before a raider ever signs in.
+async function importDiscord(){
+  if(!confirm('Pull the Discord roster and create identity links for every member/officer? Existing members are left in place (usernames refreshed).')) return;
+  setStatus('Importing from Discord…');
+  try{
+    const res = await api('/api/members/import-discord', { method:'POST' });
+    if(!res.ok){
+      let detail = 'HTTP ' + res.status;
+      try{ const j = await res.json(); if(j && j.detail) detail = j.detail; }catch(e){}
+      setStatus('Import failed: ' + detail, true);
+      return;
+    }
+    const r = await res.json();
+    setStatus('Imported ' + r.matched + ' member/officer' + (r.matched === 1 ? '' : 's') +
+      ' — ' + r.created + ' new, ' + r.updated + ' updated.');
+    loadAll();
+  }catch(err){ if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true); }
+}
+
+// Newest guild sync across every loaded character — one line telling officers how
+// current the guild badges are.
+function showGuildSynced(){
+  const el = document.getElementById('guildSynced');
+  let newest = null;
+  const all = MEMBERS.flatMap(m => m.characters || []).concat(ORPHANS, IGNORED);
+  for(const c of all){
+    if(!c.guildSyncedAt) continue;
+    const t = new Date(c.guildSyncedAt);
+    if(!isNaN(t) && (newest === null || t > newest)) newest = t;
+  }
+  el.textContent = newest ? 'Guild synced ' + newest.toLocaleString() : 'Guild never synced';
+}
+
+// Officer tool: pull the wooback roster from the Blizzard API and stamp each
+// character with the guild it's in (or clear it when it's no longer on the roster).
+// Creates and deletes nothing — it only updates guild info.
+async function syncGuild(){
+  setStatus('Syncing the guild roster from Blizzard…');
+  try{
+    const res = await api('/api/characters/sync-guild', { method:'POST' });
+    if(!res.ok){
+      let detail = 'HTTP ' + res.status;
+      try{ const j = await res.json(); if(j && j.detail) detail = j.detail; }catch(e){}
+      setStatus('Guild sync failed: ' + detail, true);
+      return;
+    }
+    const r = await res.json();
+    setStatus('Roster has ' + r.rosterCount + ' character' + (r.rosterCount === 1 ? '' : 's') +
+      ' — ' + r.inGuild + ' of ours in guild, ' + r.notInGuild + ' not' +
+      (r.unmatchedRoster ? ', ' + r.unmatchedRoster + ' to import below' : '') + '.');
+    loadAll();
+  }catch(err){ if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true); }
+}
+
+// Officer tool: fetch the roster characters the last sync staged for import and paint
+// the "not imported" card. Called on load and after a sync; a fetch failure leaves the
+// card as it was rather than blanking it.
+async function loadCandidates(){
+  try{
+    const res = await api('/api/characters/import-candidates');
+    if(res.ok) renderCandidates(await res.json());
+  }catch(err){ /* 401/403 already handled by api(); nothing else to do */ }
+}
+
+function renderCandidates(rows){
+  CANDIDATES = rows || [];
+  const b = document.getElementById('candidateBody');
+  const all = document.getElementById('candAll');
+  if(all) all.checked = false;
+  if(!CANDIDATES.length){
+    b.innerHTML = '<tr><td colspan="5" class="rl-empty">Nothing to import — every roster character has a record. Sync the guild to refresh.</td></tr>';
+    updateImportButton();
+    return;
+  }
+  b.innerHTML = CANDIDATES.map(c => {
+    const val = esc(c.name);
+    return '<tr>' +
+      '<td class="acts"><input type="checkbox" class="cand" value="' + val + '" onchange="updateImportButton()"></td>' +
+      '<td>' + charName(c.name, c.cls, null) + '</td>' +
+      '<td>' + (c.cls ? clsSpec(c) : '<span class="muted">—</span>') + '</td>' +
+      '<td class="muted">' + (c.level || '—') + '</td>' +
+      '<td class="muted">' + (c.rank === 0 ? 'GM' : (c.rank ?? '—')) + '</td>' +
+    '</tr>';
+  }).join('');
+  updateImportButton();
+}
+
+function toggleAllCandidates(checked){
+  document.querySelectorAll('#candidateBody input.cand').forEach(cb => { cb.checked = checked; });
+  updateImportButton();
+}
+
+function selectedCandidates(){
+  return Array.from(document.querySelectorAll('#candidateBody input.cand:checked')).map(cb => cb.value);
+}
+
+function updateImportButton(){
+  const n = selectedCandidates().length;
+  const btn = document.getElementById('importSelBtn');
+  if(btn){ btn.disabled = n === 0; btn.textContent = n ? 'Import ' + n + ' selected' : 'Import selected'; }
+  const count = document.getElementById('candCount');
+  if(count) count.textContent = CANDIDATES.length ? CANDIDATES.length + ' on the roster to import' : '';
+  // Mirror the total into the collapsed summary, so an officer sees there's something
+  // to import without opening the card.
+  const summaryCount = document.getElementById('candSummaryCount');
+  if(summaryCount) summaryCount.textContent = CANDIDATES.length ? ' (' + CANDIDATES.length + ')' : '';
+}
+
+// Officer tool: import the ticked candidates. The server creates each character and
+// then pulls its gear, so this can take a moment per character — the button is locked
+// while it runs. The response reports each row's gear outcome.
+async function importGuild(){
+  const names = selectedCandidates();
+  if(!names.length) return;
+  if(!confirm('Import ' + names.length + ' character' + (names.length === 1 ? '' : 's') +
+    ' and pull their gear? They\'re created unclaimed for you to assign.')) return;
+  const btn = document.getElementById('importSelBtn');
+  if(btn) btn.disabled = true;
+  setStatus('Importing ' + names.length + ' character' + (names.length === 1 ? '' : 's') + ' and pulling gear…');
+  try{
+    const res = await api('/api/characters/import-guild', { method:'POST', body: JSON.stringify({ names }) });
+    if(!res.ok){
+      let detail = 'HTTP ' + res.status;
+      try{ const j = await res.json(); if(j && j.detail) detail = j.detail; }catch(e){}
+      setStatus('Import failed: ' + detail, true);
+      if(btn) btn.disabled = false;
+      return;
+    }
+    const r = await res.json();
+    const withGear = (r.results || []).filter(x => x.status === 'created' && x.gearSource).length;
+    const skipped = (r.results || []).filter(x => x.status === 'skipped').length;
+    setStatus('Imported ' + r.imported + ' character' + (r.imported === 1 ? '' : 's') +
+      ' — ' + withGear + ' with gear' + (skipped ? ', ' + skipped + ' skipped' : '') + '.');
+    loadAll();
+  }catch(err){
+    if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true);
+    if(btn) btn.disabled = false;
+  }
+}
+
+async function putChar(id, body, okMsg){
+  try{
+    const res = await api('/api/characters/' + encodeURIComponent(id), { method:'PUT', body: JSON.stringify(body) });
+    if(!res.ok){ setStatus('Update failed (HTTP ' + res.status + ').', true); return; }
+    if(okMsg) setStatus(okMsg);
+    loadAll();
+  }catch(err){ if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true); }
+}
+
+// Look up a character across members + orphans by id (for edits that must send the full body).
+function findChar(id){
+  for(const m of MEMBERS){ for(const c of (m.characters||[])){ if(c.id === id) return { c, memberId: m.id }; } }
+  for(const c of ORPHANS){ if(c.id === id) return { c, memberId: null }; }
+  for(const c of IGNORED){ if(c.id === id) return { c, memberId: c.memberId ?? null }; }
+  return null;
+}
+
+function charBody(c, over){
+  return Object.assign({
+    memberId: c.memberId ?? null,
+    name: c.name,
+    class: c.cls ?? null,
+    spec: c.spec ?? null,
+    realm: c.realm ?? null,
+    isMain: c.isMain,
+    notes: c.notes ?? null,
+    // Carried on every write so an ordinary edit never quietly un-ignores a character.
+    ignored: c.ignored ?? false
+  }, over || {});
+}
+
+// Mark a character as not part of the guild: it leaves the roster cards and the
+// unlinked list, joins the section at the bottom, and drops out of loot & attendance
+// stats. Reversible — un-ignoring brings all of it back.
+function ignoreChar(id, name){
+  const found = findChar(id);
+  if(!found) return;
+  putChar(id, charBody(Object.assign({}, found.c, { memberId: found.memberId }), { ignored: true }),
+    'Ignored ' + name + '.');
+}
+
+function unignoreChar(id, name){
+  const found = findChar(id);
+  if(!found) return;
+  putChar(id, charBody(Object.assign({}, found.c, { memberId: found.memberId }), { ignored: false }),
+    'Restored ' + name + '.');
+}
+
+function setMain(id){
+  const found = findChar(id);
+  if(!found) return;
+  putChar(id, charBody(Object.assign({}, found.c, { memberId: found.memberId }), { isMain: true }), 'Main updated.');
+}
+
+function reassign(id, newMemberId){
+  const found = findChar(id);
+  if(!found) return;
+  const base = Object.assign({}, found.c, { memberId: found.memberId });
+  // Moving away from the current member clears the main flag so two mains can't collide.
+  const keepMain = !!(newMemberId && found.memberId === newMemberId && base.isMain);
+  const wasOrphan = found.memberId == null;
+  const msg = newMemberId ? (wasOrphan ? 'Assigned.' : 'Reassigned.') : 'Unassigned.';
+  putChar(id, charBody(base, { memberId: newMemberId || null, isMain: keepMain }), msg);
+}
+
+function editChar(id){
+  const found = findChar(id);
+  if(!found) return;
+  const c = found.c;
+  const name = prompt('Character name:', c.name);
+  if(name === null) return;
+  if(!name.trim()){ setStatus('Name cannot be empty.', true); return; }
+  const cls = prompt('Class:', c.cls || '');
+  if(cls === null) return;
+  const spec = prompt('Spec:', c.spec || '');
+  if(spec === null) return;
+  const realm = prompt('Realm:', c.realm || '');
+  if(realm === null) return;
+  const notes = prompt('Notes:', c.notes || '');
+  if(notes === null) return;
+  putChar(id, charBody(Object.assign({}, c, { memberId: found.memberId }), {
+    name: name.trim(),
+    class: cls.trim() || null,
+    spec: spec.trim() || null,
+    realm: realm.trim() || null,
+    notes: notes.trim() || null
+  }), 'Saved ' + name.trim() + '.');
+}
+
+async function delChar(id, name){
+  if(!confirm('Delete character "' + name + '"? This cannot be undone.')) return;
+  try{
+    const res = await api('/api/characters/' + encodeURIComponent(id), { method:'DELETE' });
+    if(!res.ok){ setStatus('Delete failed (HTTP ' + res.status + ').', true); return; }
+    setStatus('Deleted ' + name + '.');
+    loadAll();
+  }catch(err){ if(!['401','403'].includes(err.message)) setStatus('Could not reach the guild database.', true); }
+}
+
+loadAll();
+</script>

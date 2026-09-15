@@ -1,0 +1,149 @@
+<meta charset="utf-8">
+<script>
+/* Access gate. Runs before anything renders: captures a session handed back by
+   the auth Worker (home.html#session=…), and bounces to the landing page if
+   there is no unexpired session. Home is open to any signed-in tier; the Worker
+   only ever issues a session to home-role or officer holders. */
+(function(){
+  var m = location.hash.match(/(?:^#|&)session=([^&]+)/);
+  if(m){
+    try{ localStorage.setItem('vashj_session', decodeURIComponent(m[1])); }catch(e){}
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  function valid(tok){
+    if(!tok) return false;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      var payload = JSON.parse(atob(p));
+      return payload.exp && payload.exp > Math.floor(Date.now()/1000);
+    }catch(e){ return false; }
+  }
+  var tok = null;
+  try{ tok = localStorage.getItem('vashj_session'); }catch(e){}
+  if(!valid(tok)){
+    try{ localStorage.removeItem('vashj_session'); }catch(e){}
+    location.replace('../index.html');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../styles.css">
+
+<div class="app">
+  <div class="wrap">
+    <div class="topbar">
+      <div class="nav">
+        <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navDrawer">
+          <span></span><span></span><span></span>
+        </button>
+        <nav class="nav-drawer" id="navDrawer"></nav>
+      </div>
+      <span class="topbar-right">
+        <span id="authWho" class="auth-who"></span>
+        <button class="btn-ghost" onclick="logout()">Sign out</button>
+      </span>
+    </div>
+
+    <div class="home-hero">
+      <span class="eyebrow">Guild Tools</span>
+      <h1>wooback</h1>
+      <p class="subtitle">Welcome back. Pick an app to get started.</p>
+    </div>
+
+    <div class="app-cards">
+      <a class="app-card" href="logs.html">
+        <h2>Warcraft Logs</h2>
+        <p>Browse every raid log the wooback guild has uploaded to Warcraft Logs, newest first, each linked straight through.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="groups.html" data-officer-only>
+        <span class="app-card-tag">Officers</span>
+        <h2>2 group organisation</h2>
+        <p>Split the mains and alts signups into two 25-man groups — drag or auto-allocate, with nobody double-booked in one group.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="attendance.html" data-officer-only>
+        <span class="app-card-tag">Officers</span>
+        <h2>Attendance</h2>
+        <p>Pull raid attendance straight from Warcraft Logs; new characters land unclaimed for the roster.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="character.html">
+        <h2>Character sheet</h2>
+        <p>Your character's gear as last raided, everything they've won, every roll, and their attendance — opens on your own main.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="items.html">
+        <h2>Items</h2>
+        <p>Every item on a wooback character: who has it equipped, how often it has dropped — searchable by item, character or class.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="loot-history.html">
+        <h2>Loot history</h2>
+        <p>Every item the guild has awarded, who won it, and everyone who rolled on it — searchable.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="loot.html" data-officer-only>
+        <span class="app-card-tag">Officers</span>
+        <h2>Loot log</h2>
+        <p>Record loot awards per raid night, saved to the guild database.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="loot-prio.html">
+        <h2>Loot prio</h2>
+        <p>One signup plus the guild loot sheets: every item a boss drops in BT, Hyjal, SSC or Tempest Keep, with the characters signed up who hold prio on it.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="sheet.html">
+        <h2>Loot sheets</h2>
+        <p>Read-only view of the guild's P3 and P2 loot spreadsheets, live from Google Sheets.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="loot-stats.html">
+        <h2>Loot stats</h2>
+        <p>Most rolls lost, most 100s, most 1s, most off-spec pieces — the guild's loot hall of shame.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="my-priority.html">
+        <h2>My raid loot priority</h2>
+        <p>Your own raid loot priority — every item you hold prio on across BT, Hyjal, SSC and Tempest Keep, read live from the guild loot sheets.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="members.html">
+        <h2>Roster &amp; alts</h2>
+        <p>Who plays what: every member's mains and alts, the characters nobody has claimed, and the ones the guild ignores. Officers manage the links.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="board.html" data-officer-only>
+        <span class="app-card-tag">Officers</span>
+        <h2>Vash assignments</h2>
+        <p>Build and export Lady Vashj — Phase 2 range / healer / chaser assignments, with Raid-Helper import.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="forever.html">
+        <h2>WoW Forever poll</h2>
+        <p>Are we doing WoW Forever? Say whether you're in, and what faction, race, role and class you'd play — everyone sees the running tallies.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+    </div>
+
+    <footer>wooback guild tools — signed in with Discord.</footer>
+  </div>
+</div>
+
+<script src="../menu.js"></script>

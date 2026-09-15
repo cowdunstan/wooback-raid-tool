@@ -178,7 +178,9 @@ public static class AuthEndpoints
             }
 
             var session = tokens.Sign(uid, name, isOfficer);
-            return RedirectToApp(ctx, d, "/home.html", "session", session, clearState: true);
+            // The gated apps live under /legacy/ — the site root is public now. The
+            // denied/error redirects below still target "/", which is the landing page.
+            return RedirectToApp(ctx, d, "/legacy/home.html", "session", session, clearState: true);
         });
 
         // Sliding renewal. The pages call this on load once a session is past its

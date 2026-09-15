@@ -4,9 +4,9 @@
    generic, like the poll's: it stores whatever question and option ids it is sent.
 
    Where a question also appears in the members' WoW Forever poll (legacy/forever.html,
-   QUESTIONS) — class, role, race, focus, commitment — the question id and option ids match
+   QUESTIONS) — class, role, focus, commitment — the question id and option ids match
    that poll's, so an officer can line an applicant up against the guild's own answers.
-   Change one, change the other. (Race is trimmed to Alliance here: we're going Alliance.)
+   Change one, change the other.
 
    Choice types (radio, checkbox, select, range) are sent as `choices: { id: [value, …] }`;
    free-text types (text, url, textarea) as `text: { id: "…" }`. */
@@ -31,9 +31,6 @@ const APPLY_SECTIONS = [
       ['unsure','Not sure'] ] },
     { id:'offRole', type:'radio', q:'Willing to play another role if the raid needs it?', options:[
       ['yes','Yes'], ['maybe','Maybe'], ['no','No'] ] },
-    { id:'race', type:'radio', q:'Which race are you leaning toward?', options:[
-      ['human','Human'], ['dwarf','Dwarf'], ['nightelf','Night Elf'], ['gnome','Gnome'],
-      ['skyborne','Skyborne'], ['nopref','No preference'] ] },
     { id:'focus', type:'checkbox', q:'What are you most looking forward to?', hint:'Pick any.', options:[
       ['raiding','Raiding'], ['pvp','PvP / Battlegrounds'], ['leveling','Leveling & questing'],
       ['dungeons','5-man dungeons'], ['professions','Professions & economy'],
@@ -47,10 +44,12 @@ const APPLY_SECTIONS = [
   ]},
 
   { title:'Availability', questions:[
-    { id:'raidNights', type:'checkbox', req:true, q:'Which evenings can you usually raid?',
-      hint:'Our main raid starts at 9:30pm EST. Tick every evening you could usually make it.', options:[
+    { id:'raidNights', type:'checkbox', req:true, q:'Which days can you usually raid?',
+      hint:'Our main raid starts at 9:30am EST. Tick every day you could usually make it.', options:[
       ['mon','Mon'], ['tue','Tue'], ['wed','Wed'], ['thu','Thu'], ['fri','Fri'],
       ['sat','Sat'], ['sun','Sun'] ] },
+    { id:'raidTimezone', type:'select', q:'Which timezone would you prefer to raid in?', options:[
+      ['na_east','NA East'], ['na_west','NA West'], ['eu','EU'], ['oce','OCE'], ['nopref','No preference'] ] },
     { id:'attendance', type:'radio', q:'Realistically, how many raids would you make?', options:[
       ['nearly_all','Nearly every raid'], ['most','Most of them'], ['half','About half'],
       ['varies','It varies'] ] },

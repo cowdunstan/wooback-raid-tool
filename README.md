@@ -69,9 +69,10 @@ session.
   yet. It makes a single anonymous call, `POST /api/applications` (see the API list). The
   questions live in **`apply-questions.js`** (`APPLY_SECTIONS`), shared with
   `applications.html` so the form and the review can't drift. Where a question is also on
-  the members' poll (class, role, race, focus, commitment) its ids match
+  the members' poll (class, role, focus, commitment) its ids match
   `legacy/forever.html`'s `QUESTIONS`, so an applicant lines up against the guild's own
-  answers. We're going Alliance, so there's no faction question and race is Alliance-only.
+  answers. We're going Alliance, so there's no faction or race question. Applicants say where they play
+  from and, separately, which timezone they'd prefer to raid in (`raidTimezone`).
   Starred questions are checked by the form; the server only insists on the Discord
   username. An optional slider (`sweaty`, 1–5) counts as unanswered until it is moved.
 - **`applications.html`** *(root, officers only)* — review of those applications, newest

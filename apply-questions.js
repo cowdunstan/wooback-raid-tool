@@ -48,7 +48,7 @@ const APPLY_SECTIONS = [
 
   { title:'Availability', questions:[
     { id:'raidNights', type:'checkbox', req:true, q:'Which evenings can you usually raid?',
-      hint:"Our WoW Forever raid nights aren't set yet, so tick every evening that could work.", options:[
+      hint:'Our main raid starts at 9:30pm EST. Tick every evening you could usually make it.', options:[
       ['mon','Mon'], ['tue','Tue'], ['wed','Wed'], ['thu','Thu'], ['fri','Fri'],
       ['sat','Sat'], ['sun','Sun'] ] },
     { id:'attendance', type:'radio', q:'Realistically, how many raids would you make?', options:[

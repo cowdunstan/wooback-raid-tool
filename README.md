@@ -15,7 +15,56 @@ board, identity links, loot, and attendance.
 
 ## Frontend (GitHub Pages)
 
-- **`index.html`** — public landing page. "Sign in with Discord" only.
+### Site layout: a public root, the tools under `/legacy/`
+
+The root of the site is **public**; everything that needs a Discord session lives
+under **`/legacy/`**.
+
+```
+/index.html          public landing — sign in, or (already signed in) a way through to the tools
+/apply.html          public — recruitment, no session, talks to no API
+/styles.css /menu.js /app.js /groups.js /loot-prio.js /my-priority.js /loot-sheet.js
+/<page>.html × 16    redirect stubs, one per moved page → legacy/<page>.html
+/legacy/<page>.html  the gated apps, listed below
+```
+
+The tools were at the root until the site needed somewhere to put public-facing
+recruitment. They moved wholesale rather than one at a time, which cost nothing:
+**every link in the app is a bare relative filename** — `NAV_LINKS` and `itemHref()`
+in `menu.js`, the app cards on `home.html`, the officer gates' `location.replace('home.html')`
+— so they all resolve inside whatever directory the page is served from. Only the
+three links that *cross* the boundary needed spelling out: each page's `../styles.css`
+and `../menu.js`, and the session gate's `location.replace('../index.html')`.
+
+**The shared assets deliberately stayed at the root** rather than moving into
+`legacy/`. The landing page and `apply.html` want `styles.css`, and the landing wants
+`API_BASE` + `validSession()` from `menu.js`; a copy under `legacy/` would mean
+maintaining two. It also keeps a browser holding a cached pre-move page (see *Asset
+caching*) from 404-ing its own CSS and JS for ten minutes.
+
+GitHub Pages has no server-side redirects, so **each moved page leaves a stub behind
+at the root** — two lines of `location.replace('legacy/<page>.html' + search + hash)`,
+so a bookmark or a link pasted in Discord years ago still lands, query string and
+fragment intact. The target is written out per stub rather than read off
+`location.pathname`, which a server is free to rewrite (`npx serve` locally does
+exactly that, stripping both the extension and the query).
+
+Post-login, the backend redirects to **`/legacy/home.html`**
+(`Auth/AuthEndpoints.cs`); its `denied` / `error` redirects still target `/`, which is
+still the landing page that reads them.
+
+### The pages
+
+Everything below `index.html` and `apply.html` lives under **`legacy/`** and requires a
+session.
+
+- **`index.html`** *(root, public)* — landing page. "Sign in with Discord" for a
+  stranger; for someone already holding a session the button is swapped for **Open
+  guild tools →** into `legacy/home.html` rather than redirecting, so the Apply link
+  stays reachable for a member pointing a recruit at it.
+- **`apply.html`** *(root, public)* — recruitment. The one page with **no gate script
+  at all** and no API call: an applicant has no Discord session and no guild role yet.
+  Placeholder until the form lands.
 - **`home.html`** — the default page after sign-in: a welcome hub with a hamburger
   menu and app cards. Open to any signed-in tier.
 - **`logs.html`** — the **Warcraft Logs** app: the guild's uploaded reports
@@ -318,10 +367,17 @@ contract between HTML and `menu.js` (renaming `API_BASE`, changing what
 `renderNav` expects) — ship it, wait out the window, then rely on it. For
 anything urgent, a hard refresh (Ctrl-F5) bypasses the cache immediately.
 
-Each page points at the backend through a single constant: `AUTH_BASE`
-(`index.html`), `RH_PROXY` + `API_BASE` (`app.js`), `WCL_BASE` (`logs.html`),
-`API_BASE` (`loot.html`, `attendance.html`, `members.html`) — all
-`https://wooback-vash-api.fly.dev`.
+The same window is why `styles.css` and the JS stayed at the **root** when the apps
+moved under `/legacy/` (see *Site layout*). For ten minutes after that ship a browser
+could still be holding the pre-move `home.html` at the root, which asks for
+`styles.css` and `menu.js` as siblings; leaving them there means such a page renders
+rather than losing its CSS and nav. A root `<page>.html` is a redirect stub now, so
+the same skew can also serve someone the old real page one last time — harmless, it
+still works.
+
+Every page reaches the backend through `API_BASE` — defined once, in `menu.js`, and
+resolving to `http://localhost:8080` on localhost and `https://wooback-vash-api.fly.dev`
+everywhere else. It is the only place the backend host is written down.
 
 ## Backend (`server/WoobackVash.Api`)
 
@@ -477,7 +533,7 @@ lives in `server/WoobackVash.Api/appsettings.json`.
    - holds `HOME_ROLE_ID` (or is an officer) → home session (`officer: false`);
    - neither → redirected back to the landing page with a "no access" message.
    On success it upserts the member, mints a signed session, and redirects to
-   `home.html#session=…`.
+   `legacy/home.html#session=…`.
 4. Pages store the session and send it as `Authorization: Bearer <token>`. The
    backend rejects officer routes with no session (`401`) or a non-officer session
    (`403`). Client-side checks only decide what to *show*; the real enforcement is

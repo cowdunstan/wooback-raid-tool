@@ -10,10 +10,15 @@ only *how to work here*.
 
 ## Layout
 
-- **Frontend — repo root.** One `.html` per app (`board`, `groups`, `members`,
-  `loot`, `attendance`, `character`, `item`, `loot-prio`, …), plus `menu.js` (shared
-  session helpers, `API_BASE`, the nav, item links, and the `RH` Raid-Helper module),
-  `app.js`, `groups.js`, `loot-prio.js`, `styles.css`.
+- **Frontend — repo root.** The shared assets: `menu.js` (session helpers, `API_BASE`,
+  the nav, item links, and the `RH` Raid-Helper module), `app.js`, `groups.js`,
+  `loot-prio.js`, `styles.css`. Plus the two public pages, `index.html` and
+  `apply.html`, and a redirect stub per moved page.
+- **Frontend — `legacy/`.** One `.html` per gated app (`board`, `groups`, `members`,
+  `loot`, `attendance`, `character`, `item`, `loot-prio`, …). They reach the shared
+  assets as `../menu.js` / `../styles.css`; every link *between* them is a bare
+  relative filename and stays that way. Adding a page here means adding its root
+  stub too. See README → *Site layout*.
 - **Backend — `server/WoobackVash.Api`.** `Api/` (endpoints), `Auth/`, `Config/`,
   `Data/` (EF Core + `Migrations/`), `Proxy/`, `Services/`.
 
@@ -68,7 +73,7 @@ change as cosmetic (and say so).
 
 ## Things that must change together
 
-- `SHEET_DOCS` in `sheet.html` ↔ `LootSheet:Docs` in
+- `SHEET_DOCS` in `legacy/sheet.html` ↔ `LootSheet:Docs` in
   `server/WoobackVash.Api/appsettings.json`. Both name the same Google docs.
 - An origin change ↔ `AllowedOrigins` in **both** `appsettings.json` and
   `appsettings.Development.json`.

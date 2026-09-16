@@ -286,9 +286,13 @@
   }
 
   /* Landing / sign-in page */
-  .landing{max-width:520px;margin:12vh auto 0;text-align:center;}
+  .landing{max-width:520px;margin:6vh auto 0;text-align:center;}
   .landing h1{font-size:32px;margin-bottom:8px;}
   .landing .subtitle{margin:0 auto 26px;max-width:400px;}
+  /* The guild crest stands in for the landing's wordmark — it spells the name out itself,
+     so the <h1> holds the image (alt text keeps the heading) rather than repeating it. */
+  .landing .landing-title{margin:0 0 4px;text-shadow:none;line-height:0;}
+  .landing-logo{width:240px;max-width:70vw;height:auto;filter:drop-shadow(0 8px 28px rgba(0,0,0,.55));}
   .discord-btn{
     display:inline-flex;align-items:center;gap:10px;
     background:#5865F2;color:#fff;border:none;border-radius:9px;
@@ -322,6 +326,7 @@
   .wrap.apply-wrap{max-width:680px;margin:4vh auto 0;}
   .apply-wrap [hidden]{display:none !important;}
   .apply-head{text-align:center;margin-bottom:26px;}
+  .apply-logo{width:120px;height:auto;display:block;margin:0 auto 8px;}
   .apply-head h1{font-size:32px;margin-bottom:8px;}
   .apply-head .subtitle{margin:0 auto;max-width:520px;line-height:1.5;}
   .apply-section{

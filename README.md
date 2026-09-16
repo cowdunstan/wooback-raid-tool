@@ -26,6 +26,8 @@ under **`/legacy/`**.
 /applications.html   officers — review of those applications (WoW Forever, so not in legacy/)
 /styles.css /menu.js /app.js /groups.js /loot-prio.js /my-priority.js /loot-sheet.js
 /apply-questions.js  the application's question list, shared by the two pages above
+/logo.png            the guild crest (landing + apply header); favicon.png and
+                     apple-touch-icon.png are cut from the same art for every real page
 /<page>.html × 16    redirect stubs, one per moved page → legacy/<page>.html
 /legacy/<page>.html  the gated apps, listed below
 ```

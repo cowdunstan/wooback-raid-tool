@@ -14,7 +14,7 @@
 const LAUNCH_CLASSES = [
   ['warrior','Warrior'], ['paladin','Paladin'], ['hunter','Hunter'], ['rogue','Rogue'],
   ['priest','Priest'], ['shaman','Shaman'], ['mage','Mage'], ['warlock','Warlock'],
-  ['druid','Druid']
+  ['druid','Druid'], ['unsure','Not sure']
 ];
 const LAUNCH_ROLES = [ ['tank','Tank'], ['healer','Healer'], ['dps','DPS'] ];
 
@@ -24,15 +24,15 @@ const LAUNCH_SECTIONS = [
     { id:'spec', type:'radio', req:true, q:'Main spec', options: LAUNCH_ROLES },
     { id:'offspec', type:'radio', req:true, q:'Off spec', hint:'What you could swap to if the raid needs it.',
       options: LAUNCH_ROLES.concat([ ['none','No off spec'] ]) },
+    { id:'professions', type:'checkbox', q:'Professions', hint:'Pick up to two, or leave blank if you have not decided.', max:2, options:[
+      ['alchemy','Alchemy'], ['blacksmithing','Blacksmithing'], ['enchanting','Enchanting'],
+      ['engineering','Engineering'], ['herbalism','Herbalism'], ['leatherworking','Leatherworking'],
+      ['mining','Mining'], ['skinning','Skinning'], ['tailoring','Tailoring'] ] },
     { id:'charName', type:'text', max:64, q:'Character name', hint:'If you know it already.' }
   ]},
 
-  { title:'Alts and professions', questions:[
-    { id:'alts', type:'text', max:200, q:'Alts?', hint:'Any you plan to level, with class and role — e.g. "Priest healer". Leave blank for none.' },
-    { id:'professions', type:'checkbox', q:'Professions on your main', hint:'Pick up to two, or leave blank if you have not decided.', max:2, options:[
-      ['alchemy','Alchemy'], ['blacksmithing','Blacksmithing'], ['enchanting','Enchanting'],
-      ['engineering','Engineering'], ['herbalism','Herbalism'], ['leatherworking','Leatherworking'],
-      ['mining','Mining'], ['skinning','Skinning'], ['tailoring','Tailoring'] ] }
+  { title:'Alts', questions:[
+    { id:'alts', type:'text', max:200, q:'Alts?', hint:'Any you plan to level, with class and role — e.g. "Priest healer". Leave blank for none.' }
   ]},
 
   { title:'Raiding', questions:[

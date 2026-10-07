@@ -92,9 +92,9 @@ session.
   Officers reach it from the Discord ping's link. The page's officer gate is cosmetic; the
   routes are `RequireOfficer`.
 - **`launch.html`** *(root, any signed-in tier)* — the **WoW Forever launch poll**, for
-  planning the launch raid groups: main class, main spec and off spec (tank / healer / DPS —
-  coarser than the application's melee/ranged split on purpose), an optional character name,
-  alts (free text), up to two professions, whether they expect to be 60 when raids open on
+  planning the launch raid groups: main class (or not sure), main spec and off spec (tank /
+  healer / DPS — coarser than the application's melee/ranged split on purpose), up to two
+  professions, an optional character name, alts (free text), whether they expect to be 60 when raids open on
   9 December (yes / no / unsure), which raid group they want — the **sweaty parsing group**
   (~5 hours Saturday and Sunday mornings, minimum performance requirements, a bench policy)
   or the **semi-hardcore group** (show up when signed up, with consumes, knowing the fights)

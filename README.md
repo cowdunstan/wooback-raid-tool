@@ -107,12 +107,13 @@ session.
   healer / DPS — coarser than the application's melee/ranged split on purpose), up to two
   professions, an optional character name, alts (free text), whether they expect to be 60 when raids open on
   9 December (yes / no / unsure), which raid group they want — the **sweaty parsing group**
-  (up to 5 hours Saturday and Sunday mornings, minimum performance requirements, a bench policy)
+  (up to 5 hours a day Saturday and Sunday mornings, minimum performance requirements, a bench policy)
   or the **semi-hardcore group** (show up when signed up, with consumes, knowing the fights)
   — who they want to stick with to raid together (`raidWith`, free text), whether they plan
-  to PvP (`pvp`, optional: yes / a little / no), and an optional "anything else". One response per member, pre-filled on return and editable any time.
-  **Main spec, off spec and raid group are public, as counts**: a "Where the guild stands"
-  table with **Main spec** / **Off spec** tabs (a row per raid group plus everyone, a column per role; off spec also counts "No off spec") so a
+  to PvP (`pvp`, optional: yes / a little / no), and an optional
+  "anything else". One response per member, pre-filled on return and editable any time.
+  **Main class, main spec, off spec and raid group are public, as counts**: a "Who's answered so far"
+  table with **Main spec** / **Off spec** / **Class** tabs (a row per option, a column per raid group plus everyone, and a total row; off spec also counts "No off spec") so a
   member can see which group is short of what before choosing. It never names anyone, and
   every other answer is officers-only. Which questions are public is decided by the
   server (`PublicQuestions` in `LaunchPollEndpoints.cs`), mirrored by `public: true` in the
@@ -599,7 +600,7 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
 - **Launch poll** (any signed-in session) — `GET /api/launch-poll` returns
   `{ total, mine, answers }`: how many members have answered, the caller's own
   `{ choices, text, updatedAt }` (or `null`) to pre-fill the form, and `answers[]` — one
-  entry per response holding **only** the public questions (`spec`, `offspec`, `group`),
+  entry per response holding **only** the public questions (`class`, `spec`, `offspec`, `group`),
   with no id, name or timestamp, sorted by the answers themselves so the order gives nothing
   away about who saved last. `POST /api/launch-poll` with `{ choices: { questionId: [value, …] }, text:
   { questionId: "…" } }` upserts the caller's `LaunchPollResponse` on the unique `Uid`;

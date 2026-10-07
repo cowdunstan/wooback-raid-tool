@@ -13,8 +13,8 @@ namespace WoobackVash.Api.Api;
 /// one.
 ///
 /// Any signed-in member answers for themselves and reads back their own answers. Everyone also
-/// sees, anonymously, the answers to the <see cref="PublicQuestions"/> — main spec, off spec and
-/// raid group — so a member can see which group is short of tanks before they pick one. Those
+/// sees, anonymously, the answers to the <see cref="PublicQuestions"/> — main class, main spec,
+/// off spec and raid group — so a member can see which group is short of tanks before they pick one. Those
 /// come back as one nameless entry per response, holding only those questions, so the page can
 /// cross-tabulate group against spec. Everything else, and who answered what, leaves the server
 /// only through the officer-gated <c>GET /api/launch-poll/responses</c>.
@@ -29,7 +29,7 @@ public static class LaunchPollEndpoints
     public record LaunchPollInput(Dictionary<string, List<string>>? Choices, Dictionary<string, string>? Text);
 
     /// <summary>The choice questions every member may see answers to, anonymously.</summary>
-    private static readonly string[] PublicQuestions = ["spec", "offspec", "group"];
+    private static readonly string[] PublicQuestions = ["class", "spec", "offspec", "group"];
 
     // Generous headroom over the ~10 questions the form actually has.
     private const int MaxKeys = 40;

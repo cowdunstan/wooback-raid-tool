@@ -417,7 +417,7 @@
 
   /* WoW Forever launch poll (launch.html) and its officer review (launch-responses.html).
      Both lean on the apply- and review- styles above; these are the extras. */
-  .apply-wrap .authbar .btn-ghost,.review-wrap .authbar .btn-ghost{text-decoration:none;}
+  .authbar a.btn-ghost{text-decoration:none;}
   .launch-count{font-size:12.5px;color:var(--text-dim);margin:10px 0 0;}
   .apply-status.ok{color:var(--accent);}
   .apply-opts.launch-opts-wide{grid-template-columns:1fr;}

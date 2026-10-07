@@ -34,6 +34,16 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Launch poll — wooback</title>
+<style>
+  /* This page's own rules. They live here rather than in styles.css so they ship with the
+     markup that uses them: a browser can hold a styles.css up to ten minutes older than this
+     page (README → Asset caching), and without these the raid-group options collapse into two
+     narrow columns with their explanation run into the label. */
+  .launch-count{font-size:12.5px;color:var(--text-dim);margin:10px 0 0;}
+  .apply-opts.launch-opts-wide{grid-template-columns:1fr;}
+  .launch-opt-detail{display:block;font-size:12px;color:var(--text-dim);margin-top:2px;line-height:1.4;}
+  .launch-summary-title{font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:var(--heading);margin:0 0 8px;}
+</style>
 
 <div class="app">
   <div class="wrap apply-wrap">

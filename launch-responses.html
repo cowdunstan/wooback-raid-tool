@@ -32,7 +32,7 @@
 <title>Launch poll responses — wooback</title>
 
 <div class="app">
-  <div class="wrap review-wrap">
+  <div class="wrap review-wrap stats-wrap">
     <div class="authbar">
       <span class="authbar-left">
         <div class="nav">
@@ -56,12 +56,14 @@
 
     <p id="status" class="apply-status"></p>
 
-    <section id="summary" class="launch-summary" hidden></section>
-
     <div id="filters" class="launch-filters" hidden></div>
+    <section id="summary" hidden></section>
+
+    <h3 id="listHead" class="stat-section" hidden>Responses</h3>
     <div id="list"></div>
   </div>
 </div>
+<div id="tip" class="stat-tip" hidden></div>
 
 <script src="menu.js"></script>
 <script src="launch-questions.js"></script>
@@ -98,33 +100,177 @@ const first = (r, id) => picked(r, id)[0];
 let responses = [];
 let filter = 'all';
 
-// ── Summary: the numbers an officer builds groups from ──────────────────────────────────────
-// One row per raid group (plus everyone), split by main spec, with how many expect to be 60
-// when raids open. Below it, a tally per choice question.
-function summaryHtml(){
+const pct = (n, d) => d ? Math.round(n * 100 / d) : 0;
+const plural = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
+const DAY = 86400000;
+const CLASS_COLORS = (typeof RH !== 'undefined' && RH.CLASS_COLORS) || {};
+const inGroup = (r, g) => g === 'all' || first(r, 'group') === g;
+const who = r => (r.text && r.text.charName) || r.name;
+
+// ── Stats building blocks (styles in styles.css, shared with application-stats.html) ────────
+function statCard(title, note, body){
+  return '<div class="stat-card"><h2>' + esc(title) + '</h2>' +
+    (note ? '<p class="stat-note">' + note + '</p>' : '') + body + '</div>';
+}
+
+function kpi(label, value, sub, tip){
+  return '<div class="kpi"' + (tip ? ' data-tip="' + esc(tip) + '"' : '') + '><div class="kpi-label">' + esc(label) + '</div>' +
+    '<div class="kpi-value">' + esc(value) + '</div>' +
+    (sub ? '<div class="kpi-sub">' + esc(sub) + '</div>' : '') + '</div>';
+}
+
+// rows: [{ label, n, swatch?, unknown? }]; shares are of `denom`.
+function hbars(rows, denom){
+  const max = Math.max(1, ...rows.map(r => r.n));
+  return rows.map(r =>
+    '<div class="hbar' + (r.unknown ? ' unknown' : '') + '" data-tip="' + esc(r.label + ': ' + plural(r.n, 'member') + ' (' + pct(r.n, denom) + '%)') + '">' +
+      '<div class="hbar-head"><span class="hbar-label">' +
+        (r.swatch ? '<span class="swatch" style="background:' + r.swatch + '"></span>' : '') + esc(r.label) +
+      '</span><span class="hbar-count"><b>' + r.n + '</b> · ' + pct(r.n, denom) + '%</span></div>' +
+      '<div class="hbar-track"><div class="hbar-fill" style="width:' + (r.n * 100 / max) + '%"></div></div>' +
+    '</div>').join('');
+}
+
+// A grid of counts, gold tint scaling with the count. rows/cols: [[id, label, swatch?]];
+// count(rowId, colId) gives a cell; tip(row, col, n) its hover text.
+function heat(rows, cols, count, tip){
+  let max = 0;
+  const grid = rows.map(r => cols.map(c => { const n = count(r[0], c[0]); max = Math.max(max, n); return n; }));
+  const colTot = cols.map((c, j) => grid.reduce((s, row) => s + row[j], 0));
+  let html = '<div class="heat-scroll"><table class="heat"><thead><tr><th></th>' +
+    cols.map(c => '<th>' + esc(c[1]) + '</th>').join('') + '<th class="tot">Total</th></tr></thead><tbody>';
+  rows.forEach(function(r, i){
+    const cells = cols.map(function(c, j){
+      const n = grid[i][j];
+      if(!n) return '<td class="z">·</td>';
+      return '<td style="background:rgba(var(--accent-rgb),' + (.18 + .62 * n / max).toFixed(2) + ')" data-tip="' +
+        esc(tip(r, c, n)) + '">' + n + '</td>';
+    }).join('');
+    const rowTot = grid[i].reduce((s, n) => s + n, 0);
+    html += '<tr><th class="row"><span>' + (r[2] ? '<span class="swatch" style="background:' + r[2] + '"></span>' : '') +
+      esc(r[1]) + '</span></th>' + cells + '<td class="tot">' + (rowTot || '·') + '</td></tr>';
+  });
+  html += '<tr><th class="row tot">Total</th>' + colTot.map(n => '<td class="tot">' + (n || '·') + '</td>').join('') +
+    '<td class="tot">' + colTot.reduce((s, n) => s + n, 0) + '</td></tr></tbody></table></div>';
+  return html;
+}
+
+// Option counts for one choice question, in the form's order. An id the form no longer offers
+// is kept, raw, so a retired option doesn't silently drop out of the totals.
+function tally(set, q){
+  const counts = {}, extra = [];
+  let answered = 0;
+  set.forEach(function(r){
+    const v = picked(r, q.id);
+    if(!v.length) return;
+    answered++;
+    v.forEach(function(x){
+      if(!(x in counts)){ counts[x] = 0; if(!q.options.some(o => o[0] === x)) extra.push(x); }
+      counts[x]++;
+    });
+  });
+  const rows = q.options.map(o => ({ id:o[0], label:o[1], n:counts[o[0]] || 0 }))
+    .concat(extra.map(x => ({ id:x, label:x, n:counts[x] })));
+  return { rows, answered };
+}
+
+function choiceCard(set, q){
+  const t = tally(set, q);
+  const rows = t.rows.map(r => Object.assign(r, {
+    swatch: q.id === 'class' ? CLASS_COLORS[r.id] : null,
+    unknown: r.id === 'unsure' || r.id === 'none'
+  }));
+  const note = plural(t.answered, 'member') + ' of ' + set.length + ' answered' + (q.req ? '' : ' (optional)') +
+    (q.type === 'checkbox' ? ' · pick-any, so shares don\'t add up to 100%' : '') + '.';
+  return statCard(q.q, note, hbars(rows, t.answered));
+}
+
+// ── Sections ────────────────────────────────────────────────────────────────────────────────
+// Headline numbers for the group in view: how many answered, the main-spec split with how many
+// more could swap in on off spec, and how many expect to be 60 when raids open.
+function headline(set){
+  const recent = set.filter(r => Date.now() - new Date(r.updatedAt) < 7 * DAY).length;
+  const role = function(id, label){
+    const main = set.filter(r => first(r, 'spec') === id).length;
+    const off = set.filter(r => first(r, 'offspec') === id && first(r, 'spec') !== id).length;
+    return kpi(label, main, off ? '+' + off + ' on off spec' : 'none on off spec',
+      label + ': ' + plural(main, 'main') + (off ? ', and ' + off + ' more who could swap to it' : ''));
+  };
+  const yes = set.filter(r => first(r, 'sixty') === 'yes').length;
+  const unsure = set.filter(r => first(r, 'sixty') === 'unsure').length;
+  const no = set.filter(r => first(r, 'sixty') === 'no').length;
+  const undecided = set.filter(r => first(r, 'class') === 'unsure').length;
+  return '<div class="kpis">' +
+    kpi('Responses', set.length, plural(recent, 'update') + ' in the last 7 days') +
+    role('tank', 'Tanks') + role('healer', 'Healers') + role('dps', 'DPS') +
+    kpi('60 on 9 Dec', pct(yes, set.length) + '%', yes + ' yes · ' + unsure + ' unsure · ' + no + ' no') +
+    kpi('Class decided', pct(set.length - undecided, set.length) + '%', undecided ? plural(undecided, 'member') + ' not sure yet' : 'everyone has picked') +
+  '</div>';
+}
+
+// One row per raid group (plus everyone), split by main spec — each cell with how many more
+// could cover that role on off spec — and how many expect to be 60. Always every group, whatever
+// the filter: comparing them is the point.
+function groupTable(){
   const groupQ = byId('group'), specQ = byId('spec');
   const rows = groupQ.options.map(o => [o[0], o[1]]).concat([['all', 'Everyone']]);
   const head = '<tr><th></th>' + specQ.options.map(o => '<th>' + esc(o[1]) + '</th>').join('') +
     '<th>Total</th><th>60 on 9 Dec</th></tr>';
   const body = rows.map(function(row){
-    const set = responses.filter(r => row[0] === 'all' || first(r, 'group') === row[0]);
-    const cells = specQ.options.map(o => '<td>' + set.filter(r => first(r, 'spec') === o[0]).length + '</td>').join('');
+    const set = responses.filter(r => inGroup(r, row[0]));
+    const cells = specQ.options.map(function(o){
+      const main = set.filter(r => first(r, 'spec') === o[0]).length;
+      const off = set.filter(r => first(r, 'offspec') === o[0] && first(r, 'spec') !== o[0]).length;
+      return '<td data-tip="' + esc(row[1] + ' · ' + o[1] + '\n' + plural(main, 'main') + (off ? ' · +' + off + ' on off spec' : '')) + '">' +
+        main + (off ? ' <span class="launch-dim">+' + off + '</span>' : '') + '</td>';
+    }).join('');
     const sixty = set.filter(r => first(r, 'sixty') === 'yes').length;
     const unsure = set.filter(r => first(r, 'sixty') === 'unsure').length;
     return '<tr' + (row[0] === 'all' ? ' class="launch-total"' : '') + '><th>' + esc(row[1]) + '</th>' + cells +
       '<td>' + set.length + '</td><td>' + sixty + (unsure ? ' <span class="launch-dim">(+' + unsure + ' unsure)</span>' : '') + '</td></tr>';
   }).join('');
+  return statCard('Raid groups', 'Main specs per group; the dim <span class="launch-dim">+n</span> is how many more could swap to that role on off spec. Every group, whatever the filter above.',
+    '<div class="launch-table-wrap"><table class="launch-table">' + head + body + '</table></div>');
+}
 
-  const tallies = LAUNCH_QUESTIONS.filter(q => q.options).map(function(q){
-    const chips = q.options.map(function(o){
-      const n = responses.filter(r => picked(r, q.id).indexOf(o[0]) !== -1).length;
-      return n ? '<span class="launch-chip">' + esc(o[1]) + ' <b>' + n + '</b></span>' : '';
-    }).join('');
-    return '<div class="review-row"><dt>' + esc(q.q) + '</dt><dd>' + (chips || '<span class="review-none">—</span>') + '</dd></div>';
-  }).join('');
+function classSpec(set){
+  const classes = byId('class').options.map(o => [o[0], o[1], CLASS_COLORS[o[0]]]);
+  return statCard('Class × main spec', 'Who\'s planning what. Darker means more members in that combination.',
+    heat(classes, byId('spec').options,
+      (c, s) => set.filter(r => first(r, 'class') === c && first(r, 'spec') === s).length,
+      (c, s, n) => c[1] + ' · ' + s[1] + '\n' + plural(n, 'member')));
+}
 
-  return '<div class="launch-table-wrap"><table class="launch-table">' + head + body + '</table></div>' +
-    '<details class="review-details"><summary>Every tally</summary><dl>' + tallies + '</dl></details>';
+function offspecCover(set){
+  const specs = byId('spec').options, offs = byId('offspec').options;
+  return statCard('Off-spec cover', 'Main spec down the side, what they could swap to across the top.',
+    heat(specs, offs,
+      (m, o) => set.filter(r => first(r, 'spec') === m && first(r, 'offspec') === o).length,
+      (m, o, n) => plural(n, m[1] + ' main') + (o[0] === 'none' ? ' with no off spec' : ' who could ' + o[1].toLowerCase())));
+}
+
+// Free text that matters for building groups: who wants to stick together, and planned alts.
+function textList(set, id, title, note){
+  const rows = set.filter(r => r.text && r.text[id])
+    .sort((a, b) => who(a).localeCompare(who(b)))
+    .map(r => '<li><b>' + esc(who(r)) + '</b> — ' + esc(r.text[id]) + '</li>').join('');
+  return statCard(title, note, rows ? '<ul class="quotes">' + rows + '</ul>' : '<p class="review-none">Nobody yet.</p>');
+}
+
+function summaryHtml(){
+  const set = responses.filter(r => inGroup(r, filter));
+  if(!set.length) return groupTable();
+  return headline(set) + groupTable() +
+    '<h3 class="stat-section">Composition</h3>' +
+    '<div class="stat-grid">' + classSpec(set) + offspecCover(set) + '</div>' +
+    '<h3 class="stat-section">Readiness &amp; the rest</h3>' +
+    '<div class="stat-grid">' + choiceCard(set, byId('sixty')) + choiceCard(set, byId('professions')) +
+      choiceCard(set, byId('pvp')) + choiceCard(set, byId('class')) + '</div>' +
+    '<h3 class="stat-section">Who goes with whom</h3>' +
+    '<div class="stat-grid">' +
+      textList(set, 'raidWith', 'Raiding together', 'Who each member wants to stick with.') +
+      textList(set, 'alts', 'Planned alts', 'In their own words.') +
+    '</div>';
 }
 
 // ── Cards ───────────────────────────────────────────────────────────────────────────────────
@@ -190,9 +336,10 @@ function filtersHtml(){
 }
 
 function render(){
-  const summaryEl = document.getElementById('summary'), filtersEl = document.getElementById('filters');
+  const summaryEl = document.getElementById('summary'), filtersEl = document.getElementById('filters'),
+    listHead = document.getElementById('listHead');
   if(!responses.length){
-    summaryEl.hidden = filtersEl.hidden = true;
+    summaryEl.hidden = filtersEl.hidden = listHead.hidden = true;
     document.getElementById('list').innerHTML = '';
     setStatus('No responses yet.');
     return;
@@ -202,11 +349,30 @@ function render(){
   summaryEl.hidden = false;
   filtersEl.innerHTML = filtersHtml();
   filtersEl.hidden = false;
-  const shown = responses.filter(r => filter === 'all' || first(r, 'group') === filter);
+  listHead.hidden = false;
+  const shown = responses.filter(r => inGroup(r, filter));
   document.getElementById('list').innerHTML = shown.length
     ? shown.map(card).join('')
     : '<p class="review-none">Nobody has picked this group yet.</p>';
 }
+
+// Hover text for the stats, as on application-stats.html.
+(function(){
+  const tip = document.getElementById('tip');
+  document.addEventListener('mousemove', function(e){
+    const t = e.target.closest && e.target.closest('[data-tip]');
+    if(!t){ tip.hidden = true; return; }
+    tip.textContent = t.dataset.tip;
+    tip.hidden = false;
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + 14, y = e.clientY + 14;
+    if(x + w > innerWidth - 8) x = e.clientX - w - 14;
+    if(y + h > innerHeight - 8) y = e.clientY - h - 14;
+    tip.style.left = Math.max(8, x) + 'px';
+    tip.style.top = Math.max(8, y) + 'px';
+  });
+  document.addEventListener('mouseleave', () => { tip.hidden = true; });
+})();
 
 async function load(){
   setStatus('Loading…');

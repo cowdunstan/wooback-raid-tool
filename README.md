@@ -25,8 +25,11 @@ under **`/legacy/`**.
 /apply.html          public — WoW Forever application form, no session, one anonymous POST
 /applications.html   officers — review of those applications (WoW Forever, so not in legacy/)
 /application-stats.html  officers — the same applications collated into charts
+/launch.html         any signed-in member — the WoW Forever launch poll
+/launch-responses.html  officers — review of the launch poll
 /styles.css /menu.js /app.js /groups.js /loot-prio.js /my-priority.js /loot-sheet.js
-/apply-questions.js  the application's question list, shared by the two pages above
+/apply-questions.js  the application's question list, shared by apply, applications, application-stats
+/launch-questions.js the launch poll's question list, shared by launch + launch-responses
 /logo.png            the guild crest (landing + apply header); favicon.png and
                      apple-touch-icon.png are cut from the same art for every real page
 /<page>.html × 16    redirect stubs, one per moved page → legacy/<page>.html
@@ -65,9 +68,10 @@ session.
 
 - **`index.html`** *(root, public)* — landing page. "Sign in with Discord" for a
   stranger, with a note under it that access needs membership of the wooback Discord
-  server; for someone already holding a session the button is swapped for **Open
-  TBC tools →** into `legacy/home.html` rather than redirecting, so the Apply link
-  stays reachable for a member pointing a recruit at it.
+  server; for someone already holding a session the button is swapped for **WoW Forever
+  launch poll →** (`launch.html`), with a smaller **Open TBC tools →** link into
+  `legacy/home.html` under it, rather than redirecting, so the Apply link stays reachable
+  for a member pointing a recruit at it.
 - **`apply.html`** *(root, public)* — the **WoW Forever application form**. The one page
   with **no gate script at all**: an applicant has no Discord session and no guild role
   yet. It makes a single anonymous call, `POST /api/applications` (see the API list). The
@@ -97,6 +101,31 @@ session.
   the browser, taking every question and label off `APPLY_SECTIONS`, so a question added to
   the form charts itself. An All time / 90 / 30 days filter applies to everything except the
   over-time chart. Linked from `applications.html`'s header; its gate is cosmetic too.
+- **`launch.html`** *(root, any signed-in tier)* — the **WoW Forever launch poll**, for
+  planning the launch raid groups: main class (or not sure), main spec and off spec (tank /
+  healer / DPS — coarser than the application's melee/ranged split on purpose), up to two
+  professions, an optional character name, alts (free text), whether they expect to be 60 when raids open on
+  9 December (yes / no / unsure), which raid group they want — the **sweaty parsing group**
+  (~5 hours Saturday and Sunday mornings, minimum performance requirements, a bench policy)
+  or the **semi-hardcore group** (show up when signed up, with consumes, knowing the fights)
+  — who they want to stick with to raid together (`raidWith`, free text), and an optional
+  "anything else". One response per member, pre-filled on return and editable any time.
+  **Main spec, off spec and raid group are public, as counts**: a "Where the guild stands"
+  table (a row per raid group plus everyone, a column per main spec and per off spec) so a
+  member can see which group is short of what before choosing. It never names anyone, and
+  every other answer is officers-only. Which questions are public is decided by the
+  server (`PublicQuestions` in `LaunchPollEndpoints.cs`), mirrored by `public: true` in the
+  question list. The questions live in
+  **`launch-questions.js`** (`LAUNCH_SECTIONS`), shared with `launch-responses.html`; `class`
+  uses the same option ids as the application and the WoW Forever poll. The gate is
+  `home.html`'s, bouncing to `index.html`. Reached from the landing page and a card on
+  `legacy/home.html`; not in the `legacy/` nav, like `applications.html`.
+- **`launch-responses.html`** *(root, officers only)* — review of the launch poll: a table of
+  each raid group by main spec with how many expect to be 60 on 9 December, a tally of every
+  choice question, filter chips per group, then one card per member (class · spec / off spec ·
+  60 by 9 Dec · group · who they raid with, every answer behind a toggle, their linked TBC main if any, and
+  Delete). A member who opens it is sent to `launch.html`. The gate is cosmetic; the routes
+  are `RequireOfficer`.
 - **`home.html`** — the default page after sign-in: a welcome hub with a hamburger
   menu and app cards. Open to any signed-in tier.
 - **`logs.html`** — the **Warcraft Logs** app: the guild's uploaded reports
@@ -566,6 +595,19 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   and with no URL configured it's skipped. `GET /api/applications` (**officer only**)
   returns `{ total, applications[] = { id, discord, choices, text, submittedAt } }`, newest
   first. `DELETE /api/applications/{id}` (**officer only**) removes one.
+- **Launch poll** (any signed-in session) — `GET /api/launch-poll` returns
+  `{ total, mine, answers }`: how many members have answered, the caller's own
+  `{ choices, text, updatedAt }` (or `null`) to pre-fill the form, and `answers[]` — one
+  entry per response holding **only** the public questions (`spec`, `offspec`, `group`),
+  with no id, name or timestamp, sorted by the answers themselves so the order gives nothing
+  away about who saved last. `POST /api/launch-poll` with `{ choices: { questionId: [value, …] }, text:
+  { questionId: "…" } }` upserts the caller's `LaunchPollResponse` on the unique `Uid`;
+  bounds as the applications' (≤ 40 keys, ids ≤ 64 chars, ≤ 2000 chars per text answer),
+  blank text dropped. Question-agnostic: `launch-questions.js` owns the set.
+  `GET /api/launch-poll/responses` (**officer only**) returns `{ total, responses[] = { id,
+  name, mainName, mainId, choices, text, updatedAt } }`, most recently updated first, with
+  each member's linked TBC main resolved as `/api/poll/detail` does.
+  `DELETE /api/launch-poll/responses/{id}` (**officer only**) removes one.
 - **Health** — `/healthz` (liveness), `/readyz` (DB reachability + error detail).
 
 Non-secret config (Discord client id, guild id, role ids, WCL guild identity)

@@ -415,6 +415,42 @@
   .review-none{color:var(--text-dim);}
   @media (max-width:560px){ .review-row{grid-template-columns:1fr;gap:2px;} }
 
+  /* WoW Forever launch poll (launch.html) and its officer review (launch-responses.html).
+     Both lean on the apply- and review- styles above; these are the extras. */
+  .apply-wrap .authbar .btn-ghost,.review-wrap .authbar .btn-ghost{text-decoration:none;}
+  .launch-count{font-size:12.5px;color:var(--text-dim);margin:10px 0 0;}
+  .apply-status.ok{color:var(--accent);}
+  .apply-opts.launch-opts-wide{grid-template-columns:1fr;}
+  .launch-opt-detail{display:block;font-size:12px;color:var(--text-dim);margin-top:2px;line-height:1.4;}
+  .launch-summary{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
+    padding:14px 18px;margin:0 0 16px;
+  }
+  .launch-table-wrap{overflow-x:auto;margin-bottom:10px;}
+  .launch-table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums;}
+  .launch-table th,.launch-table td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--panel-line);white-space:nowrap;}
+  .launch-table th:first-child{text-align:left;color:var(--heading);white-space:normal;padding-left:0;}
+  @media (max-width:760px){ .launch-table th,.launch-table td{padding:6px 6px;} }
+  .launch-table tr:first-child th,.launch-table tr.launch-head th{color:var(--text-dim);font-weight:600;font-size:11.5px;}
+  .launch-table th.launch-colgroup{text-align:center;color:var(--heading);border-bottom-color:var(--accent-dim);}
+  .launch-summary-title{font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:var(--heading);margin:0 0 8px;}
+  .launch-table td{color:var(--text);}
+  .launch-table tr.launch-total th,.launch-table tr.launch-total td{font-weight:700;border-bottom:none;}
+  .launch-dim{color:var(--text-dim);font-weight:400;}
+  .launch-chip{
+    display:inline-block;margin:0 6px 4px 0;padding:2px 8px;border-radius:999px;
+    background:var(--chip-bg);color:var(--text);white-space:nowrap;
+  }
+  .launch-chip b{color:var(--accent);}
+  .launch-filters{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
+  .launch-filter{
+    background:none;border:1px solid var(--panel-line);border-radius:999px;color:var(--text-dim);
+    padding:5px 12px;font-size:12px;font-family:'Inter',sans-serif;cursor:pointer;
+  }
+  .launch-filter:hover{border-color:var(--accent-dim);color:var(--text);}
+  .launch-filter.active{border-color:var(--accent);color:var(--heading);background:rgba(var(--accent-rgb),.12);}
+  .launch-filter b{color:var(--accent);}
+
   /* Warcraft Logs list */
   .logs-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px;}
   .logs-toolbar .btn-ghost{text-decoration:none;}

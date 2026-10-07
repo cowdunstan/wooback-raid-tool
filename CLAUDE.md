@@ -16,7 +16,8 @@ only *how to work here*.
   `apply.html`, and a redirect stub per moved page.
 - **WoW Forever pages go at the root too, never in `legacy/`.** `legacy/` is the TBC
   tools. So far that's `apply.html` (public), `applications.html` (officers), and the
-  `apply-questions.js` they share.
+  `apply-questions.js` they share; and `launch.html` (members), `launch-responses.html`
+  (officers), and the `launch-questions.js` they share.
 - **Frontend — `legacy/`.** One `.html` per gated app (`board`, `groups`, `members`,
   `loot`, `attendance`, `character`, `item`, `loot-prio`, …). They reach the shared
   assets as `../menu.js` / `../styles.css`; every link *between* them is a bare
@@ -95,6 +96,10 @@ change as cosmetic (and say so).
 - The shared question ids in `apply-questions.js` (class, role, focus, commitment)
   ↔ `QUESTIONS` in `legacy/forever.html`. They match on purpose, so an applicant's answers
   line up with the members' poll; rename an id or option in one, rename it in both.
+- `PublicQuestions` in `server/WoobackVash.Api/Api/LaunchPollEndpoints.cs` ↔ the questions
+  marked `public: true` in `launch-questions.js`. The server's list is what actually reaches
+  every member; the flag only documents it, and `launch.html`'s table reads `spec`, `offspec`
+  and `group` by name.
 - `WOWHEAD_DOMAIN` in `menu.js` and `LEVEL_CAP` in `groups.js` both track the current
   expansion — flip them together when the guild moves on (item tooltips ↔ the max-level
   filter on the 2-group page).

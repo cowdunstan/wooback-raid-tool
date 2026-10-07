@@ -176,6 +176,9 @@ app.MapPollEndpoints();
 // The public WoW Forever application form (apply.html) and its officer review.
 app.MapApplicationEndpoints();
 
+// The WoW Forever launch poll (launch.html) and its officer review (launch-responses.html).
+app.MapLaunchPollEndpoints();
+
 app.Run();
 
 // The caller's IP, for per-IP rate limiting. Behind Fly's proxy RemoteIpAddress is the proxy,

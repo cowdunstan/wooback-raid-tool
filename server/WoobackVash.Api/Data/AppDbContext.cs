@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<LootPrioExclusion> LootPrioExclusions => Set<LootPrioExclusion>();
     public DbSet<PollResponse> PollResponses => Set<PollResponse>();
     public DbSet<GuildApplication> GuildApplications => Set<GuildApplication>();
+    public DbSet<LaunchPollResponse> LaunchPollResponses => Set<LaunchPollResponse>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -29,6 +30,14 @@ public class AppDbContext : DbContext
             e.Property(x => x.Text).HasColumnType("jsonb");
             // The review page lists newest first.
             e.HasIndex(x => x.SubmittedAt);
+        });
+
+        b.Entity<LaunchPollResponse>(e =>
+        {
+            // One response per Discord user — POST upserts on it.
+            e.HasIndex(x => x.Uid).IsUnique();
+            e.Property(x => x.Choices).HasColumnType("jsonb");
+            e.Property(x => x.Text).HasColumnType("jsonb");
         });
 
         b.Entity<Member>(e =>

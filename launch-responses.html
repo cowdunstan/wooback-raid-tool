@@ -1,0 +1,245 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Officer gate, as on applications.html. Hiding the page is only cosmetic: GET and DELETE
+   /api/launch-poll/responses are officer-gated on the API regardless. A member who lands here
+   is sent to the poll itself rather than the landing page. */
+(function(){
+  function payload(tok){
+    if(!tok) return null;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      return JSON.parse(atob(p));
+    }catch(e){ return null; }
+  }
+  var tok = null;
+  try{ tok = localStorage.getItem('vashj_session'); }catch(e){}
+  var p = payload(tok);
+  if(!p || !p.exp || p.exp <= Math.floor(Date.now()/1000)){
+    try{ localStorage.removeItem('vashj_session'); }catch(e){}
+    location.replace('index.html');
+  }else if(!p.officer){
+    location.replace('launch.html');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Launch poll responses — wooback</title>
+
+<div class="app">
+  <div class="wrap review-wrap">
+    <div class="authbar">
+      <span class="authbar-left">
+        <span class="eyebrow">Launch poll · officers only</span>
+      </span>
+      <span class="authbar-right">
+        <span id="authWho" class="auth-who"></span>
+        <a class="btn-ghost" href="launch.html">The poll</a>
+        <button class="btn-ghost" onclick="logout()">Sign out</button>
+      </span>
+    </div>
+
+    <h1>Launch poll responses</h1>
+    <p class="subtitle">Every member's answers, most recently updated first. Members can change theirs any time, so this is the latest word, not a log.</p>
+
+    <p id="status" class="apply-status"></p>
+
+    <section id="summary" class="launch-summary" hidden></section>
+
+    <div id="filters" class="launch-filters" hidden></div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script src="menu.js"></script>
+<script src="launch-questions.js"></script>
+<script>
+// Every label is read off LAUNCH_SECTIONS (launch-questions.js), the same list that builds the
+// members' form, so this view can't drift from what was asked. API_BASE, sessionToken and
+// logout come from menu.js.
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function api(path, opts){
+  const res = await fetch(API_BASE + path, Object.assign({
+    headers: { 'Authorization': 'Bearer ' + sessionToken() }
+  }, opts));
+  if(res.status === 401){ setStatus('Session expired — signing out…', 'err'); setTimeout(logout, 1200); throw new Error('401'); }
+  return res;
+}
+
+function setStatus(msg, kind){
+  const el = document.getElementById('status');
+  el.textContent = msg || '';
+  el.className = 'apply-status' + (kind ? ' ' + kind : '');
+}
+
+const byId = id => LAUNCH_QUESTIONS.find(q => q.id === id);
+
+function optionLabel(q, value){
+  const o = (q.options || []).find(o => o[0] === value);
+  return o ? o[1] : value;       // an id the form no longer offers still shows, raw
+}
+const picked = (r, id) => (r.choices && r.choices[id]) || [];
+const first = (r, id) => picked(r, id)[0];
+
+let responses = [];
+let filter = 'all';
+
+// ── Summary: the numbers an officer builds groups from ──────────────────────────────────────
+// One row per raid group (plus everyone), split by main spec, with how many expect to be 60
+// when raids open. Below it, a tally per choice question.
+function summaryHtml(){
+  const groupQ = byId('group'), specQ = byId('spec');
+  const rows = groupQ.options.map(o => [o[0], o[1]]).concat([['all', 'Everyone']]);
+  const head = '<tr><th></th>' + specQ.options.map(o => '<th>' + esc(o[1]) + '</th>').join('') +
+    '<th>Total</th><th>60 on 9 Dec</th></tr>';
+  const body = rows.map(function(row){
+    const set = responses.filter(r => row[0] === 'all' || first(r, 'group') === row[0]);
+    const cells = specQ.options.map(o => '<td>' + set.filter(r => first(r, 'spec') === o[0]).length + '</td>').join('');
+    const sixty = set.filter(r => first(r, 'sixty') === 'yes').length;
+    const unsure = set.filter(r => first(r, 'sixty') === 'unsure').length;
+    return '<tr' + (row[0] === 'all' ? ' class="launch-total"' : '') + '><th>' + esc(row[1]) + '</th>' + cells +
+      '<td>' + set.length + '</td><td>' + sixty + (unsure ? ' <span class="launch-dim">(+' + unsure + ' unsure)</span>' : '') + '</td></tr>';
+  }).join('');
+
+  const tallies = LAUNCH_QUESTIONS.filter(q => q.options).map(function(q){
+    const chips = q.options.map(function(o){
+      const n = responses.filter(r => picked(r, q.id).indexOf(o[0]) !== -1).length;
+      return n ? '<span class="launch-chip">' + esc(o[1]) + ' <b>' + n + '</b></span>' : '';
+    }).join('');
+    return '<div class="review-row"><dt>' + esc(q.q) + '</dt><dd>' + (chips || '<span class="review-none">—</span>') + '</dd></div>';
+  }).join('');
+
+  return '<div class="launch-table-wrap"><table class="launch-table">' + head + body + '</table></div>' +
+    '<details class="review-details"><summary>Every tally</summary><dl>' + tallies + '</dl></details>';
+}
+
+// ── Cards ───────────────────────────────────────────────────────────────────────────────────
+function answerHtml(q, r){
+  if(LAUNCH_TEXT_TYPES.indexOf(q.type) !== -1){
+    const v = r.text && r.text[q.id];
+    return v ? esc(v) : null;
+  }
+  const p = picked(r, q.id);
+  return p.length ? p.map(v => esc(optionLabel(q, v))).join(', ') : null;
+}
+
+function when(iso){
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
+}
+
+function card(r){
+  // The at-a-glance line: main, spec / off spec, level by raids, and group.
+  const lbl = id => { const v = first(r, id); return v ? optionLabel(byId(id), v) : null; };
+  const spec = lbl('spec'), off = first(r, 'offspec');
+  const summary = [
+    lbl('class'),
+    spec ? spec + (off && off !== 'none' ? ' / ' + lbl('offspec') : '') : null,
+    lbl('sixty') ? '60 by 9 Dec: ' + lbl('sixty') : null,
+    lbl('group')
+  ].filter(Boolean);
+
+  const sections = LAUNCH_SECTIONS.map(function(s){
+    const rows = s.questions.map(function(q){
+      const a = answerHtml(q, r);
+      return '<div class="review-row"><dt>' + esc(q.q) + '</dt><dd>' +
+        (a == null ? '<span class="review-none">—</span>' : a) + '</dd></div>';
+    }).join('');
+    return '<section class="review-section"><h3>' + esc(s.title) + '</h3><dl>' + rows + '</dl></section>';
+  }).join('');
+
+  const charName = r.text && r.text.charName;
+  // The TBC main links to its sheet, which lives under legacy/.
+  const main = r.mainName && r.mainId
+    ? '<a class="review-char" href="legacy/character.html?id=' + esc(r.mainId) + '">TBC: ' + esc(r.mainName) + '</a>' : '';
+
+  return '<article class="review-card" data-id="' + esc(r.id) + '" data-name="' + esc(r.name) + '">' +
+    '<header class="review-head">' +
+      '<div><span class="review-handle">' + esc(charName || r.name) + '</span>' +
+        (charName ? '<span class="review-char">' + esc(r.name) + '</span>' : '') + main +
+        '<div class="review-when">Updated ' + esc(when(r.updatedAt)) + '</div></div>' +
+      '<button type="button" class="btn-ghost review-delete">Delete</button>' +
+    '</header>' +
+    (summary.length ? '<p class="review-summary">' + esc(summary.join(' · ')) + '</p>' : '') +
+    '<details class="review-details"><summary>All answers</summary>' + sections + '</details>' +
+  '</article>';
+}
+
+function filtersHtml(){
+  const opts = [['all', 'Everyone']].concat(byId('group').options);
+  return opts.map(function(o){
+    const n = o[0] === 'all' ? responses.length : responses.filter(r => first(r, 'group') === o[0]).length;
+    return '<button type="button" class="launch-filter' + (filter === o[0] ? ' active' : '') + '" data-filter="' + esc(o[0]) + '">' +
+      esc(o[1]) + ' <b>' + n + '</b></button>';
+  }).join('');
+}
+
+function render(){
+  const summaryEl = document.getElementById('summary'), filtersEl = document.getElementById('filters');
+  if(!responses.length){
+    summaryEl.hidden = filtersEl.hidden = true;
+    document.getElementById('list').innerHTML = '';
+    setStatus('No responses yet.');
+    return;
+  }
+  setStatus(responses.length + (responses.length === 1 ? ' response.' : ' responses.'));
+  summaryEl.innerHTML = summaryHtml();
+  summaryEl.hidden = false;
+  filtersEl.innerHTML = filtersHtml();
+  filtersEl.hidden = false;
+  const shown = responses.filter(r => filter === 'all' || first(r, 'group') === filter);
+  document.getElementById('list').innerHTML = shown.length
+    ? shown.map(card).join('')
+    : '<p class="review-none">Nobody has picked this group yet.</p>';
+}
+
+async function load(){
+  setStatus('Loading…');
+  try{
+    const res = await api('/api/launch-poll/responses');
+    if(res.status === 403){ setStatus('Officers only.', 'err'); return; }
+    if(!res.ok){ setStatus('Could not load responses (HTTP ' + res.status + ').', 'err'); return; }
+    responses = (await res.json()).responses || [];
+    render();
+  }catch(err){
+    if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
+  }
+}
+
+document.getElementById('filters').addEventListener('click', function(e){
+  const btn = e.target.closest('.launch-filter');
+  if(!btn) return;
+  filter = btn.dataset.filter;
+  render();
+});
+
+document.getElementById('list').addEventListener('click', async function(e){
+  const btn = e.target.closest('.review-delete');
+  if(!btn) return;
+  const cardEl = btn.closest('.review-card');
+  if(!confirm('Delete the response from ' + cardEl.dataset.name + "? This can't be undone.")) return;
+  btn.disabled = true;
+  try{
+    const res = await api('/api/launch-poll/responses/' + encodeURIComponent(cardEl.dataset.id), { method:'DELETE' });
+    if(!res.ok && res.status !== 404){
+      setStatus('Could not delete (HTTP ' + res.status + ').', 'err');
+      btn.disabled = false;
+      return;
+    }
+    responses = responses.filter(r => r.id !== cardEl.dataset.id);
+    render();
+  }catch(err){
+    if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
+    btn.disabled = false;
+  }
+});
+
+load();
+</script>

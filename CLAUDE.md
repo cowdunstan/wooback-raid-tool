@@ -16,7 +16,8 @@ only *how to work here*.
   `apply.html`, and a redirect stub per moved page.
 - **WoW Forever pages go at the root too, never in `legacy/`.** `legacy/` is the TBC
   tools. So far that's `apply.html` (public), `applications.html` (officers), and the
-  `apply-questions.js` they share.
+  `apply-questions.js` they share; and `launch.html` (members), `launch-responses.html`
+  (officers), and the `launch-questions.js` they share.
 - **Frontend — `legacy/`.** One `.html` per gated app (`board`, `groups`, `members`,
   `loot`, `attendance`, `character`, `item`, `loot-prio`, …). They reach the shared
   assets as `../menu.js` / `../styles.css`; every link *between* them is a bare

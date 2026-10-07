@@ -1,0 +1,258 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Access gate. Open to any signed-in tier, so it is the same gate as legacy/home.html's:
+   captures a session handed back in the URL fragment and bounces to the landing page when
+   there is no unexpired one. This page sits at the site root (it is WoW Forever, not a TBC
+   tool), so the bounce is to index.html. Every read and write is API-enforced regardless. */
+(function(){
+  var m = location.hash.match(/(?:^#|&)session=([^&]+)/);
+  if(m){
+    try{ localStorage.setItem('vashj_session', decodeURIComponent(m[1])); }catch(e){}
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  function valid(tok){
+    if(!tok) return false;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      var payload = JSON.parse(atob(p));
+      return payload.exp && payload.exp > Math.floor(Date.now()/1000);
+    }catch(e){ return false; }
+  }
+  var tok = null;
+  try{ tok = localStorage.getItem('vashj_session'); }catch(e){}
+  if(!valid(tok)){
+    try{ localStorage.removeItem('vashj_session'); }catch(e){}
+    location.replace('index.html');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Launch poll — wooback</title>
+
+<div class="app">
+  <div class="wrap apply-wrap">
+    <div class="authbar">
+      <span class="authbar-left">
+        <a class="btn-ghost" href="launch-responses.html" data-officer-only>See responses</a>
+      </span>
+      <span class="authbar-right">
+        <span id="authWho" class="auth-who"></span>
+        <button class="btn-ghost" onclick="logout()">Sign out</button>
+      </span>
+    </div>
+
+    <header class="apply-head">
+      <a href="index.html"><img class="apply-logo" src="logo.png" alt="wooback home" width="120" height="120"></a>
+      <span class="eyebrow">WoW Forever · launch poll</span>
+      <h1>Launch poll</h1>
+      <p class="subtitle">Help the officers plan the launch raid groups. One response each, and you can come back and change it any time before raids open. Only officers see your answers. Questions marked <span class="apply-req">*</span> are required.</p>
+      <p id="count" class="launch-count"></p>
+    </header>
+
+    <form id="launchForm" novalidate>
+      <div id="sections"></div>
+
+      <div class="apply-actions">
+        <button type="submit" class="btn-primary" id="submitBtn">Save my answers</button>
+        <p id="status" class="apply-status" role="status"></p>
+      </div>
+    </form>
+
+    <p class="landing-apply"><a href="index.html">← Back to wooback</a></p>
+  </div>
+</div>
+
+<script src="menu.js"></script>
+<script src="launch-questions.js"></script>
+<script>
+// LAUNCH_SECTIONS, LAUNCH_QUESTIONS and LAUNCH_TEXT_TYPES come from launch-questions.js;
+// API_BASE, sessionToken and logout from menu.js. The server stores whatever it is sent, so the
+// required-field checks below are the form's own. The form builder follows apply.html's.
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+const isGroup = q => q.type === 'radio' || q.type === 'checkbox';
+const isText = q => LAUNCH_TEXT_TYPES.indexOf(q.type) !== -1;
+
+function control(q){
+  const id = 'q-' + q.id;
+  if(isGroup(q)){
+    const wide = !!q.details;
+    return '<div class="apply-opts' + (wide ? ' launch-opts-wide' : '') + '">' + q.options.map(function(o){
+      const detail = wide && q.details[o[0]]
+        ? '<small class="launch-opt-detail">' + esc(q.details[o[0]]) + '</small>' : '';
+      return '<label class="apply-opt"><input type="' + q.type + '" name="' + esc(q.id) + '" value="' + esc(o[0]) + '">' +
+        '<span>' + esc(o[1]) + detail + '</span></label>';
+    }).join('') + '</div>';
+  }
+  if(q.type === 'textarea'){
+    return '<textarea class="apply-input" id="' + id + '" name="' + esc(q.id) + '" maxlength="2000" rows="3"></textarea>';
+  }
+  return '<input class="apply-input" type="text" id="' + id + '" name="' + esc(q.id) + '"' +
+    ' maxlength="' + (q.max || 2000) + '" autocomplete="off">';
+}
+
+function question(q){
+  const req = q.req ? '<span class="apply-req" title="Required">*</span>' : '';
+  const tag = isGroup(q) ? 'fieldset' : 'div';
+  const head = isGroup(q)
+    ? '<legend class="apply-label">' + esc(q.q) + req + '</legend>'
+    : '<label class="apply-label" for="q-' + esc(q.id) + '">' + esc(q.q) + req + '</label>';
+  return '<' + tag + ' class="apply-q" data-q="' + esc(q.id) + '">' + head +
+    (q.hint ? '<p class="apply-hint">' + esc(q.hint) + '</p>' : '') +
+    control(q) + '<p class="apply-err" hidden></p></' + tag + '>';
+}
+
+function buildForm(){
+  document.getElementById('sections').innerHTML = LAUNCH_SECTIONS.map(function(s){
+    return '<section class="apply-section"><h2>' + esc(s.title) + '</h2>' +
+      s.questions.map(question).join('') + '</section>';
+  }).join('');
+}
+
+const form = document.getElementById('launchForm');
+
+function fill(mine){
+  const choices = (mine && mine.choices) || {}, text = (mine && mine.text) || {};
+  LAUNCH_QUESTIONS.forEach(function(q){
+    if(isGroup(q)){
+      const picked = choices[q.id] || [];
+      form.querySelectorAll('input[name="' + q.id + '"]').forEach(i => { i.checked = picked.indexOf(i.value) !== -1; });
+    }else{
+      document.getElementById('q-' + q.id).value = text[q.id] || '';
+    }
+  });
+}
+
+function collect(){
+  const choices = {}, text = {};
+  LAUNCH_QUESTIONS.forEach(function(q){
+    if(isGroup(q)){
+      const picked = Array.from(form.querySelectorAll('input[name="' + q.id + '"]:checked')).map(i => i.value);
+      if(picked.length) choices[q.id] = picked;
+    }else{
+      const v = document.getElementById('q-' + q.id).value.trim();
+      if(v) text[q.id] = v;
+    }
+  });
+  return { choices, text };
+}
+
+function problems(p){
+  const out = {};
+  LAUNCH_QUESTIONS.forEach(function(q){
+    const value = isText(q) ? p.text[q.id] : p.choices[q.id];
+    if(q.req && !value){
+      out[q.id] = q.type === 'checkbox' ? 'Pick at least one.' : isText(q) ? 'Please fill this in.' : 'Please choose one.';
+    }else if(q.type === 'checkbox' && q.max && value && value.length > q.max){
+      out[q.id] = 'Pick at most ' + q.max + '.';
+    }
+  });
+  return out;
+}
+
+function clearProblem(el){
+  if(!el || !el.classList.contains('invalid')) return;
+  el.classList.remove('invalid');
+  el.querySelector('.apply-err').hidden = true;
+}
+
+function showProblems(bad){
+  form.querySelectorAll('.apply-q').forEach(clearProblem);
+  let first = null;
+  Object.keys(bad).forEach(function(id){
+    const el = form.querySelector('.apply-q[data-q="' + id + '"]');
+    if(!el) return;
+    el.classList.add('invalid');
+    const err = el.querySelector('.apply-err');
+    err.textContent = bad[id];
+    err.hidden = false;
+    first = first || el;
+  });
+  if(first){
+    first.scrollIntoView({ behavior:'smooth', block:'center' });
+    const focusable = first.querySelector('input, textarea');
+    if(focusable) focusable.focus({ preventScroll:true });
+  }
+}
+
+form.addEventListener('input', e => clearProblem(e.target.closest('.apply-q')));
+form.addEventListener('change', e => clearProblem(e.target.closest('.apply-q')));
+
+function setStatus(msg, kind){
+  const el = document.getElementById('status');
+  el.textContent = msg || '';
+  el.className = 'apply-status' + (kind ? ' ' + kind : '');
+}
+
+async function api(path, opts){
+  const headers = { 'Authorization': 'Bearer ' + sessionToken() };
+  if(opts && opts.body) headers['Content-Type'] = 'application/json';
+  const res = await fetch(API_BASE + path, Object.assign({ headers }, opts));
+  if(res.status === 401){ setStatus('Session expired — signing out…', 'err'); setTimeout(logout, 1200); throw new Error('401'); }
+  return res;
+}
+
+function when(iso){
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
+}
+
+function showCount(data){
+  const n = data.total || 0;
+  document.getElementById('count').textContent =
+    n + (n === 1 ? ' member has' : ' members have') + ' answered so far.' +
+    (data.mine ? ' You last saved ' + when(data.mine.updatedAt) + '.' : '');
+}
+
+async function load(){
+  try{
+    const res = await api('/api/launch-poll');
+    if(!res.ok){ setStatus('Could not load your answers (HTTP ' + res.status + ').', 'err'); return; }
+    const data = await res.json();
+    fill(data.mine);
+    showCount(data);
+  }catch(err){
+    if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
+  }
+}
+
+form.addEventListener('submit', async function(e){
+  e.preventDefault();
+  const payload = collect();
+  const bad = problems(payload);
+  if(Object.keys(bad).length){
+    showProblems(bad);
+    setStatus('A few answers still need filling in.', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  setStatus('Saving…');
+  try{
+    const res = await api('/api/launch-poll', { method:'POST', body: JSON.stringify(payload) });
+    if(!res.ok){
+      let detail = 'HTTP ' + res.status;
+      try{ const j = await res.json(); if(j && j.detail) detail = j.detail; }catch(_){}
+      setStatus('Could not save: ' + detail, 'err');
+      return;
+    }
+    await load();
+    setStatus('Saved — thanks! Come back and change it any time.', 'ok');
+  }catch(err){
+    if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+buildForm();
+load();
+</script>

@@ -19,7 +19,8 @@
       </button>
       <p class="landing-signin-note" id="signin-note">You must be a member of the wooback Discord server to get access.</p>
 
-      <a class="landing-btn" id="tools" href="legacy/home.html" hidden>Open TBC tools →</a>
+      <a class="landing-btn" id="launch" href="launch.html" hidden>WoW Forever launch poll →</a>
+      <p class="landing-apply" id="toolsLine" hidden><a id="tools" href="legacy/home.html">Open TBC tools →</a></p>
 
       <div class="landing-msg" id="msg"></div>
 
@@ -64,7 +65,8 @@
     if(validSession(localStorage.getItem('vashj_session'))){
       document.getElementById('signin').hidden = true;
       document.getElementById('signin-note').hidden = true;
-      document.getElementById('tools').hidden = false;
+      document.getElementById('launch').hidden = false;
+      document.getElementById('toolsLine').hidden = false;
       document.getElementById('subtitle').textContent = 'Welcome back. The guild apps are through here.';
     }
   }catch(e){}

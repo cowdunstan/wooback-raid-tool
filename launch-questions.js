@@ -9,7 +9,8 @@
 
    Choice types (radio, checkbox) are sent as `choices: { id: [value, …] }`; free-text types
    (text, textarea) as `text: { id: "…" }`. A question with `details` renders each option
-   full-width with that line of explanation under it; `max` on a checkbox caps the picks.
+   full-width with that line of explanation under it; `max` on a checkbox caps the picks;
+   `short` gives an option a shorter label for a table header.
 
    `public: true` marks a question every member sees the answers to, anonymously, as counts
    on launch.html. It is cosmetic here: the server's PublicQuestions (LaunchPollEndpoints.cs)
@@ -24,7 +25,7 @@ const LAUNCH_ROLES = [ ['tank','Tank'], ['healer','Healer'], ['dps','DPS'] ];
 
 const LAUNCH_SECTIONS = [
   { title:'Your main', questions:[
-    { id:'class', type:'radio', req:true, q:'Main class', options: LAUNCH_CLASSES },
+    { id:'class', type:'radio', req:true, public:true, q:'Main class', options: LAUNCH_CLASSES },
     { id:'spec', type:'radio', req:true, public:true, q:'Main spec', options: LAUNCH_ROLES },
     { id:'offspec', type:'radio', req:true, public:true, q:'Off spec', hint:'What you could swap to if the raid needs it.',
       options: LAUNCH_ROLES.concat([ ['none','No off spec'] ]) },
@@ -44,8 +45,9 @@ const LAUNCH_SECTIONS = [
       ['yes','Yes'], ['no','No'], ['unsure','Unsure'] ] },
     { id:'group', type:'radio', req:true, public:true, q:'Which raid group do you want to be in?', options:[
       ['sweaty','Sweaty parsing group'], ['semi','Semi-hardcore group'] ],
+      short:{ sweaty:'Sweaty parsing', semi:'Semi-hardcore' },
       details:{
-        sweaty:'About 5 hours a day, Saturday and Sunday mornings. Minimum performance requirements and a bench policy.',
+        sweaty:'Up to 5 hours a day, Saturday and Sunday mornings. Minimum performance requirements and a bench policy.',
         semi:'If you sign up for Saturday or Sunday, show up — with consumes, and knowing the fights.'
       } },
     { id:'raidWith', type:'text', max:300, q:'Is there a person or group of friends you want to stick with to raid together?',

@@ -35,13 +35,19 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>WoW Forever — wooback</title>
 
-<!-- No hamburger here: NAV_LINKS in menu.js are bare filenames for the legacy/ pages and
-     would resolve against the root. The cards below are this page's whole nav. -->
+<!-- The drawer is data-nav="forever": menu.js's FOREVER_NAV_LINKS, the root-level pages,
+     not the legacy/ ones. -->
 <div class="app">
   <div class="wrap">
     <div class="authbar">
       <span class="authbar-left">
-        <a class="btn-ghost" href="legacy/home.html">TBC tools</a>
+        <div class="nav">
+          <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navDrawer">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-drawer" id="navDrawer" data-nav="forever"></nav>
+        </div>
+        <a class="btn-ghost" href="legacy/home.html">Switch to TBC tools</a>
       </span>
       <span class="authbar-right">
         <span id="authWho" class="auth-who"></span>
@@ -50,6 +56,7 @@
     </div>
 
     <div class="home-hero">
+      <a href="index.html"><img class="apply-logo" src="logo.png" alt="wooback home" width="120" height="120" style="margin:0 0 10px"></a>
       <span class="eyebrow">WoW Forever</span>
       <h1>wooback</h1>
       <p class="subtitle">Everything for the guild's WoW Forever launch. Pick an app to get started.</p>
@@ -86,12 +93,6 @@
         <span class="app-card-tag">Officers</span>
         <h2>Application stats</h2>
         <p>The same applications collated into charts — classes, roles, focus and commitment at a glance.</p>
-        <span class="app-card-go">Open →</span>
-      </a>
-
-      <a class="app-card" href="legacy/forever.html">
-        <h2>WoW Forever poll</h2>
-        <p>The original interest poll: who's in, and what faction, race, role and class they'd play — everyone sees the running tallies.</p>
         <span class="app-card-go">Open →</span>
       </a>
     </div>

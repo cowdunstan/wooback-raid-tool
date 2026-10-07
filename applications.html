@@ -35,12 +35,18 @@
   <div class="wrap review-wrap">
     <div class="authbar">
       <span class="authbar-left">
+        <div class="nav">
+          <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navDrawer">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-drawer" id="navDrawer" data-nav="forever"></nav>
+        </div>
+        <a href="forever-home.html"><img src="logo.png" alt="WoW Forever home" width="36" height="36" style="display:block"></a>
         <span class="eyebrow">Recruitment · officers only</span>
       </span>
       <span class="authbar-right">
         <span id="authWho" class="auth-who"></span>
         <a class="btn-ghost" href="application-stats.html">Stats</a>
-        <a class="btn-ghost" href="forever-home.html">Forever home</a>
         <button class="btn-ghost" onclick="logout()">Sign out</button>
       </span>
     </div>

@@ -58,9 +58,9 @@ fragment intact. The target is written out per stub rather than read off
 `location.pathname`, which a server is free to rewrite (`npx serve` locally does
 exactly that, stripping both the extension and the query).
 
-Post-login, the backend redirects to **`/legacy/home.html`**
-(`Auth/AuthEndpoints.cs`); its `denied` / `error` redirects still target `/`, which is
-still the landing page that reads them.
+Post-login, the backend redirects to the landing page, **`/#session=…`**
+(`Auth/AuthEndpoints.cs`), the same place its `denied` / `error` redirects go: it
+stores the session and offers the way through to the Forever and TBC tools.
 
 ### The pages
 
@@ -69,8 +69,8 @@ session.
 
 - **`index.html`** *(root, public)* — landing page. "Sign in with Discord" for a
   stranger, with a note under it that access needs membership of the wooback Discord
-  server; for someone already holding a session the button is swapped for **WoW Forever
-  launch poll →** (`launch.html`), with a smaller **Open TBC tools →** link into
+  server. It is where sign-in lands (`#session=…`, stored on arrival); for someone holding a
+  session the button is swapped for **Open WoW Forever tools →** (`forever-home.html`), with a smaller **Open TBC tools →** link into
   `legacy/home.html` under it, rather than redirecting, so the Apply link stays reachable
   for a member pointing a recruit at it.
 - **`apply.html`** *(root, public)* — the **WoW Forever application form**. The one page
@@ -102,6 +102,14 @@ session.
   the browser, taking every question and label off `APPLY_SECTIONS`, so a question added to
   the form charts itself. An All time / 90 / 30 days filter applies to everything except the
   over-time chart. Linked from `applications.html`'s header; its gate is cosmetic too.
+- **`forever-home.html`** *(root, any signed-in tier)* — the **WoW Forever hub**: the
+  crest, a **Switch to TBC tools** button, and an app card per Forever page (officer
+  cards hidden from members). The old interest poll (`legacy/forever.html`) is no longer
+  carded here; it is still in the `legacy/` nav. Every signed-in Forever page — this
+  one, `launch.html`, `launch-responses.html`, `applications.html`,
+  `application-stats.html` — carries the hamburger with `data-nav="forever"`, which
+  makes `menu.js` render `FOREVER_NAV_LINKS` (the root pages, plus a link across to the
+  TBC tools) instead of the `legacy/` `NAV_LINKS`. `apply.html` is public and has none.
 - **`launch.html`** *(root, any signed-in tier)* — the **WoW Forever launch poll**, for
   planning the launch raid groups: main class (or not sure), main spec and off spec (tank /
   healer / DPS — coarser than the application's melee/ranged split on purpose), up to two
@@ -128,7 +136,7 @@ session.
   60 by 9 Dec · group · who they raid with, every answer behind a toggle, their linked TBC main if any, and
   Delete). A member who opens it is sent to `launch.html`. The gate is cosmetic; the routes
   are `RequireOfficer`.
-- **`home.html`** — the default page after sign-in: a welcome hub with a hamburger
+- **`home.html`** — the TBC tools hub: a welcome hub with a hamburger, a **Switch to WoW Forever tools** button,
   menu and app cards. Open to any signed-in tier.
 - **`logs.html`** — the **Warcraft Logs** app: the guild's uploaded reports
   (newest first). Each report expands on click to reveal links opening that raid on
@@ -625,7 +633,7 @@ lives in `server/WoobackVash.Api/appsettings.json`.
    - holds `HOME_ROLE_ID` (or is an officer) → home session (`officer: false`);
    - neither → redirected back to the landing page with a "no access" message.
    On success it upserts the member, mints a signed session, and redirects to
-   `legacy/home.html#session=…`.
+   the landing page, `/#session=…`.
 4. Pages store the session and send it as `Authorization: Bearer <token>`. The
    backend rejects officer routes with no session (`401`) or a non-officer session
    (`403`). Client-side checks only decide what to *show*; the real enforcement is

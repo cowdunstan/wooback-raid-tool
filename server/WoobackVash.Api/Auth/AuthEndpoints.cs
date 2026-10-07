@@ -178,9 +178,9 @@ public static class AuthEndpoints
             }
 
             var session = tokens.Sign(uid, name, isOfficer);
-            // The gated apps live under /legacy/ — the site root is public now. The
-            // denied/error redirects below still target "/", which is the landing page.
-            return RedirectToApp(ctx, d, "/legacy/home.html", "session", session, clearState: true);
+            // Back to the landing page, like the denied/error redirects above. It stores
+            // the session and offers the way through to both the Forever and TBC tools.
+            return RedirectToApp(ctx, d, "/", "session", session, clearState: true);
         });
 
         // Sliding renewal. The pages call this on load once a session is past its

@@ -37,11 +37,14 @@
     location.href = API_BASE + '/auth/login';
   });
 
-  // Surface a denial / error passed back from the Worker in the URL fragment.
+  // The backend hands back a fresh session (#session=…) after sign-in, or a denial /
+  // error, in the URL fragment.
   (function(){
     var params = new URLSearchParams(location.hash.slice(1));
     var msg = document.getElementById('msg');
-    if(params.has('denied')){
+    if(params.has('session')){
+      try{ localStorage.setItem('vashj_session', params.get('session')); }catch(e){}
+    } else if(params.has('denied')){
       var why = params.get('denied');
       msg.textContent = why === 'no_access'
         ? 'That Discord account doesn’t have access to wooback tools.'

@@ -36,12 +36,15 @@
 <div class="app">
   <div class="wrap">
     <div class="topbar">
-      <div class="nav">
-        <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navDrawer">
-          <span></span><span></span><span></span>
-        </button>
-        <nav class="nav-drawer" id="navDrawer"></nav>
-      </div>
+      <span class="authbar-left">
+        <div class="nav">
+          <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navDrawer">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-drawer" id="navDrawer"></nav>
+        </div>
+        <a class="btn-ghost" href="../forever-home.html" style="text-decoration:none">Switch to WoW Forever tools</a>
+      </span>
       <span class="topbar-right">
         <span id="authWho" class="auth-who"></span>
         <button class="btn-ghost" onclick="logout()">Sign out</button>

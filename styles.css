@@ -205,9 +205,9 @@
   footer{text-align:center;color:var(--text-dim);font-size:11px;margin-top:22px;}
 
   /* Signed-in bar on the board */
-  .authbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;}
+  .authbar{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;margin-bottom:6px;flex-wrap:wrap;}
   .authbar-left{display:inline-flex;align-items:center;gap:12px;}
-  .authbar-right{display:inline-flex;align-items:center;gap:10px;}
+  .authbar-right{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .auth-who{font-size:11.5px;color:var(--text-dim);}
   .authbar .btn-ghost{padding:5px 12px;font-size:11.5px;}
 

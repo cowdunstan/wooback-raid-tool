@@ -24,10 +24,11 @@ under **`/legacy/`**.
 /index.html          public landing — sign in, or (already signed in) a way through to the tools
 /apply.html          public — WoW Forever application form, no session, one anonymous POST
 /applications.html   officers — review of those applications (WoW Forever, so not in legacy/)
+/application-stats.html  officers — the same applications collated into charts
 /launch.html         any signed-in member — the WoW Forever launch poll
 /launch-responses.html  officers — review of the launch poll
 /styles.css /menu.js /app.js /groups.js /loot-prio.js /my-priority.js /loot-sheet.js
-/apply-questions.js  the application's question list, shared by apply + applications
+/apply-questions.js  the application's question list, shared by apply, applications, application-stats
 /launch-questions.js the launch poll's question list, shared by launch + launch-responses
 /logo.png            the guild crest (landing + apply header); favicon.png and
                      apple-touch-icon.png are cut from the same art for every real page
@@ -91,6 +92,15 @@ session.
   because `legacy/` is the TBC tools; for the same reason it isn't in the `legacy/` nav.
   Officers reach it from the Discord ping's link. The page's officer gate is cosmetic; the
   routes are `RequireOfficer`.
+- **`application-stats.html`** *(root, officers only)* — the same applications, collated:
+  headline tiles (total, last 7 days, how many can raid both Sat & Sun, how many want to
+  raid, average sweatiness, logs linked), applications per week (per month once there are
+  more than ~6 months of them), a class × role grid, raid-day availability with the main
+  raid days highlighted, the sweatiness spread, and a bar chart for every other choice
+  question. It has no endpoint of its own: it reads `GET /api/applications` and tallies in
+  the browser, taking every question and label off `APPLY_SECTIONS`, so a question added to
+  the form charts itself. An All time / 90 / 30 days filter applies to everything except the
+  over-time chart. Linked from `applications.html`'s header; its gate is cosmetic too.
 - **`launch.html`** *(root, any signed-in tier)* — the **WoW Forever launch poll**, for
   planning the launch raid groups: main class (or not sure), main spec and off spec (tank /
   healer / DPS — coarser than the application's melee/ranged split on purpose), up to two

@@ -42,6 +42,8 @@
   .launch-count{font-size:12.5px;color:var(--text-dim);margin:10px 0 0;}
   .apply-opts.launch-opts-wide{grid-template-columns:1fr;}
   .launch-opt-detail{display:block;font-size:12px;color:var(--text-dim);margin-top:2px;line-height:1.4;}
+  .launch-table td.launch-dim{color:var(--text-dim);opacity:.6;}
+  #standingsTable tr:first-child th{white-space:normal;vertical-align:bottom;}
   .launch-summary-title{font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:var(--heading);margin:0 0 8px;}
 </style>
 
@@ -61,7 +63,7 @@
       <a href="index.html"><img class="apply-logo" src="logo.png" alt="wooback home" width="120" height="120"></a>
       <span class="eyebrow">WoW Forever · launch poll</span>
       <h1>Launch poll</h1>
-      <p class="subtitle">Help the officers plan the launch raid groups. One response each, and you can come back and change it any time before raids open. Everyone sees how many picked each spec and raid group, but not who; the rest of your answers only officers see. Questions marked <span class="apply-req">*</span> are required.</p>
+      <p class="subtitle">Help the officers plan the launch raid groups. One response each, and you can come back and change it any time before raids open. Everyone sees how many picked each class, spec and raid group, but not who; the rest of your answers only officers see. Questions marked <span class="apply-req">*</span> are required.</p>
       <p id="count" class="launch-count"></p>
     </header>
 
@@ -70,6 +72,7 @@
       <div class="launch-filters" role="tablist" aria-label="Which spec to count">
         <button type="button" class="launch-filter active" role="tab" aria-selected="true" data-tab="spec">Main spec</button>
         <button type="button" class="launch-filter" role="tab" aria-selected="false" data-tab="offspec">Off spec</button>
+        <button type="button" class="launch-filter" role="tab" aria-selected="false" data-tab="class">Class</button>
       </div>
       <div id="standingsTable" class="launch-table-wrap" role="tabpanel"></div>
     </section>
@@ -223,9 +226,10 @@ function when(iso){
   return isNaN(d) ? '' : d.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
 }
 
-// The anonymous public answers (main spec, off spec, raid group — the server picks which), as
-// one table per spec question behind a pair of tabs: a row per raid group plus everyone, a
-// column per option of that question (so the off spec tab also counts "No off spec").
+// The anonymous public answers (class, main spec, off spec, raid group — the server picks
+// which), as one table per question behind tabs: a row per option of that question (so the off
+// spec tab also counts "No off spec"), a column per raid group plus everyone, and a total row.
+// Options run down the side rather than across so the ten-option class tab still fits a phone.
 let standings = [];
 let standingsTab = 'spec';
 
@@ -235,15 +239,19 @@ function showStandings(answers){
   if(!standings.length){ section.hidden = true; return; }
   const byId = id => LAUNCH_QUESTIONS.find(q => q.id === id);
   const first = (a, id) => (a[id] || [])[0];
-  const cols = byId(standingsTab).options;
-  const rows = byId('group').options.concat([['all', 'Everyone']]);
-  const head = '<tr><th></th>' + cols.map(o => '<th>' + esc(o[1]) + '</th>').join('') + '<th>Total</th></tr>';
-  const body = rows.map(function(row){
-    const set = standings.filter(a => row[0] === 'all' || first(a, 'group') === row[0]);
-    return '<tr' + (row[0] === 'all' ? ' class="launch-total"' : '') + '><th>' + esc(row[1]) + '</th>' +
-      cols.map(o => '<td>' + set.filter(a => first(a, standingsTab) === o[0]).length + '</td>').join('') +
-      '<td>' + set.length + '</td></tr>';
+  const groupQ = byId('group');
+  const cols = groupQ.options.map(o => [o[0], (groupQ.short && groupQ.short[o[0]]) || o[1]]).concat([['all', 'Everyone']]);
+  const inCol = (a, col) => col === 'all' || first(a, 'group') === col;
+  const head = '<tr><th></th>' + cols.map(c => '<th>' + esc(c[1]) + '</th>').join('') + '</tr>';
+  const rows = byId(standingsTab).options.map(function(o){
+    return '<tr><th>' + esc(o[1]) + '</th>' + cols.map(function(c){
+      const n = standings.filter(a => inCol(a, c[0]) && first(a, standingsTab) === o[0]).length;
+      return '<td' + (n ? '' : ' class="launch-dim"') + '>' + n + '</td>';
+    }).join('') + '</tr>';
   }).join('');
+  const total = '<tr class="launch-total"><th>Total</th>' +
+    cols.map(c => '<td>' + standings.filter(a => inCol(a, c[0])).length + '</td>').join('') + '</tr>';
+  const body = rows + total;
   document.getElementById('standingsTable').innerHTML = '<table class="launch-table">' + head + body + '</table>';
   document.querySelectorAll('#standings [data-tab]').forEach(function(b){
     const on = b.dataset.tab === standingsTab;

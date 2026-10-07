@@ -109,8 +109,8 @@ session.
   9 December (yes / no / unsure), which raid group they want — the **sweaty parsing group**
   (up to 5 hours Saturday and Sunday mornings, minimum performance requirements, a bench policy)
   or the **semi-hardcore group** (show up when signed up, with consumes, knowing the fights)
-  — who they want to stick with to raid together (`raidWith`, free text), and an optional
-  "anything else". One response per member, pre-filled on return and editable any time.
+  — who they want to stick with to raid together (`raidWith`, free text), whether they plan
+  to PvP (`pvp`, optional: yes / a little / no), and an optional "anything else". One response per member, pre-filled on return and editable any time.
   **Main spec, off spec and raid group are public, as counts**: a "Where the guild stands"
   table with **Main spec** / **Off spec** tabs (a row per raid group plus everyone, a column per role; off spec also counts "No off spec") so a
   member can see which group is short of what before choosing. It never names anyone, and

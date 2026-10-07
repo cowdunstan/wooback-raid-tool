@@ -106,7 +106,7 @@ session.
   healer / DPS — coarser than the application's melee/ranged split on purpose), up to two
   professions, an optional character name, alts (free text), whether they expect to be 60 when raids open on
   9 December (yes / no / unsure), which raid group they want — the **sweaty parsing group**
-  (~5 hours Saturday and Sunday mornings, minimum performance requirements, a bench policy)
+  (up to 5 hours a day Saturday and Sunday mornings, minimum performance requirements, a bench policy)
   or the **semi-hardcore group** (show up when signed up, with consumes, knowing the fights)
   — who they want to stick with to raid together (`raidWith`, free text), and an optional
   "anything else". One response per member, pre-filled on return and editable any time.

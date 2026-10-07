@@ -45,7 +45,7 @@ const LAUNCH_SECTIONS = [
     { id:'group', type:'radio', req:true, public:true, q:'Which raid group do you want to be in?', options:[
       ['sweaty','Sweaty parsing group'], ['semi','Semi-hardcore group'] ],
       details:{
-        sweaty:'About 5 hours a day, Saturday and Sunday mornings. Minimum performance requirements and a bench policy.',
+        sweaty:'Up to 5 hours a day, Saturday and Sunday mornings. Minimum performance requirements and a bench policy.',
         semi:'If you sign up for Saturday or Sunday, show up — with consumes, and knowing the fights.'
       } },
     { id:'raidWith', type:'text', max:300, q:'Is there a person or group of friends you want to stick with to raid together?',

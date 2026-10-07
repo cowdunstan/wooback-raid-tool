@@ -1,0 +1,469 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Officer gate, same as applications.html. Cosmetic only: the one call this page makes,
+   GET /api/applications, is officer-gated on the API regardless. */
+(function(){
+  function payload(tok){
+    if(!tok) return null;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      return JSON.parse(atob(p));
+    }catch(e){ return null; }
+  }
+  var tok = null;
+  try{ tok = localStorage.getItem('vashj_session'); }catch(e){}
+  var p = payload(tok);
+  if(!p || !p.exp || p.exp <= Math.floor(Date.now()/1000)){
+    try{ localStorage.removeItem('vashj_session'); }catch(e){}
+    location.replace('index.html');
+  }else if(!p.officer){
+    location.replace('index.html');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Application stats — wooback</title>
+<style>
+  .stats-wrap [hidden]{display:none !important;}
+  .stats-filter{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 18px;}
+  .stats-filter span{font-size:12px;color:var(--text-dim);margin-right:2px;}
+  .stats-filter button{
+    background:var(--chip-bg);border:1px solid var(--panel-line);color:var(--text-dim);
+    border-radius:999px;padding:5px 12px;font:600 11.5px 'Inter',sans-serif;cursor:pointer;
+  }
+  .stats-filter button:hover{color:var(--text);border-color:var(--accent-dim);}
+  .stats-filter button.on{color:var(--on-accent);background:var(--accent);border-color:var(--accent);}
+
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+  @media (max-width:560px){ .kpis{grid-template-columns:repeat(2,1fr);} }
+  .kpi{background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;padding:12px 14px;}
+  .kpi-label{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--text-dim);font-weight:600;}
+  .kpi-value{font-family:'Cinzel',serif;font-size:26px;font-weight:700;color:var(--heading);margin-top:4px;font-variant-numeric:tabular-nums;}
+  .kpi-sub{font-size:11.5px;color:var(--text-dim);margin-top:2px;}
+
+  .stat-card{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
+    padding:16px 18px 14px;margin-bottom:14px;min-width:0;
+  }
+  .stat-card h2{
+    font-family:'Cinzel',serif;font-size:15px;font-weight:700;margin:0 0 4px;
+    color:var(--heading);letter-spacing:.3px;
+  }
+  .stat-note{font-size:12px;color:var(--text-dim);margin:0 0 12px;}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:14px;}
+  .stat-grid .stat-card{margin-bottom:0;}
+  .stat-section{
+    font-family:'Cinzel',serif;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--accent);margin:26px 0 10px;
+  }
+
+  /* Column chart: one gold series, bars anchored to the baseline, rounded at the data end. */
+  .cols{display:flex;align-items:flex-end;gap:2px;height:170px;border-bottom:1px solid var(--panel-line);padding-top:16px;}
+  .col{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative;cursor:default;}
+  .col-bar{width:100%;max-width:44px;background:var(--accent);border-radius:4px 4px 0 0;min-height:0;}
+  .cols.has-hl .col:not(.hl) .col-bar{background:rgba(var(--accent-rgb),.4);}
+  .col.zero .col-bar{background:transparent;}
+  .col:hover .col-bar{filter:brightness(1.15);}
+  .col-val{font-size:11px;color:var(--text);font-variant-numeric:tabular-nums;margin-bottom:3px;}
+  .col-axis{display:flex;gap:2px;margin-top:5px;}
+  .col-axis span{flex:1;min-width:0;text-align:center;font-size:10.5px;color:var(--text-dim);white-space:nowrap;overflow:visible;}
+  .col-axis span.main{color:var(--accent);font-weight:600;}
+
+  /* Horizontal bars: label + count on one line, the bar under it. */
+  .hbar{padding:5px 0;cursor:default;}
+  .hbar-head{display:flex;align-items:baseline;gap:8px;font-size:12.5px;}
+  .hbar-label{flex:1;min-width:0;color:var(--text);display:flex;align-items:center;gap:6px;}
+  .hbar-count{color:var(--text-dim);font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .hbar-count b{color:var(--heading);font-weight:600;}
+  .hbar-track{height:8px;background:var(--well);border-radius:4px;margin-top:4px;overflow:hidden;}
+  .hbar-fill{height:100%;background:var(--accent);border-radius:0 4px 4px 0;}
+  .hbar.unknown .hbar-label{color:var(--text-dim);font-style:italic;}
+  .hbar.unknown .hbar-fill{background:var(--text-dim);}
+  .swatch{width:9px;height:9px;border-radius:2px;flex:none;}
+
+  /* Class × role grid: gold tint scales with the count (one hue, light → strong). */
+  .heat{width:100%;border-collapse:separate;border-spacing:2px;font-size:12px;}
+  .heat th{font-weight:600;color:var(--text-dim);font-size:11px;padding:4px 6px;text-align:center;white-space:nowrap;}
+  .heat th.row{text-align:left;color:var(--text);font-size:12px;}
+  .heat th.row span{display:inline-flex;align-items:center;gap:6px;}
+  .heat td{text-align:center;padding:7px 4px;border-radius:4px;font-variant-numeric:tabular-nums;color:var(--heading);cursor:default;}
+  .heat td.z{color:var(--panel-line);}
+  .heat td.tot,.heat th.tot{color:var(--text-dim);font-weight:600;}
+  .heat-scroll{overflow-x:auto;}
+
+  .quotes{list-style:none;padding:0;margin:0;}
+  .quotes li{font-size:12.5px;padding:6px 0;border-top:1px solid var(--panel-line);color:var(--text);}
+  .quotes li:first-child{border-top:none;}
+
+  .stat-tip{
+    position:fixed;z-index:50;pointer-events:none;background:var(--well);color:var(--text);
+    border:1px solid var(--panel-line);border-radius:6px;padding:6px 9px;font:12px/1.4 'Inter',sans-serif;
+    box-shadow:0 4px 14px rgba(0,0,0,.4);max-width:260px;white-space:pre-line;
+  }
+</style>
+
+<div class="app">
+  <div class="wrap review-wrap stats-wrap">
+    <div class="authbar">
+      <span class="authbar-left">
+        <span class="eyebrow">Recruitment · officers only</span>
+      </span>
+      <span class="authbar-right">
+        <span id="authWho" class="auth-who"></span>
+        <a class="btn-ghost" href="applications.html">Applications</a>
+        <a class="btn-ghost" href="legacy/home.html">Guild tools</a>
+        <button class="btn-ghost" onclick="logout()">Sign out</button>
+      </span>
+    </div>
+
+    <h1>Application stats</h1>
+    <p class="subtitle">Every WoW Forever application, collated. Deleted applications aren't counted.</p>
+
+    <div class="stats-filter" id="filter" hidden>
+      <span>Applications from</span>
+      <button type="button" data-days="0" class="on">All time</button>
+      <button type="button" data-days="90">Last 90 days</button>
+      <button type="button" data-days="30">Last 30 days</button>
+    </div>
+
+    <p id="status" class="apply-status"></p>
+    <div id="out"></div>
+  </div>
+</div>
+<div id="tip" class="stat-tip" hidden></div>
+
+<script src="menu.js"></script>
+<script src="apply-questions.js"></script>
+<script>
+// Collates GET /api/applications in the browser. Every question, option and label is read off
+// APPLY_QUESTIONS (apply-questions.js), so a question added to the form shows up here on its own.
+// API_BASE, sessionToken, logout and RH.CLASS_COLORS come from menu.js.
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function setStatus(msg, kind){
+  const el = document.getElementById('status');
+  el.textContent = msg || '';
+  el.className = 'apply-status' + (kind ? ' ' + kind : '');
+}
+
+const byId = id => APPLY_QUESTIONS.find(q => q.id === id);
+const pct = (n, d) => d ? Math.round(n * 100 / d) : 0;
+const plural = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
+const DAY = 86400000;
+
+// Raid days the guild actually runs (README / the form's hint: Sat & Sun 9:30am EST).
+const MAIN_DAYS = ['sat', 'sun'];
+const CLASS_COLORS = (typeof RH !== 'undefined' && RH.CLASS_COLORS) || {};
+
+let ALL = [];
+let days = 0;
+
+/* ── Building blocks ─────────────────────────────────────────────────────────── */
+
+function card(title, note, body, cls){
+  return '<div class="stat-card' + (cls ? ' ' + cls : '') + '"><h2>' + esc(title) + '</h2>' +
+    (note ? '<p class="stat-note">' + note + '</p>' : '') + body + '</div>';
+}
+
+function kpi(label, value, sub){
+  return '<div class="kpi"><div class="kpi-label">' + esc(label) + '</div>' +
+    '<div class="kpi-value">' + esc(value) + '</div>' +
+    (sub ? '<div class="kpi-sub">' + esc(sub) + '</div>' : '') + '</div>';
+}
+
+// rows: [{ label, n, tip?, swatch?, unknown? }], shares are of `denom`.
+function hbars(rows, denom){
+  const max = Math.max(1, ...rows.map(r => r.n));
+  return rows.map(function(r){
+    const tip = r.tip || (r.label + ': ' + plural(r.n, 'applicant') + ' (' + pct(r.n, denom) + '%)');
+    return '<div class="hbar' + (r.unknown ? ' unknown' : '') + '" data-tip="' + esc(tip) + '">' +
+      '<div class="hbar-head"><span class="hbar-label">' +
+        (r.swatch ? '<span class="swatch" style="background:' + r.swatch + '"></span>' : '') + esc(r.label) +
+      '</span><span class="hbar-count"><b>' + r.n + '</b> · ' + pct(r.n, denom) + '%</span></div>' +
+      '<div class="hbar-track"><div class="hbar-fill" style="width:' + (r.n * 100 / max) + '%"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
+// cols: [{ label, n, tip, hl? }]. Values are printed over every bar when there's room,
+// otherwise only over the tallest.
+function columns(cols, axisEvery){
+  const max = Math.max(1, ...cols.map(c => c.n));
+  const showAll = cols.length <= 16;
+  const bars = cols.map(function(c){
+    const show = c.n && (showAll || c.n === max);
+    return '<div class="col' + (c.hl ? ' hl' : '') + (c.n ? '' : ' zero') + '" data-tip="' + esc(c.tip) + '" aria-label="' + esc(c.tip) + '">' +
+      (show ? '<span class="col-val">' + c.n + '</span>' : '') +
+      '<div class="col-bar" style="height:' + (c.n * 100 / max) + '%"></div></div>';
+  }).join('');
+  const every = axisEvery || 1;
+  const axis = cols.map((c, i) =>
+    '<span' + (c.hl ? ' class="main"' : '') + '>' + (i % every === 0 ? esc(c.label) : '') + '</span>').join('');
+  return '<div class="cols' + (cols.some(c => c.hl) ? ' has-hl' : '') + '">' + bars + '</div><div class="col-axis">' + axis + '</div>';
+}
+
+/* ── Tallies ─────────────────────────────────────────────────────────────────── */
+
+function picked(app, id){ return (app.choices && app.choices[id]) || []; }
+
+// Option counts for one choice question, in the form's option order. Values the form no
+// longer offers are kept (raw), so a retired option doesn't silently vanish from the totals.
+function tally(apps, q){
+  const counts = {}, extra = [];
+  let answered = 0;
+  apps.forEach(function(a){
+    const v = picked(a, q.id);
+    if(!v.length) return;
+    answered++;
+    v.forEach(function(x){
+      if(!(x in counts)){ counts[x] = 0; if(!(q.options || []).some(o => o[0] === x)) extra.push(x); }
+      counts[x]++;
+    });
+  });
+  const rows = (q.options || []).map(o => ({ id:o[0], label:o[1], n:counts[o[0]] || 0 }))
+    .concat(extra.map(x => ({ id:x, label:x, n:counts[x] })));
+  return { rows, answered };
+}
+
+function answeredNote(q, answered, total){
+  const multi = q.type === 'checkbox';
+  return plural(answered, 'applicant') + ' of ' + total + ' answered' +
+    (q.req ? '' : ' (optional)') +
+    (multi ? ' · pick-any, so shares don\'t add up to 100%' : '') + '.';
+}
+
+/* ── Sections ────────────────────────────────────────────────────────────────── */
+
+function headline(apps){
+  const now = Date.now();
+  const recent = d => ALL.filter(a => now - new Date(a.submittedAt) < d * DAY).length;
+
+  const sweaty = apps.map(a => Number(picked(a, 'sweaty')[0])).filter(n => n >= 1);
+  const avgSweat = sweaty.length ? (sweaty.reduce((s, n) => s + n, 0) / sweaty.length).toFixed(1) : '—';
+
+  const bothDays = apps.filter(a => MAIN_DAYS.every(d => picked(a, 'raidNights').indexOf(d) !== -1)).length;
+  const anyMain = apps.filter(a => MAIN_DAYS.some(d => picked(a, 'raidNights').indexOf(d) !== -1)).length;
+  const logs = apps.filter(a => a.text && a.text.logs).length;
+  const raiders = apps.filter(a => picked(a, 'focus').indexOf('raiding') !== -1).length;
+
+  return '<div class="kpis">' +
+    kpi('Applications', apps.length, days ? 'in the last ' + days + ' days' : ALL.length && 'since ' + new Date(ALL[ALL.length - 1].submittedAt).toLocaleDateString(undefined, { dateStyle:'medium' })) +
+    kpi('Last 7 days', recent(7), recent(30) + ' in the last 30') +
+    kpi('Raid both days', pct(bothDays, apps.length) + '%', bothDays + ' can do Sat & Sun · ' + anyMain + ' at least one') +
+    kpi('Want to raid', pct(raiders, apps.length) + '%', plural(raiders, 'applicant') + ' picked raiding') +
+    kpi('Avg sweatiness', avgSweat, sweaty.length ? 'out of 5, from ' + plural(sweaty.length, 'answer') : 'no answers yet') +
+    kpi('Logs linked', pct(logs, apps.length) + '%', plural(logs, 'applicant') + ' shared a WCL link') +
+  '</div>';
+}
+
+// Weekly buckets (Monday-start, local time) from the first application to this week;
+// monthly once that would be more than ~6 months of weeks.
+function overTime(apps){
+  if(!apps.length) return '';
+  const dates = apps.map(a => new Date(a.submittedAt)).filter(d => !isNaN(d));
+  const first = new Date(Math.min(...dates)), now = new Date();
+  const monthly = (now - first) / DAY > 26 * 7;
+
+  const start = monthly
+    ? new Date(first.getFullYear(), first.getMonth(), 1)
+    : (d => { d.setHours(0,0,0,0); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return d; })(new Date(first));
+  const next = d => monthly ? new Date(d.getFullYear(), d.getMonth() + 1, 1) : new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7);
+
+  const buckets = [];
+  for(let d = start; d <= now; d = next(d)) buckets.push({ from:d, to:next(d), n:0 });
+  dates.forEach(function(d){
+    const b = buckets.find(b => d >= b.from && d < b.to);
+    if(b) b.n++;
+  });
+
+  const fmt = d => monthly
+    ? d.toLocaleDateString(undefined, { month:'short', year:'2-digit' })
+    : d.toLocaleDateString(undefined, { day:'numeric', month:'short' });
+  const cols = buckets.map(b => ({
+    label: fmt(b.from), n: b.n,
+    tip: (monthly ? fmt(b.from) : 'Week of ' + fmt(b.from)) + '\n' + plural(b.n, 'application')
+  }));
+  const every = Math.ceil(cols.length / 8);
+  return card('Applications over time',
+    'Per ' + (monthly ? 'month' : 'week (Monday start)') + ', all time — the date filter above doesn\'t apply here.',
+    columns(cols, every));
+}
+
+function classRole(apps){
+  const cq = byId('class'), rq = byId('role');
+  if(!cq || !rq) return '';
+  const classes = cq.options, roles = rq.options;
+  const grid = {}; let max = 0, unanswered = 0;
+  apps.forEach(function(a){
+    const c = picked(a, 'class')[0], r = picked(a, 'role')[0];
+    if(!c || !r){ unanswered++; return; }
+    const k = c + '|' + r;
+    grid[k] = (grid[k] || 0) + 1;
+    max = Math.max(max, grid[k]);
+  });
+  const roleTot = r => classes.reduce((s, c) => s + (grid[c[0] + '|' + r] || 0), 0);
+
+  let html = '<div class="heat-scroll"><table class="heat"><thead><tr><th></th>' +
+    roles.map(r => '<th>' + esc(r[1]) + '</th>').join('') + '<th class="tot">Total</th></tr></thead><tbody>';
+  classes.forEach(function(c){
+    let rowTot = 0;
+    const cells = roles.map(function(r){
+      const n = grid[c[0] + '|' + r[0]] || 0;
+      rowTot += n;
+      if(!n) return '<td class="z">·</td>';
+      const alpha = (.18 + .62 * n / max).toFixed(2);
+      return '<td style="background:rgba(var(--accent-rgb),' + alpha + ')" data-tip="' +
+        esc(c[1] + ' · ' + r[1] + '\n' + plural(n, 'applicant')) + '">' + n + '</td>';
+    }).join('');
+    const sw = CLASS_COLORS[c[0]];
+    html += '<tr><th class="row"><span>' + (sw ? '<span class="swatch" style="background:' + sw + '"></span>' : '') +
+      esc(c[1]) + '</span></th>' + cells + '<td class="tot">' + (rowTot || '·') + '</td></tr>';
+  });
+  html += '<tr><th class="row tot">Total</th>' + roles.map(r => '<td class="tot">' + (roleTot(r[0]) || '·') + '</td>').join('') +
+    '<td class="tot">' + (apps.length - unanswered) + '</td></tr></tbody></table></div>';
+
+  return card('Class × role', 'Who\'s planning what. Darker means more applicants in that combination.', html);
+}
+
+function raidDays(apps){
+  const q = byId('raidNights');
+  if(!q) return '';
+  const t = tally(apps, q);
+  const cols = t.rows.map(r => ({
+    label: r.label, n: r.n, hl: MAIN_DAYS.indexOf(r.id) !== -1,
+    tip: r.label + (MAIN_DAYS.indexOf(r.id) !== -1 ? ' (main raid day)' : '') + '\n' +
+      plural(r.n, 'applicant') + ' · ' + pct(r.n, t.answered) + '%'
+  }));
+  return card(q.q, answeredNote(q, t.answered, apps.length) + ' Main raid days are highlighted.', columns(cols));
+}
+
+function sweatiness(apps){
+  const q = byId('sweaty');
+  if(!q) return '';
+  const counts = {}; let answered = 0;
+  apps.forEach(function(a){
+    const v = picked(a, 'sweaty')[0];
+    if(v == null) return;
+    answered++; counts[v] = (counts[v] || 0) + 1;
+  });
+  const cols = [];
+  for(let i = q.min; i <= q.max; i++){
+    const n = counts[String(i)] || 0;
+    cols.push({ label: String(i), n, tip: i + ' · ' + (q.labels[i] || '') + '\n' + plural(n, 'applicant') + ' · ' + pct(n, answered) + '%' });
+  }
+  const ends = '<div class="apply-range-ends"><span>' + esc(q.labels[q.min]) + '</span><span>' + esc(q.labels[q.max]) + '</span></div>';
+  return card(q.q, answeredNote(q, answered, apps.length), columns(cols) + ends);
+}
+
+function choiceCard(apps, q){
+  const t = tally(apps, q);
+  const rows = t.rows.map(r => Object.assign(r, {
+    swatch: q.id === 'class' ? CLASS_COLORS[r.id] : null,
+    unknown: r.id === 'unsure' || r.id === 'other' || r.id === 'nopref'
+  }));
+  // Pick-any shares are of the people who answered; single-choice too, so a skipped optional
+  // question doesn't read as a vote for nothing.
+  return card(q.q, answeredNote(q, t.answered, apps.length), hbars(rows, t.answered));
+}
+
+// Free-text questions don't chart; show how many answered, and the newest character names.
+function textSummary(apps){
+  const qs = APPLY_QUESTIONS.filter(q => APPLY_TEXT_TYPES.indexOf(q.type) !== -1 && q.id !== 'discord');
+  const rows = qs.map(q => ({
+    label: q.q, n: apps.filter(a => a.text && a.text[q.id]).length,
+    tip: null
+  })).map(r => Object.assign(r, { tip: r.label + ': ' + r.n + ' of ' + apps.length + ' answered' }));
+  return card('Written answers', 'How many applicants filled in each free-text question. Read them on the <a href="applications.html" style="color:var(--accent)">applications page</a>.',
+    hbars(rows, apps.length));
+}
+
+// The charts above are drawn in their own cards; every other choice question gets a bar card,
+// grouped by the form's own sections.
+const FEATURED = ['raidNights', 'sweaty', 'class', 'role'];
+
+function render(){
+  const cutoff = days ? Date.now() - days * DAY : 0;
+  const apps = ALL.filter(a => new Date(a.submittedAt).getTime() >= cutoff);
+  const out = document.getElementById('out');
+
+  if(!ALL.length){ out.innerHTML = ''; setStatus('No applications yet.'); return; }
+  setStatus('');
+  if(!apps.length){
+    out.innerHTML = headline(apps) + overTime(ALL);
+    setStatus('No applications in the last ' + days + ' days.');
+    return;
+  }
+
+  let html = headline(apps) + overTime(ALL) +
+    '<h3 class="stat-section">Raid composition</h3>' +
+    classRole(apps) +
+    '<div class="stat-grid">' + choiceCard(apps, byId('role')) + choiceCard(apps, byId('class')) + '</div>' +
+    '<h3 class="stat-section">Raiding fit</h3>' +
+    '<div class="stat-grid">' + raidDays(apps) + sweatiness(apps) + '</div>';
+
+  APPLY_SECTIONS.forEach(function(s){
+    const qs = s.questions.filter(q => APPLY_TEXT_TYPES.indexOf(q.type) === -1 &&
+      FEATURED.indexOf(q.id) === -1);
+    if(!qs.length) return;
+    html += '<h3 class="stat-section">' + esc(s.title) + '</h3><div class="stat-grid">' +
+      qs.map(q => choiceCard(apps, q)).join('') + '</div>';
+  });
+
+  html += '<h3 class="stat-section">The rest</h3><div class="stat-grid">' + textSummary(apps) + '</div>';
+  out.innerHTML = html;
+}
+
+/* ── Tooltip ─────────────────────────────────────────────────────────────────── */
+
+(function(){
+  const tip = document.getElementById('tip');
+  document.addEventListener('mousemove', function(e){
+    const t = e.target.closest && e.target.closest('[data-tip]');
+    if(!t){ tip.hidden = true; return; }
+    tip.textContent = t.dataset.tip;
+    tip.hidden = false;
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + 14, y = e.clientY + 14;
+    if(x + w > innerWidth - 8) x = e.clientX - w - 14;
+    if(y + h > innerHeight - 8) y = e.clientY - h - 14;
+    tip.style.left = Math.max(8, x) + 'px';
+    tip.style.top = Math.max(8, y) + 'px';
+  });
+  document.addEventListener('mouseleave', () => { tip.hidden = true; });
+})();
+
+/* ── Load ────────────────────────────────────────────────────────────────────── */
+
+document.getElementById('filter').addEventListener('click', function(e){
+  const b = e.target.closest('button');
+  if(!b) return;
+  days = Number(b.dataset.days);
+  this.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  render();
+});
+
+async function load(){
+  setStatus('Loading…');
+  try{
+    const res = await fetch(API_BASE + '/api/applications', { headers: { 'Authorization': 'Bearer ' + sessionToken() } });
+    if(res.status === 401){ setStatus('Session expired — signing out…', 'err'); setTimeout(logout, 1200); return; }
+    if(res.status === 403){ setStatus('Officers only.', 'err'); return; }
+    if(!res.ok){ setStatus('Could not load applications (HTTP ' + res.status + ').', 'err'); return; }
+    const data = await res.json();
+    ALL = (data.applications || []).map(a => Object.assign({ choices:{}, text:{} }, a));
+    document.getElementById('filter').hidden = !ALL.length;
+    render();
+  }catch(err){
+    setStatus('Could not reach the guild database.', 'err');
+  }
+}
+
+load();
+</script>

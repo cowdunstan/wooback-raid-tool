@@ -418,7 +418,7 @@
   /* WoW Forever launch poll (launch.html) and its officer review (launch-responses.html).
      Both lean on the apply- and review- styles above; these are the extras the two pages
      share. Rules only launch.html uses live in its own <style>, so they arrive with the page. */
-  .apply-wrap .authbar .btn-ghost,.review-wrap .authbar .btn-ghost{text-decoration:none;}
+  .authbar a.btn-ghost{text-decoration:none;}
   .apply-status.ok{color:var(--accent);}
   .launch-summary{
     background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;

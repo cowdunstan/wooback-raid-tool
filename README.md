@@ -25,6 +25,7 @@ under **`/legacy/`**.
 /apply.html          public — WoW Forever application form, no session, one anonymous POST
 /applications.html   officers — review of those applications (WoW Forever, so not in legacy/)
 /application-stats.html  officers — the same applications collated into charts
+/forever-home.html   any signed-in member — the WoW Forever hub, an app card per Forever page
 /launch.html         any signed-in member — the WoW Forever launch poll
 /launch-responses.html  officers — review of the launch poll
 /styles.css /menu.js /app.js /groups.js /loot-prio.js /my-priority.js /loot-sheet.js

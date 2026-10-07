@@ -1,0 +1,103 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Access gate, the same as launch.html's: open to any signed-in tier, captures a session
+   handed back in the URL fragment, and bounces to the landing page when there is no
+   unexpired one. This is the WoW Forever hub, so it sits at the site root beside the
+   Forever pages it links to, not in legacy/ (the TBC tools). */
+(function(){
+  var m = location.hash.match(/(?:^#|&)session=([^&]+)/);
+  if(m){
+    try{ localStorage.setItem('vashj_session', decodeURIComponent(m[1])); }catch(e){}
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  function valid(tok){
+    if(!tok) return false;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      var payload = JSON.parse(atob(p));
+      return payload.exp && payload.exp > Math.floor(Date.now()/1000);
+    }catch(e){ return false; }
+  }
+  var tok = null;
+  try{ tok = localStorage.getItem('vashj_session'); }catch(e){}
+  if(!valid(tok)){
+    try{ localStorage.removeItem('vashj_session'); }catch(e){}
+    location.replace('index.html');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>WoW Forever — wooback</title>
+
+<!-- No hamburger here: NAV_LINKS in menu.js are bare filenames for the legacy/ pages and
+     would resolve against the root. The cards below are this page's whole nav. -->
+<div class="app">
+  <div class="wrap">
+    <div class="authbar">
+      <span class="authbar-left">
+        <a class="btn-ghost" href="legacy/home.html">TBC tools</a>
+      </span>
+      <span class="authbar-right">
+        <span id="authWho" class="auth-who"></span>
+        <button class="btn-ghost" onclick="logout()">Sign out</button>
+      </span>
+    </div>
+
+    <div class="home-hero">
+      <span class="eyebrow">WoW Forever</span>
+      <h1>wooback</h1>
+      <p class="subtitle">Everything for the guild's WoW Forever launch. Pick an app to get started.</p>
+    </div>
+
+    <div class="app-cards">
+      <a class="app-card" href="launch.html">
+        <h2>Launch poll</h2>
+        <p>Your main, spec, alts and professions, whether you'll be 60 when raids open on 9 December, and which raid group you want. Everyone sees the tallies; only officers see the answers.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="launch-responses.html" data-officer-only>
+        <span class="app-card-tag">Officers</span>
+        <h2>Launch poll responses</h2>
+        <p>Every member's launch poll answers, most recently updated first — the latest word for planning the raid groups.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="apply.html">
+        <h2>Apply to wooback</h2>
+        <p>The public application form. No sign-in needed, so this is the link to hand a would-be recruit.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="applications.html" data-officer-only>
+        <span class="app-card-tag">Officers</span>
+        <h2>Applications</h2>
+        <p>Read and clear the applications that have come in through the public form.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="application-stats.html" data-officer-only>
+        <span class="app-card-tag">Officers</span>
+        <h2>Application stats</h2>
+        <p>The same applications collated into charts — classes, roles, focus and commitment at a glance.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+
+      <a class="app-card" href="legacy/forever.html">
+        <h2>WoW Forever poll</h2>
+        <p>The original interest poll: who's in, and what faction, race, role and class they'd play — everyone sees the running tallies.</p>
+        <span class="app-card-go">Open →</span>
+      </a>
+    </div>
+
+    <footer>wooback guild tools — signed in with Discord.</footer>
+  </div>
+</div>
+
+<script src="menu.js"></script>

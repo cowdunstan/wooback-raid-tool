@@ -6,7 +6,9 @@
 
    Every link it emits — NAV_LINKS, itemHref() — is a bare filename, so it
    resolves against whatever directory the calling page sits in. That is what
-   lets the whole app move under /legacy/ without touching a single href.
+   lets the whole app move under /legacy/ without touching a single href. The
+   two exceptions are the drawer links that cross between the TBC tools and the
+   WoW Forever pages at the root, which spell out their `../` / `legacy/`.
 
    The session token is `base64url(payloadJSON).base64url(HMAC)`. Only the
    Worker verifies the signature (on every API call); here we just decode the
@@ -500,12 +502,28 @@ const NAV_LINKS = [
   { href:'my-priority.html', label:'My raid loot priority' },
   { href:'members.html',     label:'Roster & alts' },
   { href:'board.html',       label:'Vash assignments',     officer:true },
-  { href:'forever.html',     label:'WoW Forever poll' }
+  { href:'forever.html',     label:'WoW Forever poll' },
+  { href:'../forever-home.html', label:'Switch to WoW Forever tools →' }
+];
+
+/* The WoW Forever pages' drawer. They sit at the site root beside this file, so a
+   page opts into this list with `<nav id="navDrawer" data-nav="forever">` rather
+   than having the legacy/ filenames above resolved against the root. apply.html is
+   the public form, so it is linked here but carries no drawer of its own. */
+const FOREVER_NAV_LINKS = [
+  { href:'forever-home.html',      label:'Home' },
+  { href:'launch.html',            label:'Launch poll' },
+  { href:'launch-responses.html',  label:'Launch poll responses', officer:true },
+  { href:'apply.html',             label:'Apply to wooback' },
+  { href:'applications.html',      label:'Applications',          officer:true },
+  { href:'application-stats.html', label:'Application stats',     officer:true },
+  { href:'legacy/home.html',       label:'Switch to TBC tools →' }
 ];
 
 function renderNav(drawer){
   const here = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
-  drawer.innerHTML = NAV_LINKS.map(function(l){
+  const links = drawer.dataset.nav === 'forever' ? FOREVER_NAV_LINKS : NAV_LINKS;
+  drawer.innerHTML = links.map(function(l){
     const active = l.href.toLowerCase() === here ? ' class="active"' : '';
     const officer = l.officer ? ' data-officer-only' : '';
     const label = l.label.replace(/&/g, '&amp;');

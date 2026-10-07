@@ -143,7 +143,8 @@ function card(r){
     lbl('class'),
     spec ? spec + (off && off !== 'none' ? ' / ' + lbl('offspec') : '') : null,
     lbl('sixty') ? '60 by 9 Dec: ' + lbl('sixty') : null,
-    lbl('group')
+    lbl('group'),
+    r.text && r.text.raidWith ? 'Raids with: ' + r.text.raidWith : null
   ].filter(Boolean);
 
   const sections = LAUNCH_SECTIONS.map(function(s){

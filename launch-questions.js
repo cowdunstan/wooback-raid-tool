@@ -9,7 +9,11 @@
 
    Choice types (radio, checkbox) are sent as `choices: { id: [value, …] }`; free-text types
    (text, textarea) as `text: { id: "…" }`. A question with `details` renders each option
-   full-width with that line of explanation under it; `max` on a checkbox caps the picks. */
+   full-width with that line of explanation under it; `max` on a checkbox caps the picks.
+
+   `public: true` marks a question every member sees the answers to, anonymously, as counts
+   on launch.html. It is cosmetic here: the server's PublicQuestions (LaunchPollEndpoints.cs)
+   decides what it actually returns, so change the two together. */
 
 const LAUNCH_CLASSES = [
   ['warrior','Warrior'], ['paladin','Paladin'], ['hunter','Hunter'], ['rogue','Rogue'],
@@ -21,8 +25,8 @@ const LAUNCH_ROLES = [ ['tank','Tank'], ['healer','Healer'], ['dps','DPS'] ];
 const LAUNCH_SECTIONS = [
   { title:'Your main', questions:[
     { id:'class', type:'radio', req:true, q:'Main class', options: LAUNCH_CLASSES },
-    { id:'spec', type:'radio', req:true, q:'Main spec', options: LAUNCH_ROLES },
-    { id:'offspec', type:'radio', req:true, q:'Off spec', hint:'What you could swap to if the raid needs it.',
+    { id:'spec', type:'radio', req:true, public:true, q:'Main spec', options: LAUNCH_ROLES },
+    { id:'offspec', type:'radio', req:true, public:true, q:'Off spec', hint:'What you could swap to if the raid needs it.',
       options: LAUNCH_ROLES.concat([ ['none','No off spec'] ]) },
     { id:'professions', type:'checkbox', q:'Professions', hint:'Pick up to two, or leave blank if you have not decided.', max:2, options:[
       ['alchemy','Alchemy'], ['blacksmithing','Blacksmithing'], ['enchanting','Enchanting'],
@@ -38,12 +42,14 @@ const LAUNCH_SECTIONS = [
   { title:'Raiding', questions:[
     { id:'sixty', type:'radio', req:true, q:'Do you think you will be 60 when raids open on 9 December?', options:[
       ['yes','Yes'], ['no','No'], ['unsure','Unsure'] ] },
-    { id:'group', type:'radio', req:true, q:'Which raid group do you want to be in?', options:[
+    { id:'group', type:'radio', req:true, public:true, q:'Which raid group do you want to be in?', options:[
       ['sweaty','Sweaty parsing group'], ['semi','Semi-hardcore group'] ],
       details:{
         sweaty:'About 5 hours a day, Saturday and Sunday mornings. Minimum performance requirements and a bench policy.',
         semi:'If you sign up for Saturday or Sunday, show up — with consumes, and knowing the fights.'
       } },
+    { id:'raidWith', type:'text', max:300, q:'Is there a person or group of friends you want to stick with to raid together?',
+      hint:'Their names, if so. Leave blank if not.' },
     { id:'anythingElse', type:'textarea', q:'Anything else?' }
   ]}
 ];

@@ -12,17 +12,24 @@ namespace WoobackVash.Api.Api;
 /// what, who will be 60 when raids open, and who wants the parsing group over the semi-hardcore
 /// one.
 ///
-/// Any signed-in member answers for themselves, and reads back only their own answers — unlike
-/// the WoW Forever interest poll there are no public tallies, because "who wants the sweaty
-/// group" is roster planning, not a guild-wide vote. Every member's answers leave the server
+/// Any signed-in member answers for themselves and reads back their own answers. Everyone also
+/// sees, anonymously, the answers to the <see cref="PublicQuestions"/> — main spec, off spec and
+/// raid group — so a member can see which group is short of tanks before they pick one. Those
+/// come back as one nameless entry per response, holding only those questions, so the page can
+/// cross-tabulate group against spec. Everything else, and who answered what, leaves the server
 /// only through the officer-gated <c>GET /api/launch-poll/responses</c>.
 ///
 /// Question-agnostic in the same way as <see cref="ApplicationEndpoints"/>: <c>launch-questions.js</c>
 /// owns the question set and this stores whatever ids it is sent, split into choices and text.
+/// The one exception is <see cref="PublicQuestions"/>, which must match the questions marked
+/// <c>public</c> there — the server, not the page, decides what is shown to everyone.
 /// </summary>
 public static class LaunchPollEndpoints
 {
     public record LaunchPollInput(Dictionary<string, List<string>>? Choices, Dictionary<string, string>? Text);
+
+    /// <summary>The choice questions every member may see answers to, anonymously.</summary>
+    private static readonly string[] PublicQuestions = ["spec", "offspec", "group"];
 
     // Generous headroom over the ~10 questions the form actually has.
     private const int MaxKeys = 40;
@@ -34,7 +41,7 @@ public static class LaunchPollEndpoints
     {
         var group = app.MapGroup("/api/launch-poll");
 
-        // The caller's own answers, to pre-fill the form, and how many members have answered.
+        // The caller's own answers, to pre-fill the form, plus the anonymous public answers.
         group.MapGet("", async (HttpContext ctx, SessionTokenService tokens) =>
         {
             var (session, error) = ctx.RequireSession(tokens);
@@ -42,8 +49,24 @@ public static class LaunchPollEndpoints
             var db = ctx.RequestServices.GetService<AppDbContext>();
             if (db is null) return DbUnavailable();
 
-            var total = await db.LaunchPollResponses.CountAsync();
-            var row = await db.LaunchPollResponses.AsNoTracking().FirstOrDefaultAsync(r => r.Uid == session!.Uid);
+            var rows = await db.LaunchPollResponses.AsNoTracking().ToListAsync();
+            var row = rows.FirstOrDefault(r => r.Uid == session!.Uid);
+
+            // Only the public questions, and no id, name or timestamp. Sorted by the answers
+            // themselves rather than by when they were saved, so the order says nothing about
+            // who has just answered.
+            var answers = rows
+                .Select(r =>
+                {
+                    var choices = Deserialize<Dictionary<string, List<string>>>(r.Choices);
+                    return PublicQuestions
+                        .Where(choices.ContainsKey)
+                        .ToDictionary(q => q, q => choices[q]);
+                })
+                .OrderBy(a => string.Join("|", PublicQuestions.Select(q => a.TryGetValue(q, out var v) ? string.Join(",", v) : "")),
+                    StringComparer.Ordinal)
+                .ToList();
+
             object? mine = row is null
                 ? null
                 : new
@@ -52,7 +75,7 @@ public static class LaunchPollEndpoints
                     text = Deserialize<Dictionary<string, string>>(row.Text),
                     updatedAt = row.UpdatedAt
                 };
-            return Results.Json(new { total, mine });
+            return Results.Json(new { total = rows.Count, mine, answers });
         });
 
         // Save or change the caller's own answers. Upserts on the unique Uid index.

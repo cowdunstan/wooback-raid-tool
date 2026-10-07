@@ -96,6 +96,10 @@ change as cosmetic (and say so).
 - The shared question ids in `apply-questions.js` (class, role, focus, commitment)
   ↔ `QUESTIONS` in `legacy/forever.html`. They match on purpose, so an applicant's answers
   line up with the members' poll; rename an id or option in one, rename it in both.
+- `PublicQuestions` in `server/WoobackVash.Api/Api/LaunchPollEndpoints.cs` ↔ the questions
+  marked `public: true` in `launch-questions.js`. The server's list is what actually reaches
+  every member; the flag only documents it, and `launch.html`'s table reads `spec`, `offspec`
+  and `group` by name.
 - `WOWHEAD_DOMAIN` in `menu.js` and `LEVEL_CAP` in `groups.js` both track the current
   expansion — flip them together when the guild moves on (item tooltips ↔ the max-level
   filter on the 2-group page).

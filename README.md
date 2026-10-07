@@ -98,9 +98,14 @@ session.
   9 December (yes / no / unsure), which raid group they want — the **sweaty parsing group**
   (~5 hours Saturday and Sunday mornings, minimum performance requirements, a bench policy)
   or the **semi-hardcore group** (show up when signed up, with consumes, knowing the fights)
-  — and an optional "anything else". One response per member, pre-filled on return and
-  editable any time; there are **no public tallies**, only a count of how many have answered,
-  because group choice is roster planning rather than a guild vote. The questions live in
+  — who they want to stick with to raid together (`raidWith`, free text), and an optional
+  "anything else". One response per member, pre-filled on return and editable any time.
+  **Main spec, off spec and raid group are public, as counts**: a "Where the guild stands"
+  table (a row per raid group plus everyone, a column per main spec and per off spec) so a
+  member can see which group is short of what before choosing. It never names anyone, and
+  every other answer is officers-only. Which questions are public is decided by the
+  server (`PublicQuestions` in `LaunchPollEndpoints.cs`), mirrored by `public: true` in the
+  question list. The questions live in
   **`launch-questions.js`** (`LAUNCH_SECTIONS`), shared with `launch-responses.html`; `class`
   uses the same option ids as the application and the WoW Forever poll. The gate is
   `home.html`'s, bouncing to `index.html`. Reached from the landing page and a card on
@@ -108,7 +113,7 @@ session.
 - **`launch-responses.html`** *(root, officers only)* — review of the launch poll: a table of
   each raid group by main spec with how many expect to be 60 on 9 December, a tally of every
   choice question, filter chips per group, then one card per member (class · spec / off spec ·
-  60 by 9 Dec · group, every answer behind a toggle, their linked TBC main if any, and
+  60 by 9 Dec · group · who they raid with, every answer behind a toggle, their linked TBC main if any, and
   Delete). A member who opens it is sent to `launch.html`. The gate is cosmetic; the routes
   are `RequireOfficer`.
 - **`home.html`** — the default page after sign-in: a welcome hub with a hamburger
@@ -581,9 +586,11 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   returns `{ total, applications[] = { id, discord, choices, text, submittedAt } }`, newest
   first. `DELETE /api/applications/{id}` (**officer only**) removes one.
 - **Launch poll** (any signed-in session) — `GET /api/launch-poll` returns
-  `{ total, mine }`: how many members have answered, and the caller's own
-  `{ choices, text, updatedAt }` (or `null`) to pre-fill the form. Nobody else's answers and
-  no tallies. `POST /api/launch-poll` with `{ choices: { questionId: [value, …] }, text:
+  `{ total, mine, answers }`: how many members have answered, the caller's own
+  `{ choices, text, updatedAt }` (or `null`) to pre-fill the form, and `answers[]` — one
+  entry per response holding **only** the public questions (`spec`, `offspec`, `group`),
+  with no id, name or timestamp, sorted by the answers themselves so the order gives nothing
+  away about who saved last. `POST /api/launch-poll` with `{ choices: { questionId: [value, …] }, text:
   { questionId: "…" } }` upserts the caller's `LaunchPollResponse` on the unique `Uid`;
   bounds as the applications' (≤ 40 keys, ids ≤ 64 chars, ≤ 2000 chars per text answer),
   blank text dropped. Question-agnostic: `launch-questions.js` owns the set.

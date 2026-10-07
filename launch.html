@@ -51,9 +51,14 @@
       <a href="index.html"><img class="apply-logo" src="logo.png" alt="wooback home" width="120" height="120"></a>
       <span class="eyebrow">WoW Forever · launch poll</span>
       <h1>Launch poll</h1>
-      <p class="subtitle">Help the officers plan the launch raid groups. One response each, and you can come back and change it any time before raids open. Only officers see your answers. Questions marked <span class="apply-req">*</span> are required.</p>
+      <p class="subtitle">Help the officers plan the launch raid groups. One response each, and you can come back and change it any time before raids open. Everyone sees how many picked each spec and raid group, but not who; the rest of your answers only officers see. Questions marked <span class="apply-req">*</span> are required.</p>
       <p id="count" class="launch-count"></p>
     </header>
+
+    <section id="standings" class="launch-summary" hidden>
+      <h2 class="launch-summary-title">Where the guild stands</h2>
+      <div id="standingsTable" class="launch-table-wrap"></div>
+    </section>
 
     <form id="launchForm" novalidate>
       <div id="sections"></div>
@@ -204,6 +209,29 @@ function when(iso){
   return isNaN(d) ? '' : d.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
 }
 
+// The anonymous public answers (main spec, off spec, raid group — the server picks which), as
+// one table: a row per raid group plus everyone, a column per main spec and per off spec.
+function showStandings(answers){
+  const section = document.getElementById('standings');
+  if(!answers || !answers.length){ section.hidden = true; return; }
+  const byId = id => LAUNCH_QUESTIONS.find(q => q.id === id);
+  const first = (a, id) => (a[id] || [])[0];
+  const roles = byId('spec').options;
+  const rows = byId('group').options.concat([['all', 'Everyone']]);
+  const head =
+    '<tr><th></th><th colspan="' + roles.length + '" class="launch-colgroup">Main spec</th>' +
+      '<th colspan="' + roles.length + '" class="launch-colgroup">Off spec</th><th></th></tr>' +
+    '<tr class="launch-head"><th></th>' + roles.concat(roles).map(o => '<th>' + esc(o[1]) + '</th>').join('') + '<th>Total</th></tr>';
+  const body = rows.map(function(row){
+    const set = answers.filter(a => row[0] === 'all' || first(a, 'group') === row[0]);
+    const count = id => roles.map(o => '<td>' + set.filter(a => first(a, id) === o[0]).length + '</td>').join('');
+    return '<tr' + (row[0] === 'all' ? ' class="launch-total"' : '') + '><th>' + esc(row[1]) + '</th>' +
+      count('spec') + count('offspec') + '<td>' + set.length + '</td></tr>';
+  }).join('');
+  document.getElementById('standingsTable').innerHTML = '<table class="launch-table">' + head + body + '</table>';
+  section.hidden = false;
+}
+
 function showCount(data){
   const n = data.total || 0;
   document.getElementById('count').textContent =
@@ -218,6 +246,7 @@ async function load(){
     const data = await res.json();
     fill(data.mine);
     showCount(data);
+    showStandings(data.answers);
   }catch(err){
     if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
   }

@@ -51,7 +51,12 @@ const LAUNCH_SECTIONS = [
         semi:'If you sign up for Saturday or Sunday, show up — with consumes, and knowing the fights.'
       } },
     { id:'raidWith', type:'text', max:300, q:'Is there a person or group of friends you want to stick with to raid together?',
-      hint:'Their names, if so. Leave blank if not.' },
+      hint:'Their names, if so. Leave blank if not.' }
+  ]},
+
+  { title:'Everything else', questions:[
+    { id:'pvp', type:'radio', q:'Are you planning to PvP?', options:[
+      ['yes','Yes'], ['little','A little'], ['no','No'] ] },
     { id:'anythingElse', type:'textarea', q:'Anything else?' }
   ]}
 ];

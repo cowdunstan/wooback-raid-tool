@@ -130,9 +130,14 @@ session.
   uses the same option ids as the application and the WoW Forever poll. The gate is
   `home.html`'s, bouncing to `index.html`. Reached from the landing page and a card on
   `legacy/home.html`; not in the `legacy/` nav, like `applications.html`.
-- **`launch-responses.html`** *(root, officers only)* — review of the launch poll: a table of
-  each raid group by main spec with how many expect to be 60 on 9 December, a tally of every
-  choice question, filter chips per group, then one card per member (class · spec / off spec ·
+- **`launch-responses.html`** *(root, officers only)* — review of the launch poll. Filter
+  chips per raid group scope everything below them except the group table: headline numbers
+  (responses and updates this week, tanks / healers / DPS with how many more could cover each on
+  off spec, % expecting 60 on 9 December, % with a class decided); a table of each raid group by
+  main spec (off-spec cover alongside) with how many expect to be 60, always every group; a
+  class × main spec grid and a main × off spec grid; bars for level-60 readiness, professions,
+  PvP and class; who each member wants to raid with, and their planned alts. Then one card per
+  member (class · spec / off spec ·
   60 by 9 Dec · group · who they raid with, every answer behind a toggle, their linked TBC main if any, and
   Delete). A member who opens it is sent to `launch.html`. The gate is cosmetic; the routes
   are `RequireOfficer`.

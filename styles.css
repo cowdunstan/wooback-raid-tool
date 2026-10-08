@@ -433,11 +433,6 @@
   .launch-table td{color:var(--text);}
   .launch-table tr.launch-total th,.launch-table tr.launch-total td{font-weight:700;border-bottom:none;}
   .launch-dim{color:var(--text-dim);font-weight:400;}
-  .launch-chip{
-    display:inline-block;margin:0 6px 4px 0;padding:2px 8px;border-radius:999px;
-    background:var(--chip-bg);color:var(--text);white-space:nowrap;
-  }
-  .launch-chip b{color:var(--accent);}
   .launch-filters{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
   .launch-filter{
     background:none;border:1px solid var(--panel-line);border-radius:999px;color:var(--text-dim);
@@ -446,6 +441,64 @@
   .launch-filter:hover{border-color:var(--accent-dim);color:var(--text);}
   .launch-filter.active{border-color:var(--accent);color:var(--heading);background:rgba(var(--accent-rgb),.12);}
   .launch-filter b{color:var(--accent);}
+
+  /* Stats building blocks: KPI tiles, stat cards, horizontal bars, the class grid, quote lists
+     and the hover tip. Shared by application-stats.html and launch-responses.html. */
+  .stats-wrap [hidden]{display:none !important;}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+  @media (max-width:560px){ .kpis{grid-template-columns:repeat(2,1fr);} }
+  .kpi{background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;padding:12px 14px;}
+  .kpi-label{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--text-dim);font-weight:600;}
+  .kpi-value{font-family:'Cinzel',serif;font-size:26px;font-weight:700;color:var(--heading);margin-top:4px;font-variant-numeric:tabular-nums;}
+  .kpi-sub{font-size:11.5px;color:var(--text-dim);margin-top:2px;}
+
+  .stat-card{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
+    padding:16px 18px 14px;margin-bottom:14px;min-width:0;
+  }
+  .stat-card h2{
+    font-family:'Cinzel',serif;font-size:15px;font-weight:700;margin:0 0 4px;
+    color:var(--heading);letter-spacing:.3px;
+  }
+  .stat-note{font-size:12px;color:var(--text-dim);margin:0 0 12px;}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:14px;}
+  .stat-grid .stat-card{margin-bottom:0;}
+  .stat-section{
+    font-family:'Cinzel',serif;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--accent);margin:26px 0 10px;
+  }
+
+  /* Horizontal bars: label + count on one line, the bar under it. */
+  .hbar{padding:5px 0;cursor:default;}
+  .hbar-head{display:flex;align-items:baseline;gap:8px;font-size:12.5px;}
+  .hbar-label{flex:1;min-width:0;color:var(--text);display:flex;align-items:center;gap:6px;}
+  .hbar-count{color:var(--text-dim);font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .hbar-count b{color:var(--heading);font-weight:600;}
+  .hbar-track{height:8px;background:var(--well);border-radius:4px;margin-top:4px;overflow:hidden;}
+  .hbar-fill{height:100%;background:var(--accent);border-radius:0 4px 4px 0;}
+  .hbar.unknown .hbar-label{color:var(--text-dim);font-style:italic;}
+  .hbar.unknown .hbar-fill{background:var(--text-dim);}
+  .swatch{width:9px;height:9px;border-radius:2px;flex:none;}
+
+  /* Class × role grid: gold tint scales with the count (one hue, light → strong). */
+  .heat{width:100%;border-collapse:separate;border-spacing:2px;font-size:12px;}
+  .heat th{font-weight:600;color:var(--text-dim);font-size:11px;padding:4px 6px;text-align:center;white-space:nowrap;}
+  .heat th.row{text-align:left;color:var(--text);font-size:12px;}
+  .heat th.row span{display:inline-flex;align-items:center;gap:6px;}
+  .heat td{text-align:center;padding:7px 4px;border-radius:4px;font-variant-numeric:tabular-nums;color:var(--heading);cursor:default;}
+  .heat td.z{color:var(--panel-line);}
+  .heat td.tot,.heat th.tot{color:var(--text-dim);font-weight:600;}
+  .heat-scroll{overflow-x:auto;}
+
+  .quotes{list-style:none;padding:0;margin:0;}
+  .quotes li{font-size:12.5px;padding:6px 0;border-top:1px solid var(--panel-line);color:var(--text);}
+  .quotes li:first-child{border-top:none;}
+
+  .stat-tip{
+    position:fixed;z-index:50;pointer-events:none;background:var(--well);color:var(--text);
+    border:1px solid var(--panel-line);border-radius:6px;padding:6px 9px;font:12px/1.4 'Inter',sans-serif;
+    box-shadow:0 4px 14px rgba(0,0,0,.4);max-width:260px;white-space:pre-line;
+  }
 
   /* Warcraft Logs list */
   .logs-toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:16px;}

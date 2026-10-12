@@ -249,11 +249,12 @@ function offspecCover(set){
       (m, o, n) => plural(n, m[1] + ' main') + (o[0] === 'none' ? ' with no off spec' : ' who could ' + o[1].toLowerCase())));
 }
 
-// Free text that matters for building groups: who wants to stick together, and planned alts.
+// Free text, one line per member who answered: who wants to stick together, planned alts, and
+// anything else they had to say. pre-line keeps a textarea answer's line breaks.
 function textList(set, id, title, note){
   const rows = set.filter(r => r.text && r.text[id])
     .sort((a, b) => who(a).localeCompare(who(b)))
-    .map(r => '<li><b>' + esc(who(r)) + '</b> — ' + esc(r.text[id]) + '</li>').join('');
+    .map(r => '<li style="white-space:pre-line"><b>' + esc(who(r)) + '</b> — ' + esc(r.text[id]) + '</li>').join('');
   return statCard(title, note, rows ? '<ul class="quotes">' + rows + '</ul>' : '<p class="review-none">Nobody yet.</p>');
 }
 
@@ -263,13 +264,19 @@ function summaryHtml(){
   return headline(set) + groupTable() +
     '<h3 class="stat-section">Composition</h3>' +
     '<div class="stat-grid">' + classSpec(set) + offspecCover(set) + '</div>' +
-    '<h3 class="stat-section">Readiness &amp; the rest</h3>' +
+    '<h3 class="stat-section">Readiness &amp; roster</h3>' +
     '<div class="stat-grid">' + choiceCard(set, byId('sixty')) + choiceCard(set, byId('professions')) +
-      choiceCard(set, byId('pvp')) + choiceCard(set, byId('class')) + '</div>' +
+      choiceCard(set, byId('class')) + '</div>' +
     '<h3 class="stat-section">Who goes with whom</h3>' +
     '<div class="stat-grid">' +
       textList(set, 'raidWith', 'Raiding together', 'Who each member wants to stick with.') +
       textList(set, 'alts', 'Planned alts', 'In their own words.') +
+    '</div>' +
+    // Mirrors the form's last section, so a note left in "Anything else?" is read without
+    // opening every card.
+    '<h3 class="stat-section">Everything else</h3>' +
+    '<div class="stat-grid">' + choiceCard(set, byId('pvp')) +
+      textList(set, 'anythingElse', 'Anything else?', 'Whatever else members wanted officers to know.') +
     '</div>';
 }
 

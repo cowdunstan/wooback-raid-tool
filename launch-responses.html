@@ -104,7 +104,10 @@ const pct = (n, d) => d ? Math.round(n * 100 / d) : 0;
 const plural = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
 const DAY = 86400000;
 const CLASS_COLORS = (typeof RH !== 'undefined' && RH.CLASS_COLORS) || {};
-const inGroup = (r, g) => g === 'all' || first(r, 'group') === g;
+// A filter is a raid group, everyone, or 'tbc': members with a TBC main linked to their Discord,
+// which is how the guild knows who is coming back. Someone who raided TBC without a linked
+// character won't count.
+const inGroup = (r, g) => g === 'all' || (g === 'tbc' ? !!r.mainId : first(r, 'group') === g);
 const who = r => (r.text && r.text.charName) || r.name;
 
 // ── Stats building blocks (styles in styles.css, shared with application-stats.html) ────────
@@ -334,9 +337,9 @@ function card(r){
 }
 
 function filtersHtml(){
-  const opts = [['all', 'Everyone']].concat(byId('group').options);
+  const opts = [['all', 'Everyone']].concat(byId('group').options, [['tbc', 'Returning from TBC']]);
   return opts.map(function(o){
-    const n = o[0] === 'all' ? responses.length : responses.filter(r => first(r, 'group') === o[0]).length;
+    const n = responses.filter(r => inGroup(r, o[0])).length;
     return '<button type="button" class="launch-filter' + (filter === o[0] ? ' active' : '') + '" data-filter="' + esc(o[0]) + '">' +
       esc(o[1]) + ' <b>' + n + '</b></button>';
   }).join('');
@@ -360,7 +363,7 @@ function render(){
   const shown = responses.filter(r => inGroup(r, filter));
   document.getElementById('list').innerHTML = shown.length
     ? shown.map(card).join('')
-    : '<p class="review-none">Nobody has picked this group yet.</p>';
+    : '<p class="review-none">' + (filter === 'tbc' ? 'Nobody with a TBC main has answered yet.' : 'Nobody has picked this group yet.') + '</p>';
 }
 
 // Hover text for the stats, as on application-stats.html.

@@ -131,7 +131,8 @@ session.
   `home.html`'s, bouncing to `index.html`. Reached from the landing page and a card on
   `legacy/home.html`; not in the `legacy/` nav, like `applications.html`.
 - **`launch-responses.html`** *(root, officers only)* — review of the launch poll. Filter
-  chips per raid group scope everything below them except the group table: headline numbers
+  chips per raid group, plus *Returning from TBC* (members with a TBC main linked to their
+  Discord), scope everything below them except the group table: headline numbers
   (responses and updates this week, tanks / healers / DPS with how many more could cover each on
   off spec, % expecting 60 on 9 December, % with a class decided); a table of each raid group by
   main spec (off-spec cover alongside) with how many expect to be 60, always every group; a

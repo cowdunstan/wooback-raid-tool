@@ -677,9 +677,13 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   any category at or above `Photobook:ReviewThreshold` (0.2), or no verdict at all (no API key,
   OpenAI unreachable) → stored as `pending`; otherwise `approved`. A stored photo is then tagged
   by `Photobook:TaggingModel` (`gpt-5-nano`, at `Photobook:TaggingImageDetail` — `high` by
-  default, since a low-detail image is too small to read the minimap — with a JSON schema whose
-  enums are the tag vocabulary, the place ids plus `none`, and the boss ids plus `none`) — a
-  failure there just leaves it untagged and out of the accuracy numbers. `PUT /api/photos/{id}` with
+  default, since a low-detail image is too small to read the minimap — and
+  `Photobook:TaggingReasoningEffort`, `low` by default, with a JSON schema whose enums are the tag
+  vocabulary, the place ids plus `none`, the clues (`caption` only offered when there is one) and
+  the boss ids plus `none`). Each tag goes to the model with a one-line meaning (`PhotoTags`). A
+  place the model gives without a valid clue is dropped as a guess, unless a boss pick implies it;
+  the model's raw reply is logged before that cleanup. A failure there just leaves it untagged
+  and out of the accuracy numbers. `PUT /api/photos/{id}` with
   `{ caption?, tags?, place?, boss?, confirm? }` corrects any of them (null leaves a field alone;
   `""` clears place or boss); a changed caption is re-moderated on its own (a flagged
   one is a 422 and a `PhotoRejection` too), tags are cut to known ids, at most 6, and place and

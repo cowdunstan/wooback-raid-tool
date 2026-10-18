@@ -59,7 +59,7 @@ public class PhotoAiService
         public const string NpcName = "npc-name";
         public const string Landmark = "landmark";
         public const string Caption = "caption";
-        /// <summary>The model gave a place but no recognisable reason.</summary>
+        /// <summary>The place came from a boss pick, with no recognisable clue of its own.</summary>
         public const string Unknown = "unknown";
 
         public static readonly string[] All = [ScreenText, NpcName, Landmark, Caption];
@@ -123,7 +123,8 @@ public class PhotoAiService
         var none = new TagSuggestion(false, [], "", null, null, null);
         if (!Configured || string.IsNullOrWhiteSpace(_opts.TaggingModel)) return none;
 
-        var vocabulary = string.Join("\n", PhotoTags.All.Select(t => $"- {t.Id}: {t.Label}"));
+        var hasCaption = !string.IsNullOrWhiteSpace(caption);
+        var vocabulary = string.Join("\n", PhotoTags.All.Select(t => $"- {t.Id}: {t.Label} — {t.Meaning}"));
         var places = string.Join("\n", PhotoPlaces.All.Select(p => $"- {p.Id}: {p.Label} ({p.Kind})"));
         var bosses = string.Join("\n", PhotoPlaces.All.Where(p => p.Bosses.Length > 0)
             .Select(p => $"{p.Label}: " + string.Join(", ", p.Bosses.Select(b => $"{b.Id} = {b.Label}"))));
@@ -131,31 +132,47 @@ public class PhotoAiService
         // place prompt ranks every kind of clue rather than leaning on the minimap, and asks which
         // one it used. That lands in AiPlaceEvidence, so the accuracy tab can show whether the
         // landmark-only guesses hold up as well as the ones read off the screen.
+        //
+        // Tuned against live runs on two UI-less screenshots. Without tag meanings the model
+        // filled all six slots, "UI / addons" and "Real life" included; without a caption it
+        // still claimed "caption" as its clue, so that clue is only offered when there is one;
+        // and it named a familiar city for a dungeon missing from the list, hence the push to
+        // "none" whenever it can't point at a specific clue.
+        var clues = new List<string>
+        {
+            "screen-text: a zone, instance or battleground name shown on screen, such as above the minimap",
+            "npc-name: a name floating over a non-player character that gives the place away — \"Stormwind City " +
+                "Guard\" means Stormwind City, \"Orgrimmar Grunt\" means Orgrimmar",
+            "landmark: a specific building, statue or gate you recognise as belonging to that exact place — not " +
+                "just a style of architecture that several places share",
+        };
+        if (hasCaption) clues.Add("caption: the caption names it");
         var prompt =
             "This is a screenshot or photo a member of the guild <Wooback> uploaded to the guild's photobook. " +
-            "The game is World of Warcraft: Forever, a new expansion that keeps most of Classic's world." +
-            (string.IsNullOrWhiteSpace(caption) ? "" : $" Their caption: \"{caption}\".") +
+            "The game is World of Warcraft: Forever, a new expansion that keeps most of Classic's world but adds " +
+            "new zones and dungeons you won't know." +
+            (hasCaption ? $" Their caption: \"{caption}\"." : " There is no caption.") +
             "\n\nThe interface is often hidden, so there may be no minimap, frames or chat — only the scene and the " +
             "names floating over characters. Player names with <Wooback> under them are guild members; a name with " +
             "\"'s Pet\" or \"'s Minion\" under it is a player's pet.\n\n" +
-            $"Pick between 1 and {PhotoTags.MaxPerPhoto} tags that clearly apply, from this list only. Several guild " +
-            $"members posing together is a group shot.\n{vocabulary}\n\n" +
-            "Then say where it was taken, as one place id from the list below, or \"none\". Use the strongest clue there is:\n" +
-            "1. screen-text: a zone, instance or battleground name shown on screen, such as above the minimap;\n" +
-            "2. npc-name: a name floating over a non-player character that gives the place away — \"Stormwind City Guard\" " +
-            "means Stormwind City, \"Orgrimmar Grunt\" means Orgrimmar;\n" +
-            "3. landmark: a building, statue, gate or scene you clearly recognise as that place;\n" +
-            "4. caption: the caption names it.\n" +
-            "Forever may have places that aren't in the list; answer \"none\" for those rather than the nearest match. " +
-            "Choose \"none\" unless you're fairly sure — a wrong place is worse than none. Say which clue you used as " +
-            "place_evidence, or \"none\" if you chose no place.\n" +
+            $"Tags: most photos need two or three, and never more than {PhotoTags.MaxPerPhoto}. Only add a tag " +
+            "whose meaning below clearly fits what you can see; a missing tag is better than a wrong one. Use these ids only:\n" +
+            $"{vocabulary}\n\n" +
+            "Place: say where it was taken, as one place id from the list below, or \"none\". Only pick a place if " +
+            "one of these clues points to it, strongest first:\n" +
+            string.Join("\n", clues.Select((c, i) => $"{i + 1}. {c}")) + "\n" +
+            "If none of those clues applies, the answer is \"none\" — do not guess from the general look of a room " +
+            "or a landscape. This may well be one of Forever's new places, which aren't in the list: answer \"none\" " +
+            "for those, never the nearest familiar place. A wrong place is worse than none. Give the clue you used " +
+            "as place_evidence, or \"none\" with no place.\n" +
             $"{places}\n\n" +
-            "And which boss it shows, as one boss id or \"none\": only if a boss is plainly being fought, its name " +
-            "floats over it or is in a target or boss frame, or the caption names it.\n" +
+            "Boss: one boss id or \"none\" — only if a boss is plainly being fought, its name floats over it or is in " +
+            "a target or boss frame" + (hasCaption ? ", or the caption names it" : "") + ".\n" +
             $"{bosses}\n\n" +
             "Finally, write one plain sentence describing what's in the picture, for use as alt text.";
 
         static JsonArray Enum(IEnumerable<string> ids) => new(ids.Select(id => (JsonNode)JsonValue.Create(id)!).ToArray());
+        var evidenceValues = Enum(PlaceEvidence.All.Where(e => hasCaption || e != PlaceEvidence.Caption).Append("none"));
         var enumValues = Enum(PhotoTags.All.Select(t => t.Id));
         var placeValues = Enum(PhotoPlaces.All.Select(p => p.Id).Append("none"));
         var bossValues = Enum(PhotoPlaces.BossById.Keys.Append("none"));
@@ -196,7 +213,7 @@ public class PhotoAiService
                                 ["items"] = new JsonObject { ["type"] = "string", ["enum"] = enumValues }
                             },
                             ["place"] = new JsonObject { ["type"] = "string", ["enum"] = placeValues },
-                            ["place_evidence"] = new JsonObject { ["type"] = "string", ["enum"] = Enum(PlaceEvidence.All.Append("none")) },
+                            ["place_evidence"] = new JsonObject { ["type"] = "string", ["enum"] = evidenceValues },
                             ["boss"] = new JsonObject { ["type"] = "string", ["enum"] = bossValues },
                             ["description"] = new JsonObject { ["type"] = "string" }
                         },
@@ -206,23 +223,33 @@ public class PhotoAiService
                 }
             }
         };
-        // The reasoning models spend output tokens thinking first; tagging needs none of it.
+        // How much the reasoning models think before answering (Photobook:TaggingReasoningEffort).
         // Older chat models reject the parameter, so it's only sent where it's understood.
         if (_opts.TaggingModel.StartsWith("gpt-5", StringComparison.OrdinalIgnoreCase))
-            body["reasoning_effort"] = "minimal";
+            body["reasoning_effort"] = _opts.TaggingReasoningEffort;
 
         var json = await PostAsync("/chat/completions", body, ct);
         if (json is null) return none;
         try
         {
             var content = json["choices"]![0]!["message"]!["content"]!.GetValue<string>();
+            // The raw answer, before the cleanup below drops anything; the record of what the model
+            // actually said when a pick looks odd.
+            _logger.LogInformation("Tagging model replied: {Content}", content);
             var parsed = JsonNode.Parse(content)!;
             var tags = parsed["tags"]!.AsArray().Select(t => t?.GetValue<string>() ?? "");
             var alt = parsed["description"]?.GetValue<string>()?.Trim() ?? "";
             var (place, boss) = PhotoPlaces.Clean(parsed["place"]?.GetValue<string>(), parsed["boss"]?.GetValue<string>());
             // Evidence only means something alongside a place; a boss-implied place came from the boss.
+            // A place needs a clue behind it. Without a valid one — none given, or "caption" with
+            // no caption — it was a guess, and the prompt says a wrong place is worse than none, so
+            // it's dropped. The exception is a place implied by a boss pick, which stands on the boss.
             var evidence = parsed["place_evidence"]?.GetValue<string>();
-            if (place is null || !PlaceEvidence.All.Contains(evidence)) evidence = place is null ? null : PlaceEvidence.Unknown;
+            var validClue = evidence is not null && PlaceEvidence.All.Contains(evidence)
+                && (hasCaption || evidence != PlaceEvidence.Caption);
+            if (place is null) evidence = null;
+            else if (!validClue && boss is null) { place = null; evidence = null; }
+            else if (!validClue) evidence = PlaceEvidence.Unknown;
             return new TagSuggestion(true, PhotoTags.Clean(tags), alt.Length > 300 ? alt[..300] : alt, place, boss, evidence);
         }
         catch (Exception ex)

@@ -16,7 +16,8 @@ namespace WoobackVash.Api.Api;
 /// An upload is checked before it's stored. The page has already resized the image and
 /// re-encoded it as JPEG — which also strips its EXIF, phone GPS included — so the API takes
 /// the full image and its thumbnail as base64 JPEG. The image and caption then go to OpenAI
-/// moderation together: flagged outright, the upload is refused and nothing is kept; borderline,
+/// moderation together: flagged outright, the upload is refused and the image is not kept — only
+/// a <see cref="PhotoRejection"/> saying who tried and why, for the officers' Rejected tab; borderline,
 /// or unchecked because moderation couldn't run, it's stored as pending for an officer to
 /// approve; otherwise it's published. A photo that gets through is then tagged from
 /// <see cref="PhotoTags"/> by a small vision model, and the uploader can correct the tags.
@@ -55,13 +56,59 @@ public static class PhotoEndpoints
             var pending = want == PhotoStatus.Pending
                 ? rows.Count
                 : await db.Photos.CountAsync(p => p.Status == PhotoStatus.Pending);
+            var rejected = await db.PhotoRejections.CountAsync();
 
             return Results.Json(new
             {
                 tags = PhotoTags.All.Select(t => new { id = t.Id, label = t.Label }),
                 pending,
+                rejected,
                 photos = rows.Select(Dto)
             });
+        });
+
+        // Everything the content check refused, newest first: who, what kind, and why. There is
+        // no image to show — a refused upload's bytes are never kept (see PhotoRejection).
+        group.MapGet("/rejections", async (HttpContext ctx, SessionTokenService tokens) =>
+        {
+            var (_, error) = ctx.RequireOfficer(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            var rows = await db.PhotoRejections.AsNoTracking()
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync();
+            return Results.Json(new
+            {
+                total = rows.Count,
+                rejections = rows.Select(r => new
+                {
+                    id = r.Id,
+                    uploaderUid = r.UploaderUid,
+                    uploaderName = r.UploaderName,
+                    kind = r.Kind,
+                    photoId = r.PhotoId,
+                    caption = r.Caption,
+                    categories = Deserialize<List<string>>(r.Categories),
+                    scores = Deserialize<List<Dictionary<string, JsonElement>>>(r.Scores),
+                    createdAt = r.CreatedAt
+                })
+            });
+        });
+
+        // Dismiss one once it has been dealt with.
+        group.MapDelete("/rejections/{id:guid}", async (HttpContext ctx, SessionTokenService tokens, Guid id) =>
+        {
+            var (_, error) = ctx.RequireOfficer(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            var deleted = await db.PhotoRejections.Where(r => r.Id == id).ExecuteDeleteAsync();
+            return deleted == 0
+                ? Results.Json(new { error = "not_found", detail = "No such rejection." }, statusCode: 404)
+                : Results.Json(new { ok = true });
         });
 
         group.MapGet("/{id:guid}/thumb", (HttpContext ctx, SessionTokenService tokens, Guid id) =>
@@ -89,11 +136,14 @@ public static class PhotoEndpoints
 
             var verdict = await ai.ModerateAsync(full, caption, ctx.RequestAborted);
             if (verdict.Flagged)
+            {
+                await RecordRejectionAsync(db, session!, PhotoRejectionKind.Upload, null, caption, verdict);
                 return Results.Json(new
                 {
                     error = "rejected",
                     detail = "This photo didn't pass the content check, so it wasn't saved. " + verdict.Reason
                 }, statusCode: 422);
+            }
 
             var held = !verdict.Checked || verdict.Reason is not null;
             var suggestion = await ai.SuggestTagsAsync(full, caption, ctx.RequestAborted);
@@ -126,7 +176,7 @@ public static class PhotoEndpoints
         // Correct the caption or tags. A new caption goes back through moderation on its own.
         group.MapPut("/{id:guid}", async (HttpContext ctx, SessionTokenService tokens, PhotoAiService ai, Guid id, PhotoEdit input) =>
         {
-            var (_, error) = ctx.RequireOfficer(tokens);
+            var (session, error) = ctx.RequireOfficer(tokens);
             if (error is not null) return error;
             var db = ctx.RequestServices.GetService<AppDbContext>();
             if (db is null) return DbUnavailable();
@@ -143,8 +193,11 @@ public static class PhotoEndpoints
                 {
                     var verdict = await ai.ModerateAsync([], caption, ctx.RequestAborted);
                     if (verdict.Flagged)
+                    {
+                        await RecordRejectionAsync(db, session!, PhotoRejectionKind.Caption, photo.Id, caption, verdict);
                         return Results.Json(new { error = "rejected", detail = "That caption didn't pass the content check. " + verdict.Reason },
                             statusCode: 422);
+                    }
                 }
                 photo.Caption = caption;
             }
@@ -179,6 +232,25 @@ public static class PhotoEndpoints
             var deleted = await db.Photos.Where(p => p.Id == id).ExecuteDeleteAsync();
             return deleted == 0 ? NotFound() : Results.Json(new { ok = true });
         });
+    }
+
+    // Logged before the 422 goes back. A failure to log never changes what the uploader is told.
+    private static async Task RecordRejectionAsync(AppDbContext db, SessionPayload session, string kind, Guid? photoId,
+        string caption, PhotoAiService.ModerationVerdict verdict)
+    {
+        db.PhotoRejections.Add(new PhotoRejection
+        {
+            UploaderUid = session.Uid,
+            UploaderName = session.Name,
+            Kind = kind,
+            PhotoId = photoId,
+            Caption = caption,
+            Categories = JsonSerializer.Serialize(verdict.Hit),
+            Scores = JsonSerializer.Serialize(verdict.Top.Select(s => new { category = s.Category, score = Math.Round(s.Score, 4) })),
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        try { await db.SaveChangesAsync(); }
+        catch (DbUpdateException) { db.ChangeTracker.Clear(); }
     }
 
     private static async Task<IResult> ImageAsync(HttpContext ctx, SessionTokenService tokens, Guid id, bool thumb)

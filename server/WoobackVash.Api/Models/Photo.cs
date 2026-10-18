@@ -50,6 +50,44 @@ public class PhotoImage
     public byte[] Thumb { get; set; } = [];
 }
 
+/// <summary>
+/// A record of something the content check refused: an upload, or a caption edit. It is how
+/// officers see who tried to post what kind of thing, and how often.
+///
+/// Deliberately <b>no image</b>. A refused photo is exactly the content that shouldn't sit in
+/// the guild's database, and keeping it would mean officers looking at it to review it. The
+/// caption, the categories that tripped, and their scores say enough.
+/// </summary>
+public class PhotoRejection
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    public string UploaderUid { get; set; } = "";
+    public string UploaderName { get; set; } = "";
+
+    /// <summary><see cref="PhotoRejectionKind"/>: a new upload, or a caption edit on an existing photo.</summary>
+    public string Kind { get; set; } = PhotoRejectionKind.Upload;
+
+    /// <summary>The photo whose caption edit was refused; null for a refused upload, which never became one.</summary>
+    public Guid? PhotoId { get; set; }
+
+    public string Caption { get; set; } = "";
+
+    /// <summary>The flagged categories, as a jsonb array, e.g. <c>["violence", "violence/graphic"]</c>.</summary>
+    public string Categories { get; set; } = "[]";
+
+    /// <summary>The top scores as jsonb: <c>[{ category, score }]</c>, highest first.</summary>
+    public string Scores { get; set; } = "[]";
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public static class PhotoRejectionKind
+{
+    public const string Upload = "upload";
+    public const string Caption = "caption";
+}
+
 public static class PhotoStatus
 {
     public const string Approved = "approved";

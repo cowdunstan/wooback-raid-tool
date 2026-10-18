@@ -22,6 +22,7 @@ public class AppDbContext : DbContext
     public DbSet<LaunchPollResponse> LaunchPollResponses => Set<LaunchPollResponse>();
     public DbSet<Photo> Photos => Set<Photo>();
     public DbSet<PhotoImage> PhotoImages => Set<PhotoImage>();
+    public DbSet<PhotoRejection> PhotoRejections => Set<PhotoRejection>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -55,6 +56,14 @@ public class AppDbContext : DbContext
         });
 
         b.Entity<PhotoImage>(e => e.HasKey(x => x.PhotoId));
+
+        b.Entity<PhotoRejection>(e =>
+        {
+            e.Property(x => x.Categories).HasColumnType("jsonb");
+            e.Property(x => x.Scores).HasColumnType("jsonb");
+            // Listed newest first. No FK on PhotoId: the record outlives the photo being deleted.
+            e.HasIndex(x => x.CreatedAt);
+        });
 
         b.Entity<Member>(e =>
         {

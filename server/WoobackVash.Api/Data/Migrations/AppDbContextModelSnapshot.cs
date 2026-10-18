@@ -500,6 +500,49 @@ namespace WoobackVash.Api.Data.Migrations
                     b.ToTable("PhotoImages");
                 });
 
+            modelBuilder.Entity("WoobackVash.Api.Models.PhotoRejection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Caption")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Categories")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("PhotoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Scores")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("UploaderName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UploaderUid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.ToTable("PhotoRejections");
+                });
+
             modelBuilder.Entity("WoobackVash.Api.Models.PollResponse", b =>
                 {
                     b.Property<Guid>("Id")

@@ -145,13 +145,19 @@ session.
   Delete). A member who opens it is sent to `launch.html`. The gate is cosmetic; the routes
   are `RequireOfficer`.
 - **`photobook.html`** *(root, officers only while it's trialled)* — the guild photobook.
-  Upload a screenshot or photo with an optional caption; the page resizes it to 1600px (plus
+  **Upload a photo** opens a dialog for a screenshot or photo and an optional caption. Dropping
+  or pasting (Ctrl+V) an image anywhere on the page opens it with that image already in; dragging
+  a file in opens it to aim at, and dragging back out closes it again. A touch screen gets a tap
+  prompt instead. A refused upload keeps the dialog open with the reason. The page resizes it to 1600px (plus
   a 480px thumbnail) and re-encodes it as JPEG before sending, which also strips EXIF, phone
   GPS included. The API runs it past OpenAI moderation and either refuses it (nothing is
   kept), holds it in the **Review queue** tab, or publishes it, then a small vision model
   picks tags from a fixed list. Filter the book by tag; click a photo for the full image,
   its AI description, the moderation scores, and to fix the caption and tags, approve a held
-  photo, or delete. Images are fetched with the session and shown as object URLs, since an
+  photo, or delete. A **Rejected** tab lists everything the content check refused — refused
+  uploads and refused caption edits — with who tried, when, the caption, the flagged
+  categories and the top scores, newest first, each with **Dismiss**. There's no image there:
+  a refused one is never kept. Images are fetched with the session and shown as object URLs, since an
   `<img src>` can't carry the Bearer token. A member who opens it is sent to
   `forever-home.html`; the gate is cosmetic, every `/api/photos` route is `RequireOfficer`.
 - **`home.html`** — the TBC tools hub: a welcome hub with a hamburger, a **Switch to WoW Forever tools** button,
@@ -637,20 +643,26 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   each member's linked TBC main resolved as `/api/poll/detail` does.
   `DELETE /api/launch-poll/responses/{id}` (**officer only**) removes one.
 - **Photobook** (**officer only**, every route, while it's trialled) — `GET /api/photos`
-  returns `{ tags[] = { id, label }, pending, photos[] }`: the tag vocabulary (`PhotoTags`),
-  the review-queue count, and the approved photos newest first, or the queue itself with
+  returns `{ tags[] = { id, label }, pending, rejected, photos[] }`: the tag vocabulary
+  (`PhotoTags`), the review-queue and rejection counts, and the approved photos newest first, or the queue itself with
   `?status=pending`. Each photo is `{ id, uploaderUid, uploaderName, caption, tags, altText,
   status, moderation: { checked, flagged, reason, top[] = { category, score } }, width, height,
   createdAt }`. `GET /api/photos/{id}/thumb` and `/full` return the JPEG bytes.
   `POST /api/photos` with `{ image, thumb, caption, width, height }` — base64 JPEGs (≤ 5 MB and
   ≤ 512 KB, checked by magic bytes), caption ≤ 300 chars — sends the image and caption to
-  OpenAI moderation (`Photobook:ModerationModel`). Flagged → **422** and nothing is stored;
+  OpenAI moderation (`Photobook:ModerationModel`). Flagged → **422**, the image is not stored,
+  and a `PhotoRejection` records who tried and why;
   any category at or above `Photobook:ReviewThreshold` (0.2), or no verdict at all (no API key,
   OpenAI unreachable) → stored as `pending`; otherwise `approved`. A stored photo is then tagged
   by `Photobook:TaggingModel` (`gpt-5-nano`, low-detail image, a JSON schema whose tag enum is
   the vocabulary) — a failure there just leaves it untagged. `PUT /api/photos/{id}` with
-  `{ caption?, tags? }` corrects either; a changed caption is re-moderated on its own, and
-  tags are cut to known ids, at most 6. `POST /api/photos/{id}/approve` publishes a held
+  `{ caption?, tags? }` corrects either; a changed caption is re-moderated on its own (a flagged
+  one is a 422 and a `PhotoRejection` too), and tags are cut to known ids, at most 6.
+  `GET /api/photos/rejections` returns `{ total, rejections[] = { id, uploaderUid, uploaderName,
+  kind: "upload"|"caption", photoId, caption, categories[], scores[] = { category, score },
+  createdAt } }`, newest first; `DELETE /api/photos/rejections/{id}` dismisses one. Rejections
+  never hold an image, and outlive the photo a caption edit was refused on.
+  `POST /api/photos/{id}/approve` publishes a held
   photo; `DELETE /api/photos/{id}` removes it with its bytes. The images live in Postgres
   (`PhotoImages`, `bytea`, kept apart from `Photos` so listing never reads them) — fine for a
   trial; object storage such as Cloudflare R2 is the move if it's opened to everyone.

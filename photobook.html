@@ -381,6 +381,7 @@
     <p id="mStatus" class="apply-status"></p>
     <div class="photo-actions">
       <button type="button" class="btn-ghost" id="mEditBtn">Edit caption &amp; tags</button>
+      <button type="button" class="btn-ghost" id="mRetag" title="Run the AI tagging again with the current prompt">✦ Re-tag with AI</button>
       <button type="button" class="btn-primary" id="mSave" hidden>Save</button>
       <button type="button" class="btn-ghost" id="mCancelEdit" hidden>Cancel</button>
       <button type="button" class="btn-ghost danger" id="mDelete">Delete</button>
@@ -933,8 +934,64 @@ function renderAccuracy(){
           '<p class="acc-note" style="margin:10px 0 0">Dimmed rows have fewer than 5 data points.' +
             (unused ? ' ' + unused + (unused === 1 ? ' tag hasn\'t' : ' tags haven\'t') + ' come up in a reviewed photo yet.' : '') + '</p></div>'
       : '<div class="photo-empty"><b>Nothing to score yet</b>Open a photo with ✦ suggested tags and press <b>Looks right</b> or fix them.</div>') +
-    '<div class="acc-picks">' + pick('Place', stats.place, byEvidence) + pick('Boss', stats.boss) + '</div>';
+    '<div class="acc-picks">' + pick('Place', stats.place, byEvidence) + pick('Boss', stats.boss) + '</div>' +
+    retagCard();
 }
+
+// ── Re-tag everything with the current prompt ───────────────────────────────────────────────
+// For after a prompt, place-list or model change. One request per photo, in turn, so progress
+// shows and it can be stopped; each is a fraction of a cent. Reviewed photos keep their tags —
+// only the AI's suggestion is refreshed, so the numbers above re-score the new prompt.
+let retagRun = null;   // { done, total, failed, stop } while running
+
+function retagCard(){
+  const r = retagRun;
+  return '<div class="stat-card" style="margin-top:14px"><h2>Re-run the AI</h2>' +
+    '<p class="acc-note">After changing the prompt or the place list, run the tagging again on every photo. Unreviewed photos get ' +
+    'the new suggestions; reviewed ones keep their tags, and only the AI\'s suggestion is refreshed — so the numbers above then ' +
+    'score the new prompt. Moderation isn\'t re-run.</p>' +
+    (r
+      ? '<p class="acc-note" id="retagProgress"><b>' + (r.stop ? 'Stopping… ' : 'Re-tagging… ') + r.done + ' of ' + r.total + '</b>' +
+          (r.failed ? ' · <span class="acc-warn">' + r.failed + ' failed</span>' : '') + '</p>' +
+        '<button type="button" class="btn-ghost" id="retagStop"' + (r.stop ? ' disabled' : '') + '>Stop</button>'
+      : '<button type="button" class="btn-primary" id="retagAll">✦ Re-tag every photo</button>') +
+    '</div>';
+}
+
+async function retagAll(){
+  // Every stored photo, published and held alike.
+  const [a, p] = await Promise.all([api('/api/photos'), api('/api/photos?status=pending')]);
+  if(!a.ok || !p.ok){ setStatus('Could not list the photos to re-tag.', 'err'); return; }
+  const ids = (await a.json()).photos.concat((await p.json()).photos).map(x => x.id);
+  if(!ids.length){ setStatus('There are no photos to re-tag.'); return; }
+  if(!confirm('Run the AI tagging again on all ' + ids.length + ' photos? Reviewed tags are kept. ' +
+    'It costs a fraction of a cent per photo and takes a few seconds each.')) return;
+  retagRun = { done: 0, total: ids.length, failed: 0, stop: false };
+  renderAccuracy();
+  let lastError = '';
+  for(const id of ids){
+    if(retagRun.stop) break;
+    try{
+      const res = await api('/api/photos/' + id + '/retag', { method:'POST' });
+      if(!res.ok){ retagRun.failed++; lastError = await errorDetail(res); }
+    }catch(err){
+      if(String(err.message) === '401') return;
+      retagRun.failed++; lastError = 'Could not reach the guild database.';
+    }
+    retagRun.done++;
+    if(tab === 'accuracy') renderAccuracy();
+  }
+  const r = retagRun;
+  retagRun = null;
+  setStatus((r.stop ? 'Stopped after ' : 'Re-tagged ') + (r.done - r.failed) + ' of ' + r.total + ' photos.' +
+    (r.failed ? ' ' + r.failed + ' failed: ' + lastError : ''), r.failed ? 'err' : 'ok');
+  if(tab === 'accuracy') await load();
+}
+
+document.getElementById('accuracy').addEventListener('click', function(e){
+  if(e.target.closest('#retagAll') && !retagRun) retagAll();
+  if(e.target.closest('#retagStop') && retagRun){ retagRun.stop = true; renderAccuracy(); }
+});
 
 document.getElementById('tagFilters').addEventListener('click', function(e){
   const b = e.target.closest('[data-tag]');
@@ -957,7 +1014,7 @@ function renderModalTags(){
 function setEditing(on){
   $('mView').hidden = on;
   $('mEdit').hidden = !on;
-  $('mEditBtn').hidden = on;
+  $('mEditBtn').hidden = $('mRetag').hidden = on;
   $('mSave').hidden = $('mCancelEdit').hidden = !on;
   $('mReview').hidden = on || !needsReview(current);
   if(on){
@@ -1169,6 +1226,25 @@ $('mSave').addEventListener('click', function(){
     fillPanel(current);
     setStatus('Saved.', 'ok', 'mStatus');
   });
+});
+// Run the AI tagging again on this photo with the current prompt. Reviewed tags are kept on
+// the server; only the AI's suggestion is refreshed, which the accuracy tab then re-scores.
+$('mRetag').addEventListener('click', function(){
+  const btn = this, label = btn.textContent;
+  btn.textContent = '✦ Re-tagging…';
+  setStatus('', null, 'mStatus');
+  act(btn, async function(){
+    const res = await api('/api/photos/' + current.id + '/retag', { method:'POST' });
+    if(!res.ok){ setStatus(await errorDetail(res), 'err', 'mStatus'); return; }
+    Object.assign(current, await res.json());
+    const keep = current;
+    render();
+    current = keep;
+    fillPanel(current);
+    setStatus(current.tagsConfirmed
+      ? 'AI re-run. Your reviewed tags were kept; the new suggestion is counted on the Tag accuracy tab.'
+      : 'Re-tagged with the current prompt.', 'ok', 'mStatus');
+  }).finally(() => { btn.textContent = label; });
 });
 $('mApprove').addEventListener('click', function(){
   act(this, async function(){

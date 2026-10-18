@@ -169,12 +169,15 @@ session.
   sharpening to the full image, with a side panel (below the photo on narrow screens) for the
   uploader, where (place and boss) and tags (all of which link back to the filters), the AI
   description and the moderation result. Editing the caption, place, boss and tags sits behind
-  **Edit**; a held photo carries **Approve and publish**; and there's **Delete**. A **Tag
+  **Edit**; **✦ Re-tag with AI** runs the tagging again with the current prompt; a held photo
+  carries **Approve and publish**; and there's **Delete**. A **Tag
   accuracy** tab scores the AI against review, on reviewed photos only: tag precision (of the
   tags it suggested, how many were kept) and recall (of the tags photos ended up with, how many
   it had suggested), per tag and overall, and how often its place and boss picks — "none"
   included — survived review, were changed, cleared, or filled in where it had nothing, with the
-  place picks also split by the clue the AI used, to show whether scene-only guesses hold up. A **Rejected** tab lists everything the content check refused — refused
+  place picks also split by the clue the AI used, to show whether scene-only guesses hold up.
+  Its **Re-tag every photo** re-runs the tagging on every stored photo, one at a time with progress
+  and a Stop, for after a prompt or place-list change. A **Rejected** tab lists everything the content check refused — refused
   uploads and refused caption edits — with who tried, when, the caption, the flagged
   categories and the top scores, newest first, each with **Dismiss**. There's no image there:
   a refused one is never kept. Images are fetched with the session and shown as object URLs, since an
@@ -705,6 +708,11 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   kind: "upload"|"caption", photoId, caption, categories[], scores[] = { category, score },
   createdAt } }`, newest first; `DELETE /api/photos/rejections/{id}` dismisses one. Rejections
   never hold an image, and outlive the photo a caption edit was refused on.
+  `POST /api/photos/{id}/retag` runs the tagging model again on a stored photo with the current
+  prompt and settings (moderation isn't re-run): it refreshes the `ai*` fields and alt text, and on
+  a photo nobody has reviewed also replaces its tags, place and boss; a reviewed photo keeps the
+  person's, so its refreshed suggestion re-scores the new prompt in `/tag-stats`. If the model
+  can't be reached it's a **502** and nothing changes.
   `POST /api/photos/{id}/approve` publishes a held
   photo; `DELETE /api/photos/{id}` removes it with its bytes. The images live in Postgres
   (`PhotoImages`, `bytea`, kept apart from `Photos` so listing never reads them) — fine for a

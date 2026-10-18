@@ -313,6 +313,51 @@ public static class PhotoEndpoints
             return Results.Json(Dto(photo));
         });
 
+        // Run the tagging model again on a stored photo, with whatever prompt and settings are
+        // current — for after the prompt, place list or model changes. Moderation isn't re-run.
+        //
+        // What it replaces depends on whether a person has reviewed the photo. Unreviewed, the new
+        // picks replace the old ones and stay suggestions. Reviewed, the person's tags, place and
+        // boss are kept and only the stored AI suggestion is refreshed — so re-tagging reviewed
+        // photos re-scores the new prompt against human answers on the Tag accuracy tab.
+        // If the model can't be reached, nothing changes and it's a 502.
+        group.MapPost("/{id:guid}/retag", async (HttpContext ctx, SessionTokenService tokens, PhotoAiService ai, Guid id) =>
+        {
+            var (_, error) = ctx.RequireOfficer(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            var photo = await db.Photos.FirstOrDefaultAsync(p => p.Id == id);
+            if (photo is null) return NotFound();
+            var full = await db.PhotoImages.Where(i => i.PhotoId == id).Select(i => i.Full).FirstOrDefaultAsync();
+            if (full is null) return NotFound();
+
+            var suggestion = await ai.SuggestTagsAsync(full, photo.Caption, ctx.RequestAborted);
+            if (!suggestion.Ran)
+                return Results.Json(new
+                {
+                    error = "tagging_failed",
+                    detail = "The tagging model couldn't be reached (or isn't configured), so nothing was changed."
+                }, statusCode: 502);
+
+            var aiTags = JsonSerializer.Serialize(suggestion.Tags);
+            photo.AiTagged = true;
+            photo.AiTags = aiTags;
+            photo.AiPlace = suggestion.Place;
+            photo.AiPlaceEvidence = suggestion.PlaceEvidence;
+            photo.AiBoss = suggestion.Boss;
+            if (!string.IsNullOrEmpty(suggestion.AltText)) photo.AltText = suggestion.AltText;
+            if (!photo.TagsConfirmed)
+            {
+                photo.Tags = aiTags;
+                photo.Place = suggestion.Place;
+                photo.Boss = suggestion.Boss;
+            }
+            await db.SaveChangesAsync();
+            return Results.Json(Dto(photo));
+        });
+
         // Publish a photo moderation held back.
         group.MapPost("/{id:guid}/approve", async (HttpContext ctx, SessionTokenService tokens, Guid id) =>
         {

@@ -152,9 +152,15 @@ session.
   a 480px thumbnail) and re-encodes it as JPEG before sending, which also strips EXIF, phone
   GPS included. The API runs it past OpenAI moderation and either refuses it (nothing is
   kept), holds it in the **Review queue** tab, or publishes it, then a small vision model
-  picks tags from a fixed list. Filter the book by tag; click a photo for the full image,
-  its AI description, the moderation scores, and to fix the caption and tags, approve a held
-  photo, or delete. A **Rejected** tab lists everything the content check refused — refused
+  picks tags from a fixed list. The book runs newest upload first, in justified rows that keep
+  every photo's own shape (`justify()`, sized from each photo's stored width and height, never
+  taller than the target row height); the caption and uploader show on hover, or always on a
+  touch screen. Filter it by tag. A photo opens in a full-screen lightbox that steps through
+  whatever the grid is showing — arrows, ←/→, or a swipe — showing the thumbnail at once and
+  sharpening to the full image, with a side panel (below the photo on narrow screens) for the
+  uploader, tags (which link back to the filter), the AI description and the moderation
+  result. Editing the caption and tags sits behind **Edit**; a held photo carries **Approve
+  and publish**; and there's **Delete**. A **Rejected** tab lists everything the content check refused — refused
   uploads and refused caption edits — with who tried, when, the caption, the flagged
   categories and the top scores, newest first, each with **Dismiss**. There's no image there:
   a refused one is never kept. Images are fetched with the session and shown as object URLs, since an

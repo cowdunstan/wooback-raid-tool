@@ -28,6 +28,7 @@ under **`/legacy/`**.
 /forever-home.html   any signed-in member — the WoW Forever hub, an app card per Forever page
 /launch.html         any signed-in member — the WoW Forever launch poll
 /launch-responses.html  officers — review of the launch poll
+/photobook.html      officers (for now) — the guild photobook, moderated and AI-tagged
 /styles.css /menu.js /app.js /groups.js /loot-prio.js /my-priority.js /loot-sheet.js
 /apply-questions.js  the application's question list, shared by apply, applications, application-stats
 /launch-questions.js the launch poll's question list, shared by launch + launch-responses
@@ -143,6 +144,16 @@ session.
   60 by 9 Dec · group · who they raid with, every answer behind a toggle, their linked TBC main if any, and
   Delete). A member who opens it is sent to `launch.html`. The gate is cosmetic; the routes
   are `RequireOfficer`.
+- **`photobook.html`** *(root, officers only while it's trialled)* — the guild photobook.
+  Upload a screenshot or photo with an optional caption; the page resizes it to 1600px (plus
+  a 480px thumbnail) and re-encodes it as JPEG before sending, which also strips EXIF, phone
+  GPS included. The API runs it past OpenAI moderation and either refuses it (nothing is
+  kept), holds it in the **Review queue** tab, or publishes it, then a small vision model
+  picks tags from a fixed list. Filter the book by tag; click a photo for the full image,
+  its AI description, the moderation scores, and to fix the caption and tags, approve a held
+  photo, or delete. Images are fetched with the session and shown as object URLs, since an
+  `<img src>` can't carry the Bearer token. A member who opens it is sent to
+  `forever-home.html`; the gate is cosmetic, every `/api/photos` route is `RequireOfficer`.
 - **`home.html`** — the TBC tools hub: a welcome hub with a hamburger, a **Switch to WoW Forever tools** button,
   menu and app cards. Open to any signed-in tier.
 - **`logs.html`** — the **Warcraft Logs** app: the guild's uploaded reports
@@ -625,6 +636,24 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   name, mainName, mainId, choices, text, updatedAt } }`, most recently updated first, with
   each member's linked TBC main resolved as `/api/poll/detail` does.
   `DELETE /api/launch-poll/responses/{id}` (**officer only**) removes one.
+- **Photobook** (**officer only**, every route, while it's trialled) — `GET /api/photos`
+  returns `{ tags[] = { id, label }, pending, photos[] }`: the tag vocabulary (`PhotoTags`),
+  the review-queue count, and the approved photos newest first, or the queue itself with
+  `?status=pending`. Each photo is `{ id, uploaderUid, uploaderName, caption, tags, altText,
+  status, moderation: { checked, flagged, reason, top[] = { category, score } }, width, height,
+  createdAt }`. `GET /api/photos/{id}/thumb` and `/full` return the JPEG bytes.
+  `POST /api/photos` with `{ image, thumb, caption, width, height }` — base64 JPEGs (≤ 5 MB and
+  ≤ 512 KB, checked by magic bytes), caption ≤ 300 chars — sends the image and caption to
+  OpenAI moderation (`Photobook:ModerationModel`). Flagged → **422** and nothing is stored;
+  any category at or above `Photobook:ReviewThreshold` (0.2), or no verdict at all (no API key,
+  OpenAI unreachable) → stored as `pending`; otherwise `approved`. A stored photo is then tagged
+  by `Photobook:TaggingModel` (`gpt-5-nano`, low-detail image, a JSON schema whose tag enum is
+  the vocabulary) — a failure there just leaves it untagged. `PUT /api/photos/{id}` with
+  `{ caption?, tags? }` corrects either; a changed caption is re-moderated on its own, and
+  tags are cut to known ids, at most 6. `POST /api/photos/{id}/approve` publishes a held
+  photo; `DELETE /api/photos/{id}` removes it with its bytes. The images live in Postgres
+  (`PhotoImages`, `bytea`, kept apart from `Photos` so listing never reads them) — fine for a
+  trial; object storage such as Cloudflare R2 is the move if it's opened to everyone.
 - **Health** — `/healthz` (liveness), `/readyz` (DB reachability + error detail).
 
 Non-secret config (Discord client id, guild id, role ids, WCL guild identity)
@@ -686,8 +715,12 @@ fly secrets set -a wooback-vash-api `
   "WarcraftLogs__ClientSecret=<wcl v2 client secret>" `
   "Blizzard__ClientId=<battle.net client id>" `
   "Blizzard__ClientSecret=<battle.net client secret>" `
-  "Recruitment__DiscordWebhookUrl=<officer channel webhook URL>"
+  "Recruitment__DiscordWebhookUrl=<officer channel webhook URL>" `
+  "Photobook__OpenAiApiKey=<openai API key>"
 ```
+`Photobook__OpenAiApiKey` powers the photobook's moderation (free) and tagging (a nano model,
+fractions of a cent a photo). Leave it unset and uploads still work, but every one is held for
+an officer, untagged. Locally it's the `Photobook:OpenAiApiKey` user-secret.
 `Recruitment__DiscordWebhookUrl` is the officer-channel webhook pinged for each new
 application (channel settings → **Integrations → Webhooks → New Webhook → Copy URL**).
 It's a secret, since anyone holding it can post to that channel. Leave it unset and

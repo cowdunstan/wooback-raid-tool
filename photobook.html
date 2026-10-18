@@ -1,0 +1,406 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* Officer gate while the photobook is tried out. Hiding the page is only cosmetic: every
+   /api/photos route is officer-gated on the API regardless. A member who lands here is sent
+   to the WoW Forever home. */
+(function(){
+  function payload(tok){
+    if(!tok) return null;
+    try{
+      var p = tok.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');
+      while(p.length % 4) p += '=';
+      return JSON.parse(atob(p));
+    }catch(e){ return null; }
+  }
+  var tok = null;
+  try{ tok = localStorage.getItem('vashj_session'); }catch(e){}
+  var p = payload(tok);
+  if(!p || !p.exp || p.exp <= Math.floor(Date.now()/1000)){
+    try{ localStorage.removeItem('vashj_session'); }catch(e){}
+    location.replace('index.html');
+  }else if(!p.officer){
+    location.replace('forever-home.html');
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Photobook — wooback</title>
+<style>
+  .wrap.photo-wrap{max-width:1100px;}
+  .photo-wrap [hidden]{display:none !important;}
+  .photo-upload{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
+    padding:14px 16px;margin:0 0 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  }
+  .photo-upload input[type=text]{
+    flex:1 1 240px;min-width:0;background:var(--well);border:1px solid var(--panel-line);border-radius:7px;
+    color:var(--text);padding:9px 11px;font:inherit;font-size:13px;
+  }
+  .photo-upload .photo-file{font-size:12.5px;color:var(--text-dim);max-width:100%;}
+  .photo-wrap #status{margin:-8px 0 14px;min-height:1em;}
+  .photo-tabs{display:flex;gap:8px;margin:0 0 12px;}
+  .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+  .photo-tile{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;overflow:hidden;
+    cursor:pointer;padding:0;text-align:left;color:inherit;font:inherit;display:flex;flex-direction:column;
+  }
+  .photo-tile:hover{border-color:var(--accent-dim);}
+  .photo-tile .thumb{aspect-ratio:4/3;background:var(--well);width:100%;object-fit:cover;display:block;}
+  .photo-tile .meta{padding:8px 10px;font-size:12px;color:var(--text-dim);}
+  .photo-tile .cap{color:var(--text);font-size:12.5px;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .photo-held{color:var(--amber);font-weight:600;}
+  .tag-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
+  .tag-chip{
+    font-size:11px;border:1px solid var(--panel-line);border-radius:999px;padding:2px 8px;color:var(--text-dim);
+    background:none;font-family:'Inter',sans-serif;
+  }
+  button.tag-chip{cursor:pointer;}
+  button.tag-chip:hover{border-color:var(--accent-dim);color:var(--text);}
+  .tag-chip.on{border-color:var(--accent);color:var(--heading);background:rgba(var(--accent-rgb),.14);}
+
+  .photo-modal{
+    position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:50;display:flex;align-items:center;
+    justify-content:center;padding:16px;
+  }
+  .photo-modal[hidden]{display:none;}
+  .photo-modal-box{
+    background:var(--panel);border:1px solid var(--panel-line);border-radius:12px;max-width:1000px;width:100%;
+    max-height:100%;overflow:auto;display:grid;grid-template-columns:minmax(0,3fr) minmax(240px,2fr);
+  }
+  @media (max-width:760px){ .photo-modal-box{grid-template-columns:1fr;} }
+  .photo-modal-box .full{width:100%;height:100%;max-height:80vh;object-fit:contain;background:#000;display:block;}
+  .photo-side{padding:14px 16px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;}
+  .photo-side h2{font-family:'Cinzel',serif;font-size:15px;color:var(--heading);margin:0;overflow-wrap:anywhere;}
+  .photo-side textarea{
+    width:100%;box-sizing:border-box;background:var(--well);border:1px solid var(--panel-line);border-radius:7px;
+    color:var(--text);padding:8px 10px;font:inherit;font-size:13px;resize:vertical;min-height:56px;
+  }
+  .photo-side .label{color:var(--text-dim);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;}
+  .photo-side .alt{color:var(--text-dim);font-style:italic;}
+  .photo-side .mod{color:var(--text-dim);}
+  .photo-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;}
+</style>
+
+<div class="app">
+  <div class="wrap photo-wrap">
+    <div class="authbar">
+      <span class="authbar-left">
+        <div class="nav">
+          <button class="hamburger" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navDrawer">
+            <span></span><span></span><span></span>
+          </button>
+          <nav class="nav-drawer" id="navDrawer" data-nav="forever"></nav>
+        </div>
+        <a href="forever-home.html"><img src="logo.png" alt="WoW Forever home" width="36" height="36" style="display:block"></a>
+        <span class="eyebrow">Photobook · officers only (trial)</span>
+      </span>
+      <span class="authbar-right">
+        <span id="authWho" class="auth-who"></span>
+        <button class="btn-ghost" onclick="logout()">Sign out</button>
+      </span>
+    </div>
+
+    <h1>Photobook</h1>
+    <p class="subtitle">Screenshots and photos from the journey. Each upload is checked by a content filter and tagged automatically; fix the tags if it got them wrong.</p>
+
+    <form id="upload" class="photo-upload">
+      <input type="file" id="file" class="photo-file" accept="image/*" required>
+      <input type="text" id="caption" maxlength="300" placeholder="Caption (optional)">
+      <button type="submit" class="btn-primary" id="uploadBtn">Upload</button>
+    </form>
+    <p id="status" class="apply-status"></p>
+
+    <div class="photo-tabs launch-filters" id="tabs">
+      <button type="button" class="launch-filter active" data-tab="approved">Photos</button>
+      <button type="button" class="launch-filter" data-tab="pending">Review queue <b id="pendingCount">0</b></button>
+    </div>
+    <div id="tagFilters" class="launch-filters"></div>
+    <div id="grid" class="photo-grid"></div>
+  </div>
+</div>
+
+<div id="modal" class="photo-modal" hidden>
+  <div class="photo-modal-box" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <img id="mImg" class="full" alt="">
+    <div class="photo-side">
+      <h2 id="mTitle"></h2>
+      <div id="mWhen" class="review-when"></div>
+      <div id="mHeld" class="photo-held"></div>
+      <div><div class="label">Caption</div><textarea id="mCaption" maxlength="300"></textarea></div>
+      <div><div class="label">Tags</div><div id="mTags" class="tag-chips"></div></div>
+      <div id="mAlt" class="alt"></div>
+      <div id="mMod" class="mod"></div>
+      <p id="mStatus" class="apply-status"></p>
+      <div class="photo-actions">
+        <button type="button" class="btn-primary" id="mSave">Save</button>
+        <button type="button" class="btn-primary" id="mApprove" hidden>Approve</button>
+        <button type="button" class="btn-ghost" id="mDelete">Delete</button>
+        <button type="button" class="btn-ghost" id="mClose">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="menu.js"></script>
+<script>
+// API_BASE, sessionToken and logout come from menu.js. The image routes want a Bearer token,
+// so images are fetched and shown as object URLs rather than linked directly.
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function api(path, opts){
+  const o = Object.assign({}, opts);
+  o.headers = Object.assign({ 'Authorization': 'Bearer ' + sessionToken() }, o.headers || {});
+  const res = await fetch(API_BASE + path, o);
+  if(res.status === 401){ setStatus('Session expired — signing out…', 'err'); setTimeout(logout, 1200); throw new Error('401'); }
+  return res;
+}
+async function errorDetail(res){
+  try{ const j = await res.json(); return j.detail || ('HTTP ' + res.status); }catch(e){ return 'HTTP ' + res.status; }
+}
+
+function setStatus(msg, kind, id){
+  const el = document.getElementById(id || 'status');
+  el.textContent = msg || '';
+  el.className = 'apply-status' + (kind ? ' ' + kind : '');
+}
+
+function when(iso){
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
+}
+
+let tab = 'approved', tagFilter = null, photos = [], vocab = [];
+const imageUrls = {};   // "id:thumb" → object URL, so re-renders don't refetch
+
+const tagLabel = id => (vocab.find(t => t.id === id) || { label:id }).label;
+
+async function imageUrl(id, kind){
+  const key = id + ':' + kind;
+  if(!imageUrls[key]){
+    imageUrls[key] = api('/api/photos/' + id + '/' + kind)
+      .then(r => r.ok ? r.blob() : null)
+      .then(b => b ? URL.createObjectURL(b) : '');
+  }
+  return imageUrls[key];
+}
+
+// ── Upload: resize and re-encode in the browser ─────────────────────────────────────────────
+// Re-encoding through a canvas as JPEG drops the EXIF block, GPS included, and keeps uploads
+// small. imageOrientation honours a phone's rotation flag before it's thrown away.
+const FULL_MAX = 1600, THUMB_MAX = 480;
+
+function drawScaled(bitmap, max){
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bitmap.width * scale);
+  c.height = Math.round(bitmap.height * scale);
+  c.getContext('2d').drawImage(bitmap, 0, 0, c.width, c.height);
+  return c;
+}
+const toJpeg = (canvas, q) => new Promise((ok, bad) =>
+  canvas.toBlob(b => b ? ok(b) : bad(new Error('encode')), 'image/jpeg', q));
+const toBase64 = blob => new Promise((ok, bad) => {
+  const r = new FileReader();
+  r.onload = () => ok(String(r.result).split(',')[1]);
+  r.onerror = () => bad(r.error);
+  r.readAsDataURL(blob);
+});
+
+document.getElementById('upload').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const file = document.getElementById('file').files[0];
+  if(!file) return;
+  const btn = document.getElementById('uploadBtn');
+  btn.disabled = true;
+  try{
+    setStatus('Preparing…');
+    let bitmap;
+    try{ bitmap = await createImageBitmap(file, { imageOrientation:'from-image' }); }
+    catch(err){ setStatus("That file couldn't be read as an image.", 'err'); return; }
+    const full = drawScaled(bitmap, FULL_MAX), thumb = drawScaled(bitmap, THUMB_MAX);
+    const body = {
+      image: await toBase64(await toJpeg(full, 0.85)),
+      thumb: await toBase64(await toJpeg(thumb, 0.8)),
+      caption: document.getElementById('caption').value.trim(),
+      width: full.width, height: full.height
+    };
+    setStatus('Checking and tagging…');
+    const res = await api('/api/photos', {
+      method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body)
+    });
+    if(!res.ok){ setStatus(await errorDetail(res), 'err'); return; }
+    const p = await res.json();
+    document.getElementById('upload').reset();
+    setStatus(p.status === 'pending'
+      ? 'Uploaded, but held for review: ' + ((p.moderation && p.moderation.reason) || 'needs an officer to look.')
+      : 'Uploaded' + (p.tags.length ? ' and tagged ' + p.tags.map(tagLabel).join(', ') + '.' : '.'), 'ok');
+    tab = p.status;
+    await load();
+  }catch(err){
+    if(String(err.message) !== '401') setStatus('Upload failed — could not reach the guild database.', 'err');
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+// ── Book ────────────────────────────────────────────────────────────────────────────────────
+function tile(p){
+  const cap = p.caption || p.altText || '';
+  return '<button type="button" class="photo-tile" data-id="' + esc(p.id) + '">' +
+    '<img class="thumb" data-thumb="' + esc(p.id) + '" alt="' + esc(p.altText || p.caption || 'Photo') + '">' +
+    '<div class="meta">' +
+      (cap ? '<div class="cap">' + esc(cap) + '</div>' : '') +
+      esc(p.uploaderName) + ' · ' + esc(when(p.createdAt)) +
+      (p.status === 'pending' ? '<div class="photo-held">Held: ' + esc((p.moderation && p.moderation.reason) || 'awaiting review') + '</div>' : '') +
+      (p.tags.length ? '<div class="tag-chips">' + p.tags.map(t => '<span class="tag-chip">' + esc(tagLabel(t)) + '</span>').join('') + '</div>' : '') +
+    '</div></button>';
+}
+
+function render(){
+  document.querySelectorAll('#tabs .launch-filter').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  // Only the tags actually in use on this tab, with counts.
+  const counts = {};
+  photos.forEach(p => p.tags.forEach(t => counts[t] = (counts[t] || 0) + 1));
+  if(tagFilter && !counts[tagFilter]) tagFilter = null;
+  const used = vocab.filter(t => counts[t.id]);
+  document.getElementById('tagFilters').innerHTML = used.length
+    ? '<button type="button" class="launch-filter' + (tagFilter ? '' : ' active') + '" data-tag="">All <b>' + photos.length + '</b></button>' +
+      used.map(t => '<button type="button" class="launch-filter' + (tagFilter === t.id ? ' active' : '') + '" data-tag="' + esc(t.id) + '">' +
+        esc(t.label) + ' <b>' + counts[t.id] + '</b></button>').join('')
+    : '';
+
+  const shown = photos.filter(p => !tagFilter || p.tags.indexOf(tagFilter) !== -1);
+  const grid = document.getElementById('grid');
+  grid.innerHTML = shown.length ? shown.map(tile).join('')
+    : '<p class="review-none">' + (tab === 'pending' ? 'Nothing waiting for review.' : 'No photos yet — be the first.') + '</p>';
+  grid.querySelectorAll('img[data-thumb]').forEach(async img => { img.src = await imageUrl(img.dataset.thumb, 'thumb'); });
+}
+
+async function load(){
+  try{
+    const res = await api('/api/photos' + (tab === 'pending' ? '?status=pending' : ''));
+    if(res.status === 403){ setStatus('Officers only.', 'err'); return; }
+    if(!res.ok){ setStatus('Could not load the photobook (' + await errorDetail(res) + ').', 'err'); return; }
+    const data = await res.json();
+    vocab = data.tags || [];
+    photos = data.photos || [];
+    document.getElementById('pendingCount').textContent = data.pending;
+    render();
+  }catch(err){
+    if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
+  }
+}
+
+document.getElementById('tabs').addEventListener('click', function(e){
+  const b = e.target.closest('[data-tab]');
+  if(!b || b.dataset.tab === tab) return;
+  tab = b.dataset.tab; tagFilter = null;
+  load();
+});
+document.getElementById('tagFilters').addEventListener('click', function(e){
+  const b = e.target.closest('[data-tag]');
+  if(!b) return;
+  tagFilter = b.dataset.tag || null;
+  render();
+});
+
+// ── Lightbox: view, retag, approve, delete ──────────────────────────────────────────────────
+const modal = document.getElementById('modal');
+let current = null, editTags = [];
+
+function renderModalTags(){
+  document.getElementById('mTags').innerHTML = vocab.map(t =>
+    '<button type="button" class="tag-chip' + (editTags.indexOf(t.id) !== -1 ? ' on' : '') + '" data-tag="' + esc(t.id) + '">' +
+      esc(t.label) + '</button>').join('');
+}
+
+async function openPhoto(p){
+  current = p;
+  editTags = p.tags.slice();
+  const img = document.getElementById('mImg');
+  img.removeAttribute('src');
+  img.alt = p.altText || p.caption || 'Photo';
+  document.getElementById('mTitle').textContent = p.caption || 'Untitled';
+  document.getElementById('mWhen').textContent = p.uploaderName + ' · ' + when(p.createdAt);
+  document.getElementById('mHeld').textContent = p.status === 'pending'
+    ? 'Held for review — ' + ((p.moderation && p.moderation.reason) || 'awaiting an officer') : '';
+  document.getElementById('mCaption').value = p.caption || '';
+  document.getElementById('mAlt').textContent = p.altText ? 'AI description: ' + p.altText : '';
+  const m = p.moderation || {};
+  document.getElementById('mMod').textContent = m.checked
+    ? 'Content check: top score ' + ((m.top || [])[0] ? m.top[0].category + ' ' + m.top[0].score.toFixed(3) : 'none') + '.'
+    : 'Content check did not run.';
+  document.getElementById('mApprove').hidden = p.status !== 'pending';
+  setStatus('', null, 'mStatus');
+  renderModalTags();
+  modal.hidden = false;
+  img.src = await imageUrl(p.id, 'full');
+}
+function closeModal(){ modal.hidden = true; current = null; }
+
+document.getElementById('grid').addEventListener('click', function(e){
+  const t = e.target.closest('.photo-tile');
+  if(!t) return;
+  const p = photos.find(x => x.id === t.dataset.id);
+  if(p) openPhoto(p);
+});
+document.getElementById('mTags').addEventListener('click', function(e){
+  const b = e.target.closest('[data-tag]');
+  if(!b) return;
+  const i = editTags.indexOf(b.dataset.tag);
+  if(i !== -1) editTags.splice(i, 1);
+  else if(editTags.length < 6) editTags.push(b.dataset.tag);
+  else { setStatus('Six tags at most.', 'err', 'mStatus'); return; }
+  renderModalTags();
+});
+document.getElementById('mClose').addEventListener('click', closeModal);
+modal.addEventListener('click', e => { if(e.target === modal) closeModal(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && !modal.hidden) closeModal(); });
+
+async function act(btn, fn){
+  btn.disabled = true;
+  try{ await fn(); }
+  catch(err){ if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err', 'mStatus'); }
+  finally{ btn.disabled = false; }
+}
+
+document.getElementById('mSave').addEventListener('click', function(){
+  act(this, async function(){
+    const res = await api('/api/photos/' + current.id, {
+      method:'PUT', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ caption: document.getElementById('mCaption').value, tags: editTags })
+    });
+    if(!res.ok){ setStatus(await errorDetail(res), 'err', 'mStatus'); return; }
+    const p = await res.json();
+    Object.assign(current, p);
+    document.getElementById('mTitle').textContent = p.caption || 'Untitled';
+    setStatus('Saved.', 'ok', 'mStatus');
+    render();
+  });
+});
+document.getElementById('mApprove').addEventListener('click', function(){
+  act(this, async function(){
+    const res = await api('/api/photos/' + current.id + '/approve', { method:'POST' });
+    if(!res.ok){ setStatus(await errorDetail(res), 'err', 'mStatus'); return; }
+    closeModal();
+    await load();
+  });
+});
+document.getElementById('mDelete').addEventListener('click', function(){
+  if(!confirm("Delete this photo? This can't be undone.")) return;
+  act(this, async function(){
+    const res = await api('/api/photos/' + current.id, { method:'DELETE' });
+    if(!res.ok && res.status !== 404){ setStatus(await errorDetail(res), 'err', 'mStatus'); return; }
+    closeModal();
+    await load();
+  });
+});
+
+load();
+</script>

@@ -432,6 +432,74 @@ namespace WoobackVash.Api.Data.Migrations
                     b.ToTable("Members");
                 });
 
+            modelBuilder.Entity("WoobackVash.Api.Models.Photo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AltText")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Caption")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Moderation")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Tags")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("UploaderName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UploaderUid")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("Photos");
+                });
+
+            modelBuilder.Entity("WoobackVash.Api.Models.PhotoImage", b =>
+                {
+                    b.Property<Guid>("PhotoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Full")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<byte[]>("Thumb")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("PhotoId");
+
+                    b.ToTable("PhotoImages");
+                });
+
             modelBuilder.Entity("WoobackVash.Api.Models.PollResponse", b =>
                 {
                     b.Property<Guid>("Id")
@@ -636,6 +704,15 @@ namespace WoobackVash.Api.Data.Migrations
                     b.Navigation("LootAward");
                 });
 
+            modelBuilder.Entity("WoobackVash.Api.Models.PhotoImage", b =>
+                {
+                    b.HasOne("WoobackVash.Api.Models.Photo", null)
+                        .WithOne("Image")
+                        .HasForeignKey("WoobackVash.Api.Models.PhotoImage", "PhotoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("WoobackVash.Api.Models.LootAward", b =>
                 {
                     b.Navigation("Rolls");
@@ -644,6 +721,11 @@ namespace WoobackVash.Api.Data.Migrations
             modelBuilder.Entity("WoobackVash.Api.Models.Member", b =>
                 {
                     b.Navigation("Characters");
+                });
+
+            modelBuilder.Entity("WoobackVash.Api.Models.Photo", b =>
+                {
+                    b.Navigation("Image");
                 });
 
             modelBuilder.Entity("WoobackVash.Api.Models.RaidEvent", b =>

@@ -20,6 +20,8 @@ public class AppDbContext : DbContext
     public DbSet<PollResponse> PollResponses => Set<PollResponse>();
     public DbSet<GuildApplication> GuildApplications => Set<GuildApplication>();
     public DbSet<LaunchPollResponse> LaunchPollResponses => Set<LaunchPollResponse>();
+    public DbSet<Photo> Photos => Set<Photo>();
+    public DbSet<PhotoImage> PhotoImages => Set<PhotoImage>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -39,6 +41,20 @@ public class AppDbContext : DbContext
             e.Property(x => x.Choices).HasColumnType("jsonb");
             e.Property(x => x.Text).HasColumnType("jsonb");
         });
+
+        b.Entity<Photo>(e =>
+        {
+            e.Property(x => x.Tags).HasColumnType("jsonb");
+            e.Property(x => x.Moderation).HasColumnType("jsonb");
+            // The book lists newest first, split by status.
+            e.HasIndex(x => new { x.Status, x.CreatedAt });
+            e.HasOne(x => x.Image)
+             .WithOne()
+             .HasForeignKey<PhotoImage>(x => x.PhotoId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PhotoImage>(e => e.HasKey(x => x.PhotoId));
 
         b.Entity<Member>(e =>
         {

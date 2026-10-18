@@ -34,7 +34,8 @@ public class PhotoAiService
     /// <param name="Flagged">OpenAI's own verdict: the photo is refused.</param>
     /// <param name="Reason">Why it's unchecked, or why it's held — for the officer looking at it.</param>
     /// <param name="Top">The highest-scoring categories, highest first.</param>
-    public record ModerationVerdict(bool Checked, bool Flagged, string? Reason, List<CategoryScore> Top)
+    /// <param name="Hit">The categories OpenAI flagged; empty unless <paramref name="Flagged"/>.</param>
+    public record ModerationVerdict(bool Checked, bool Flagged, string? Reason, List<CategoryScore> Top, List<string> Hit)
     {
         public double MaxScore => Top.Count == 0 ? 0 : Top[0].Score;
     }
@@ -56,7 +57,7 @@ public class PhotoAiService
                 ["type"] = "image_url",
                 ["image_url"] = new JsonObject { ["url"] = DataUrl(jpeg) }
             });
-        if (input.Count == 0) return new ModerationVerdict(true, false, null, []);
+        if (input.Count == 0) return new ModerationVerdict(true, false, null, [], []);
 
         var body = new JsonObject { ["model"] = _opts.ModerationModel, ["input"] = input };
         var json = await PostAsync("/moderations", body, ct);
@@ -72,18 +73,20 @@ public class PhotoAiService
                 .Take(3)
                 .ToList();
             string? reason = null;
+            var hit = new List<string>();
             if (flagged)
             {
-                var hit = result["categories"]!.AsObject()
+                hit = result["categories"]!.AsObject()
                     .Where(kv => kv.Value?.GetValue<bool>() == true)
-                    .Select(kv => kv.Key);
+                    .Select(kv => kv.Key)
+                    .ToList();
                 reason = "Flagged: " + string.Join(", ", hit);
             }
             else if (scores.Count > 0 && scores[0].Score >= _opts.ReviewThreshold)
             {
                 reason = $"Borderline: {scores[0].Category} scored {scores[0].Score:0.00}.";
             }
-            return new ModerationVerdict(true, flagged, reason, scores);
+            return new ModerationVerdict(true, flagged, reason, scores, hit);
         }
         catch (Exception ex)
         {
@@ -196,7 +199,7 @@ public class PhotoAiService
         }
     }
 
-    private static ModerationVerdict Unchecked(string reason) => new(false, false, reason, []);
+    private static ModerationVerdict Unchecked(string reason) => new(false, false, reason, [], []);
 
     private static string DataUrl(byte[] jpeg) => "data:image/jpeg;base64," + Convert.ToBase64String(jpeg);
 }

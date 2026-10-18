@@ -75,6 +75,18 @@
   .photo-tile .meta{padding:8px 10px;font-size:12px;color:var(--text-dim);}
   .photo-tile .cap{color:var(--text);font-size:12.5px;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .photo-held{color:var(--amber);font-weight:600;}
+  /* The Rejected tab: one card per refusal, no image (the API never keeps one). */
+  .reject-note{font-size:12.5px;color:var(--text-dim);margin:0 0 12px;}
+  .reject-card{
+    background:var(--panel);border:1px solid var(--panel-line);border-left:3px solid var(--amber);
+    border-radius:10px;padding:12px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;
+  }
+  .reject-body{flex:1;min-width:0;font-size:12.5px;}
+  .reject-who{font-family:'Cinzel',serif;font-weight:700;font-size:14.5px;color:var(--heading);overflow-wrap:anywhere;}
+  .reject-kind{color:var(--amber);font-weight:600;margin-left:6px;font-size:12px;}
+  .reject-caption{color:var(--text);margin:6px 0 0;overflow-wrap:anywhere;}
+  .reject-scores{color:var(--text-dim);margin-top:6px;font-variant-numeric:tabular-nums;}
+  .tag-chip.flag{border-color:rgba(var(--amber-rgb),.6);color:var(--amber);background:rgba(var(--amber-rgb),.10);}
   .tag-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
   .tag-chip{
     font-size:11px;border:1px solid var(--panel-line);border-radius:999px;padding:2px 8px;color:var(--text-dim);
@@ -148,9 +160,11 @@
     <div class="photo-tabs launch-filters" id="tabs">
       <button type="button" class="launch-filter active" data-tab="approved">Photos</button>
       <button type="button" class="launch-filter" data-tab="pending">Review queue <b id="pendingCount">0</b></button>
+      <button type="button" class="launch-filter" data-tab="rejected">Rejected <b id="rejectedCount">0</b></button>
     </div>
     <div id="tagFilters" class="launch-filters"></div>
     <div id="grid" class="photo-grid"></div>
+    <div id="rejections" hidden></div>
   </div>
 </div>
 
@@ -205,7 +219,7 @@ function when(iso){
   return isNaN(d) ? '' : d.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
 }
 
-let tab = 'approved', tagFilter = null, photos = [], vocab = [];
+let tab = 'approved', tagFilter = null, photos = [], vocab = [], rejections = [];
 const imageUrls = {};   // "id:thumb" → object URL, so re-renders don't refetch
 
 const tagLabel = id => (vocab.find(t => t.id === id) || { label:id }).label;
@@ -354,7 +368,11 @@ document.getElementById('upload').addEventListener('submit', async function(e){
     const res = await api('/api/photos', {
       method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body)
     });
-    if(!res.ok){ setStatus(await errorDetail(res), 'err'); return; }
+    if(!res.ok){
+      setStatus(await errorDetail(res), 'err');
+      if(res.status === 422) load();
+      return;
+    }
     const p = await res.json();
     document.getElementById('upload').reset();
     clearChosen();
@@ -383,8 +401,40 @@ function tile(p){
     '</div></button>';
 }
 
+// ── Rejected: what the content check refused, and who tried ─────────────────────────────────
+// OpenAI's category ids are things like "violence/graphic"; spaced out, they read well enough.
+const catLabel = c => String(c).replace(/\//g, ' / ').replace(/-/g, ' ');
+
+function rejectionCard(r){
+  const scores = (r.scores || []).map(s => catLabel(s.category) + ' ' + Number(s.score).toFixed(2)).join(' · ');
+  return '<article class="reject-card" data-id="' + esc(r.id) + '">' +
+    '<div class="reject-body">' +
+      '<div><span class="reject-who">' + esc(r.uploaderName || r.uploaderUid) + '</span>' +
+        '<span class="reject-kind">' + (r.kind === 'caption' ? 'Caption edit refused' : 'Upload refused') + '</span></div>' +
+      '<div class="review-when">' + esc(when(r.createdAt)) + '</div>' +
+      (r.categories.length ? '<div class="tag-chips">' + r.categories.map(c => '<span class="tag-chip flag">' + esc(catLabel(c)) + '</span>').join('') + '</div>' : '') +
+      '<p class="reject-caption">' + (r.caption ? '“' + esc(r.caption) + '”' : '<span class="review-none">No caption</span>') + '</p>' +
+      (scores ? '<div class="reject-scores">Top scores: ' + esc(scores) + '</div>' : '') +
+    '</div>' +
+    '<button type="button" class="btn-ghost reject-dismiss">Dismiss</button>' +
+  '</article>';
+}
+
+function renderRejections(){
+  const el = document.getElementById('rejections');
+  el.innerHTML = rejections.length
+    ? '<p class="reject-note">Everything the content check refused, newest first. The image itself is never kept — only who tried, the caption, and why. Dismiss one once it has been dealt with.</p>' +
+      rejections.map(rejectionCard).join('')
+    : '<p class="review-none">Nothing has been refused.</p>';
+}
+
 function render(){
   document.querySelectorAll('#tabs .launch-filter').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  const rejectedTab = tab === 'rejected';
+  document.getElementById('grid').hidden = rejectedTab;
+  document.getElementById('tagFilters').hidden = rejectedTab;
+  document.getElementById('rejections').hidden = !rejectedTab;
+  if(rejectedTab){ renderRejections(); return; }
   // Only the tags actually in use on this tab, with counts.
   const counts = {};
   photos.forEach(p => p.tags.forEach(t => counts[t] = (counts[t] || 0) + 1));
@@ -405,13 +455,20 @@ function render(){
 
 async function load(){
   try{
-    const res = await api('/api/photos' + (tab === 'pending' ? '?status=pending' : ''));
+    // The book's list also carries both counts, so it's fetched on every tab.
+    const [res, rej] = await Promise.all([
+      api('/api/photos' + (tab === 'pending' ? '?status=pending' : '')),
+      tab === 'rejected' ? api('/api/photos/rejections') : null
+    ]);
     if(res.status === 403){ setStatus('Officers only.', 'err'); return; }
     if(!res.ok){ setStatus('Could not load the photobook (' + await errorDetail(res) + ').', 'err'); return; }
+    if(rej && !rej.ok){ setStatus('Could not load the rejections (' + await errorDetail(rej) + ').', 'err'); return; }
     const data = await res.json();
     vocab = data.tags || [];
-    photos = data.photos || [];
+    photos = tab === 'rejected' ? [] : (data.photos || []);
+    if(rej) rejections = (await rej.json()).rejections || [];
     document.getElementById('pendingCount').textContent = data.pending;
+    document.getElementById('rejectedCount').textContent = data.rejected;
     render();
   }catch(err){
     if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
@@ -422,8 +479,24 @@ document.getElementById('tabs').addEventListener('click', function(e){
   const b = e.target.closest('[data-tab]');
   if(!b || b.dataset.tab === tab) return;
   tab = b.dataset.tab; tagFilter = null;
+  setStatus('');
   load();
 });
+document.getElementById('rejections').addEventListener('click', async function(e){
+  const btn = e.target.closest('.reject-dismiss');
+  if(!btn) return;
+  const id = btn.closest('.reject-card').dataset.id;
+  btn.disabled = true;
+  try{
+    const res = await api('/api/photos/rejections/' + encodeURIComponent(id), { method:'DELETE' });
+    if(!res.ok && res.status !== 404){ setStatus('Could not dismiss (' + await errorDetail(res) + ').', 'err'); btn.disabled = false; return; }
+    await load();
+  }catch(err){
+    if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
+    btn.disabled = false;
+  }
+});
+
 document.getElementById('tagFilters').addEventListener('click', function(e){
   const b = e.target.closest('[data-tag]');
   if(!b) return;
@@ -497,7 +570,11 @@ document.getElementById('mSave').addEventListener('click', function(){
       method:'PUT', headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ caption: document.getElementById('mCaption').value, tags: editTags })
     });
-    if(!res.ok){ setStatus(await errorDetail(res), 'err', 'mStatus'); return; }
+    if(!res.ok){
+      setStatus(await errorDetail(res), 'err', 'mStatus');
+      if(res.status === 422) load();   // a refused caption is logged, so the Rejected count moved
+      return;
+    }
     const p = await res.json();
     Object.assign(current, p);
     document.getElementById('mTitle').textContent = p.caption || 'Untitled';

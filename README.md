@@ -154,8 +154,8 @@ session.
   kept), holds it in the **Review queue** tab, or publishes it, then a small vision model
   picks tags from a fixed list, plus where it was taken and which boss it shows (from
   `PhotoPlaces`: raids and their bosses, world bosses, dungeons, battlegrounds, cities and
-  zones — Classic's places for now, since Forever keeps most of them, with Forever's own still
-  to add). It uses the strongest clue there is, and says which: a place name on screen (the
+  zones — Classic's dungeons, battlegrounds, cities and zones, which Forever keeps, plus
+  Forever's new ones and its launch raids: Onyxia's Lair, Barrow Deeps and Hyjal Summit). It uses the strongest clue there is, and says which: a place name on screen (the
   minimap), a name floating over an NPC ("Stormwind City Guard"), a landmark it recognises, or
   the caption — so it works on screenshots taken with the interface hidden. Those AI picks show dashed
   with a ✦ until someone reviews them — **Looks right** confirms them, **Fix them** opens the

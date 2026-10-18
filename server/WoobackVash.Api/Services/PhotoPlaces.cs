@@ -3,14 +3,16 @@ namespace WoobackVash.Api.Services;
 /// <summary>
 /// Where a photobook photo was taken, and which boss it shows: a fixed list of raids with their
 /// bosses, dungeons, battlegrounds, cities, zones and world bosses. Like <see cref="PhotoTags"/>,
-/// the tagging model may only pick from these (they're enums in its JSON schema), so "Molten
-/// Core" never fragments into "MC" or "molten core".
+/// the tagging model may only pick from these (they're enums in its JSON schema), so "Hyjal
+/// Summit" never fragments into "Hyjal" or "hyjal summit".
 ///
 /// The guild plays World of Warcraft: Forever, a new expansion that keeps most of Classic's
-/// world. For now this is Classic's places; Forever's new zones, dungeons and raids still need
-/// adding, and any Classic place Forever dropped taking out. A place missing from here comes
-/// back from the model as "none", never as the nearest match, so a gap costs a filter, not a
-/// wrong label. Use each name exactly as the game shows it on screen — the model matches on it.
+/// world. This is Classic's dungeons, battlegrounds, cities and zones, plus Forever's new ones
+/// and its launch raids, from the pre-launch coverage of October 2026 (Warcraft Wiki's Forever
+/// page). Classic raids other than Onyxia's Lair aren't in Forever's list, so they're left out.
+/// Hyjal Summit's boss list is incomplete. A place missing from here comes back from the model as
+/// "none", never as the nearest match, so a gap costs a filter, not a wrong label. Use each name
+/// exactly as the game shows it on screen — the model matches on it.
 ///
 /// It tracks the current expansion (see CLAUDE.md). An id that disappears is kept raw on photos
 /// already tagged with it, and the page shows it as-is.
@@ -32,32 +34,21 @@ public static class PhotoPlaces
 
     public static readonly Place[] All =
     [
-        // Raids, with their bosses.
-        P("molten-core", "Molten Core", "raid",
-            ("lucifron", "Lucifron"), ("magmadar", "Magmadar"), ("gehennas", "Gehennas"), ("garr", "Garr"),
-            ("shazzrah", "Shazzrah"), ("baron-geddon", "Baron Geddon"), ("sulfuron-harbinger", "Sulfuron Harbinger"),
-            ("golemagg", "Golemagg the Incinerator"), ("majordomo-executus", "Majordomo Executus"), ("ragnaros", "Ragnaros")),
+        // Raids, with their bosses. Forever's launch raids are its own two plus Onyxia's Lair; the
+        // other Classic raids aren't on its list (a "revamped iconic raid" is on the roadmap for
+        // summer 2027 — add it back here when it arrives).
         P("onyxias-lair", "Onyxia's Lair", "raid", ("onyxia", "Onyxia")),
-        P("blackwing-lair", "Blackwing Lair", "raid",
-            ("razorgore", "Razorgore the Untamed"), ("vaelastrasz", "Vaelastrasz the Corrupt"), ("broodlord-lashlayer", "Broodlord Lashlayer"),
-            ("firemaw", "Firemaw"), ("ebonroc", "Ebonroc"), ("flamegor", "Flamegor"), ("chromaggus", "Chromaggus"), ("nefarian", "Nefarian")),
-        P("zul-gurub", "Zul'Gurub", "raid",
-            ("jeklik", "High Priestess Jeklik"), ("venoxis", "High Priest Venoxis"), ("marli", "High Priestess Mar'li"),
-            ("mandokir", "Bloodlord Mandokir"), ("edge-of-madness", "Edge of Madness"), ("gahzranka", "Gahz'ranka"),
-            ("thekal", "High Priest Thekal"), ("arlokk", "High Priestess Arlokk"), ("jindo", "Jin'do the Hexxer"), ("hakkar", "Hakkar")),
-        P("ruins-of-ahnqiraj", "Ruins of Ahn'Qiraj", "raid",
-            ("kurinnaxx", "Kurinnaxx"), ("rajaxx", "General Rajaxx"), ("moam", "Moam"), ("buru", "Buru the Gorger"),
-            ("ayamiss", "Ayamiss the Hunter"), ("ossirian", "Ossirian the Unscarred")),
-        P("temple-of-ahnqiraj", "Temple of Ahn'Qiraj", "raid",
-            ("skeram", "The Prophet Skeram"), ("bug-trio", "Silithid Royalty"), ("sartura", "Battleguard Sartura"),
-            ("fankriss", "Fankriss the Unyielding"), ("viscidus", "Viscidus"), ("huhuran", "Princess Huhuran"),
-            ("twin-emperors", "Twin Emperors"), ("ouro", "Ouro"), ("cthun", "C'Thun")),
-        P("naxxramas", "Naxxramas", "raid",
-            ("anubrekhan", "Anub'Rekhan"), ("faerlina", "Grand Widow Faerlina"), ("maexxna", "Maexxna"),
-            ("noth", "Noth the Plaguebringer"), ("heigan", "Heigan the Unclean"), ("loatheb", "Loatheb"),
-            ("razuvious", "Instructor Razuvious"), ("gothik", "Gothik the Harvester"), ("four-horsemen", "The Four Horsemen"),
-            ("patchwerk", "Patchwerk"), ("grobbulus", "Grobbulus"), ("gluth", "Gluth"), ("thaddius", "Thaddius"),
-            ("sapphiron", "Sapphiron"), ("kelthuzad", "Kel'Thuzad")),
+        P("barrow-deeps", "Barrow Deeps", "raid",
+            ("deepscar-matriarch", "Deepscar Matriarch"), ("khalith", "Khalith the Dreadspinner"), ("amethrax", "Amethrax"),
+            ("ravus-and-darlissa", "Ravus and Darlissa"), ("elder-tangleclaw", "Elder Tangleclaw"), ("well-of-sorrow", "Well of Sorrow"),
+            ("dellynar-songwood", "Del'lynar Songwood"), ("sonya-darkhallow", "Sonya Darkhallow")),
+        // Reportedly 13 encounters; these are the ones named so far. A boss missing here comes back
+        // as "none", so add the rest as they're published.
+        P("hyjal-summit", "Hyjal Summit", "raid",
+            ("bandalar", "Bandalar"), ("time-lost-battalion", "Time-Lost Battalion"), ("old-gloomlurker", "Old Gloomlurker"),
+            ("kathris", "Kathris the Haunted"), ("elder-minderel", "Elder Minderel"), ("council-of-thorns", "Council of Thorns"),
+            ("the-wild-king", "The Wild King"), ("ancient-of-decay", "Ancient of Decay"), ("sylvestris-dusksong", "Sylvestris Dusksong"),
+            ("nythus", "Nythus the Dreambound")),
 
         // World bosses: out in the open world, so they share one "place".
         P("world-bosses", "World bosses", "world",
@@ -85,10 +76,22 @@ public static class PhotoPlaces
         P("dire-maul", "Dire Maul", "dungeon"),
         P("scholomance", "Scholomance", "dungeon"),
         P("stratholme", "Stratholme", "dungeon"),
+        // Forever's new dungeons, by level. Spelled as Warcraft Wiki has them; sources differ on
+        // a few ("Hall of Thanes", "Alcaz Island Prison", "Krol'Dok"), so check against the game.
+        P("hall-of-thanes", "The Hall of Thanes", "dungeon"),
+        P("ruins-of-lordaeron", "Ruins of Lordaeron", "dungeon"),
+        P("excavation-site", "Excavation Site: Wetlands", "dungeon"),
+        P("city-of-dalaran", "City of Dalaran", "dungeon"),
+        P("drowned-city", "The Drowned City", "dungeon"),
+        P("kroldok-stronghold", "Krol'dok Stronghold", "dungeon"),
+        P("alcaz-prison", "Alcaz Prison", "dungeon"),
+        P("blackmaw-hold", "Blackmaw Hold", "dungeon"),
+        P("shapers-terrace", "Shaper's Terrace", "dungeon"),
 
         P("warsong-gulch", "Warsong Gulch", "battleground"),
         P("arathi-basin", "Arathi Basin", "battleground"),
         P("alterac-valley", "Alterac Valley", "battleground"),
+        P("darkspear-islands", "Darkspear Islands", "battleground"),
 
         P("stormwind", "Stormwind City", "city"),
         P("ironforge", "Ironforge", "city"),
@@ -118,6 +121,9 @@ public static class PhotoPlaces
         P("tanaris", "Tanaris", "zone"), P("azshara", "Azshara", "zone"), P("felwood", "Felwood", "zone"),
         P("ungoro-crater", "Un'Goro Crater", "zone"), P("silithus", "Silithus", "zone"),
         P("winterspring", "Winterspring", "zone"), P("moonglade", "Moonglade", "zone"),
+        // Forever's new zones. Zephras Isle is the Skyborne elves' starting area.
+        P("mount-hyjal", "Mount Hyjal", "zone"), P("riverglades", "Riverglades", "zone"),
+        P("shendralas", "Shen'dralas", "zone"), P("zephras-isle", "Zephras Isle", "zone"),
     ];
 
     public static readonly Dictionary<string, Place> ById =
@@ -128,8 +134,8 @@ public static class PhotoPlaces
         All.SelectMany(p => p.Bosses.Select(b => (b, p))).ToDictionary(x => x.b.Id, x => (x.b, x.p), StringComparer.Ordinal);
 
     /// <summary>
-    /// Known ids only, and consistent: a boss decides its own place (Ragnaros is always Molten
-    /// Core), and a boss without a recognised place still fills it in. Unknown ids become null.
+    /// Known ids only, and consistent: a boss decides its own place (Sonya Darkhallow is always Barrow
+    /// Deeps), and a boss without a recognised place still fills it in. Unknown ids become null.
     /// </summary>
     public static (string? Place, string? Boss) Clean(string? place, string? boss)
     {

@@ -1007,9 +1007,10 @@ function fillPanel(p){
   const m = p.moderation || {}, top = (m.top || [])[0];
   $('mFacts').innerHTML =
     esc(p.width + ' × ' + p.height) + '<br>' +
-    (m.checked
-      ? 'Content check passed' + (top ? ' · highest score ' + esc(catLabel(top.category)) + ' ' + Number(top.score).toFixed(3) : '')
-      : 'Content check did not run');
+    (!m.checked ? 'Content check did not run'
+      // Flagged only for violence: held for an officer rather than refused (Photobook:HoldInsteadOfRefuse).
+      : (m.flagged ? 'Flagged by the content check' : 'Content check passed') +
+        (top ? ' · highest score ' + esc(catLabel(top.category)) + ' ' + Number(top.score).toFixed(3) : ''));
 }
 
 async function showImage(p){

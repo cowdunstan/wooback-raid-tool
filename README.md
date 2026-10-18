@@ -145,7 +145,8 @@ session.
   Delete). A member who opens it is sent to `launch.html`. The gate is cosmetic; the routes
   are `RequireOfficer`.
 - **`photobook.html`** *(root, officers only while it's trialled)* — the guild photobook.
-  Upload a screenshot or photo with an optional caption; the page resizes it to 1600px (plus
+  Upload a screenshot or photo with an optional caption — drop it anywhere on the page, paste
+  it (Ctrl+V), or browse; a touch screen gets a tap prompt instead. The page resizes it to 1600px (plus
   a 480px thumbnail) and re-encodes it as JPEG before sending, which also strips EXIF, phone
   GPS included. The API runs it past OpenAI moderation and either refuses it (nothing is
   kept), holds it in the **Review queue** tab, or publishes it, then a small vision model

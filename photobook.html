@@ -41,7 +41,28 @@
     flex:1 1 240px;min-width:0;background:var(--well);border:1px solid var(--panel-line);border-radius:7px;
     color:var(--text);padding:9px 11px;font:inherit;font-size:13px;
   }
-  .photo-upload .photo-file{font-size:12.5px;color:var(--text-dim);max-width:100%;}
+  .photo-upload{flex-direction:column;align-items:stretch;}
+  .photo-upload-row{display:flex;gap:10px;}
+  .photo-upload-row input[type=text]{flex:1 1 0;}
+  /* The whole box is the file picker's label, so a click anywhere in it browses. */
+  .photo-drop{
+    display:flex;align-items:center;justify-content:center;gap:14px;min-height:110px;padding:14px;
+    border:2px dashed var(--panel-line);border-radius:10px;background:var(--well);cursor:pointer;
+    text-align:center;transition:border-color .12s,background .12s;
+  }
+  .photo-drop:hover,.photo-drop:focus-within{border-color:var(--accent-dim);}
+  .photo-drop.over{border-color:var(--accent);background:rgba(var(--accent-rgb),.10);}
+  .photo-drop input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+  .photo-drop-text{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--text-dim);}
+  .photo-drop-text b{font-size:14.5px;color:var(--heading);overflow-wrap:anywhere;}
+  .photo-drop-text u{color:var(--accent);text-decoration:none;}
+  .photo-drop kbd{
+    font-family:inherit;font-size:11px;border:1px solid var(--panel-line);border-bottom-width:2px;
+    border-radius:4px;padding:0 4px;background:var(--chip-bg);color:var(--text);
+  }
+  .photo-drop-preview{max-height:90px;max-width:140px;border-radius:6px;object-fit:cover;}
+  /* While a file is dragged anywhere over the page, say where to let go. */
+  body.dragging .photo-drop{border-color:var(--accent);}
   .photo-wrap #status{margin:-8px 0 14px;min-height:1em;}
   .photo-tabs{display:flex;gap:8px;margin:0 0 12px;}
   .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
@@ -109,9 +130,18 @@
     <p class="subtitle">Screenshots and photos from the journey. Each upload is checked by a content filter and tagged automatically; fix the tags if it got them wrong.</p>
 
     <form id="upload" class="photo-upload">
-      <input type="file" id="file" class="photo-file" accept="image/*" required>
-      <input type="text" id="caption" maxlength="300" placeholder="Caption (optional)">
-      <button type="submit" class="btn-primary" id="uploadBtn">Upload</button>
+      <label class="photo-drop" id="drop">
+        <input type="file" id="file" accept="image/*">
+        <img id="dropPreview" class="photo-drop-preview" alt="" hidden>
+        <span class="photo-drop-text">
+          <b id="dropTitle">Drop an image here</b>
+          <span id="dropHint">or paste one (<kbd>Ctrl</kbd>+<kbd>V</kbd>), or <u>browse</u></span>
+        </span>
+      </label>
+      <div class="photo-upload-row">
+        <input type="text" id="caption" maxlength="300" placeholder="Caption (optional)">
+        <button type="submit" class="btn-primary" id="uploadBtn" disabled>Upload</button>
+      </div>
     </form>
     <p id="status" class="apply-status"></p>
 
@@ -212,10 +242,100 @@ const toBase64 = blob => new Promise((ok, bad) => {
   r.readAsDataURL(blob);
 });
 
+// ── Picking the image: browse, drop it anywhere on the page, or paste it ────────────────────
+// Whichever way it arrives, it lands in pendingFile and shows as a preview in the drop box, so
+// the caption can be written before uploading.
+let pendingFile = null, previewUrl = null;
+const drop = document.getElementById('drop');
+
+function choose(file){
+  if(!file) return;
+  if(!/^image\//.test(file.type)){ setStatus("That isn't an image.", 'err'); return; }
+  pendingFile = file;
+  if(previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = URL.createObjectURL(file);
+  const img = document.getElementById('dropPreview');
+  img.src = previewUrl;
+  img.hidden = false;
+  document.getElementById('dropTitle').textContent = file.name && file.name !== 'image.png' ? file.name : 'Pasted image';
+  document.getElementById('dropHint').innerHTML = matchMedia('(pointer: coarse)').matches
+    ? 'Ready to upload · tap to swap it'
+    : 'Ready to upload · drop, paste or <u>browse</u> to swap it';
+  document.getElementById('uploadBtn').disabled = false;
+  setStatus('');
+  document.getElementById('caption').focus();
+}
+
+function clearChosen(){
+  pendingFile = null;
+  if(previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = null;
+  const img = document.getElementById('dropPreview');
+  img.hidden = true;
+  img.removeAttribute('src');
+  idleCopy();
+  document.getElementById('uploadBtn').disabled = true;
+}
+
+// A phone can't drag files in or paste with Ctrl+V, so a touch screen gets a tap prompt.
+function idleCopy(){
+  const touch = matchMedia('(pointer: coarse)').matches;
+  document.getElementById('dropTitle').textContent = touch ? 'Tap to choose a photo' : 'Drop an image here';
+  document.getElementById('dropHint').innerHTML = touch
+    ? 'or take a screenshot and pick it from your gallery'
+    : 'or paste one (<kbd>Ctrl</kbd>+<kbd>V</kbd>), or <u>browse</u>';
+}
+idleCopy();
+
+const firstImage = list => [...(list || [])].find(f => /^image\//.test(f.type));
+const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].indexOf('Files') !== -1;
+
+document.getElementById('file').addEventListener('change', function(){
+  choose(this.files[0]);
+  this.value = '';   // so picking the same file again still fires
+});
+
+// The whole page is a drop target, so a near miss doesn't open the image in the tab instead.
+// dragenter/leave fire for every child crossed, hence the depth count.
+let dragDepth = 0;
+window.addEventListener('dragenter', function(e){
+  if(!hasFiles(e)) return;
+  e.preventDefault();
+  if(dragDepth++ === 0) document.body.classList.add('dragging');
+});
+window.addEventListener('dragleave', function(e){
+  if(!hasFiles(e)) return;
+  if(--dragDepth <= 0){ dragDepth = 0; document.body.classList.remove('dragging'); drop.classList.remove('over'); }
+});
+window.addEventListener('dragover', function(e){
+  if(!hasFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  drop.classList.toggle('over', drop.contains(e.target));
+});
+window.addEventListener('drop', function(e){
+  if(!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove('dragging');
+  drop.classList.remove('over');
+  const file = firstImage(e.dataTransfer.files);
+  file ? choose(file) : setStatus("That isn't an image.", 'err');
+});
+
+// Paste: only an image on the clipboard is taken, so pasting text into the caption still works.
+document.addEventListener('paste', function(e){
+  if(!modal.hidden) return;
+  const file = firstImage(e.clipboardData && e.clipboardData.files);
+  if(!file) return;
+  e.preventDefault();
+  choose(file);
+});
+
 document.getElementById('upload').addEventListener('submit', async function(e){
   e.preventDefault();
-  const file = document.getElementById('file').files[0];
-  if(!file) return;
+  const file = pendingFile;
+  if(!file){ setStatus('Drop, paste or browse for an image first.', 'err'); return; }
   const btn = document.getElementById('uploadBtn');
   btn.disabled = true;
   try{
@@ -237,6 +357,7 @@ document.getElementById('upload').addEventListener('submit', async function(e){
     if(!res.ok){ setStatus(await errorDetail(res), 'err'); return; }
     const p = await res.json();
     document.getElementById('upload').reset();
+    clearChosen();
     setStatus(p.status === 'pending'
       ? 'Uploaded, but held for review: ' + ((p.moderation && p.moderation.reason) || 'needs an officer to look.')
       : 'Uploaded' + (p.tags.length ? ' and tagged ' + p.tags.map(tagLabel).join(', ') + '.' : '.'), 'ok');
@@ -245,7 +366,7 @@ document.getElementById('upload').addEventListener('submit', async function(e){
   }catch(err){
     if(String(err.message) !== '401') setStatus('Upload failed — could not reach the guild database.', 'err');
   }finally{
-    btn.disabled = false;
+    btn.disabled = !pendingFile;
   }
 });
 
@@ -253,7 +374,7 @@ document.getElementById('upload').addEventListener('submit', async function(e){
 function tile(p){
   const cap = p.caption || p.altText || '';
   return '<button type="button" class="photo-tile" data-id="' + esc(p.id) + '">' +
-    '<img class="thumb" data-thumb="' + esc(p.id) + '" alt="' + esc(p.altText || p.caption || 'Photo') + '">' +
+    '<img class="thumb" draggable="false" data-thumb="' + esc(p.id) + '" alt="' + esc(p.altText || p.caption || 'Photo') + '">' +
     '<div class="meta">' +
       (cap ? '<div class="cap">' + esc(cap) + '</div>' : '') +
       esc(p.uploaderName) + ' · ' + esc(when(p.createdAt)) +

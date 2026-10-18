@@ -103,3 +103,9 @@ change as cosmetic (and say so).
 - `WOWHEAD_DOMAIN` in `menu.js` and `LEVEL_CAP` in `groups.js` both track the current
   expansion — flip them together when the guild moves on (item tooltips ↔ the max-level
   filter on the 2-group page).
+- `PhotoPlaces` in `server/WoobackVash.Api/Services/PhotoPlaces.cs` is the photobook's place
+  and boss list for **Forever** — a new expansion, not Classic, though it keeps most of Classic's
+  world. It starts from Classic's places; Forever's own still need adding. Ask for real names
+  rather than inventing Forever content, and spell them as the game shows them on screen. It's
+  the tagging model's enum, so add places freely, but a renamed id is orphaned on photos already
+  tagged with it.

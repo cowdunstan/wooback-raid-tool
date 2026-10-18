@@ -21,6 +21,21 @@ public class PhotobookOptions
     public string TaggingModel { get; set; } = "gpt-5-nano";
 
     /// <summary>
+    /// The image detail the tagging model sees: "high" (default) or "low". Low is a single 512px
+    /// tile — cheaper, but too small to read the minimap's zone name or a boss frame, so the place
+    /// and boss picks get much worse.
+    /// </summary>
+    public string TaggingImageDetail { get; set; } = "high";
+
+    /// <summary>
+    /// How much a gpt-5 model reasons before tagging: "minimal", "low", "medium" or "high". More
+    /// thinking costs output tokens and about a second. Low by default: in live runs on UI-less
+    /// screenshots, minimal named a familiar city for a dungeon it couldn't place and padded the
+    /// tags, while low answered "none" and kept to two or three.
+    /// </summary>
+    public string TaggingReasoningEffort { get; set; } = "low";
+
+    /// <summary>
     /// Any moderation category scoring at or above this — without being flagged outright —
     /// holds the photo for officer review instead of publishing it.
     /// </summary>

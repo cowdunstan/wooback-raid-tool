@@ -46,6 +46,7 @@ public class AppDbContext : DbContext
         b.Entity<Photo>(e =>
         {
             e.Property(x => x.Tags).HasColumnType("jsonb");
+            e.Property(x => x.AiTags).HasColumnType("jsonb");
             e.Property(x => x.Moderation).HasColumnType("jsonb");
             // The book lists newest first, split by status.
             e.HasIndex(x => new { x.Status, x.CreatedAt });

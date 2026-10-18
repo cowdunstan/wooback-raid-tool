@@ -20,7 +20,10 @@ namespace WoobackVash.Api.Api;
 /// a <see cref="PhotoRejection"/> saying who tried and why, for the officers' Rejected tab; borderline,
 /// or unchecked because moderation couldn't run, it's stored as pending for an officer to
 /// approve; otherwise it's published. A photo that gets through is then tagged from
-/// <see cref="PhotoTags"/> by a small vision model, and the uploader can correct the tags.
+/// <see cref="PhotoTags"/>, with a place and boss from <see cref="PhotoPlaces"/>, by a small
+/// vision model. Those picks show as suggestions until a person saves or accepts them; what the
+/// model said is kept beside what people settled on, and <c>/tag-stats</c> scores one against
+/// the other.
 ///
 /// Images can't go in an <c>&lt;img src&gt;</c> directly, since the routes want a Bearer token,
 /// so the page fetches them and shows object URLs.
@@ -28,7 +31,14 @@ namespace WoobackVash.Api.Api;
 public static class PhotoEndpoints
 {
     public record PhotoUpload(string? Image, string? Thumb, string? Caption, int Width, int Height);
-    public record PhotoEdit(string? Caption, List<string>? Tags);
+    /// <summary>
+    /// Null leaves a field alone. <c>Place</c> and <c>Boss</c> take "" to clear. Touching the tags,
+    /// place or boss — or sending <c>Confirm: true</c> on its own, the "looks right" button —
+    /// marks the AI's picks as reviewed.
+    /// </summary>
+    public record PhotoEdit(string? Caption, List<string>? Tags, string? Place, string? Boss, bool? Confirm);
+
+    private record PickRow(string? Ai, string? Final);
 
     private const int MaxImageBytes = 5 * 1024 * 1024;
     private const int MaxThumbBytes = 512 * 1024;
@@ -61,9 +71,72 @@ public static class PhotoEndpoints
             return Results.Json(new
             {
                 tags = PhotoTags.All.Select(t => new { id = t.Id, label = t.Label }),
+                kinds = PhotoPlaces.Kinds.Select(k => new { id = k.Id, label = k.Label }),
+                places = PhotoPlaces.All.Select(pl => new
+                {
+                    id = pl.Id,
+                    label = pl.Label,
+                    kind = pl.Kind,
+                    bosses = pl.Bosses.Select(b => new { id = b.Id, label = b.Label })
+                }),
                 pending,
                 rejected,
                 photos = rows.Select(Dto)
+            });
+        });
+
+        // How well the tagging model does, judged only on photos a person has reviewed. Per tag:
+        // how often people kept or removed it when the AI suggested it, and how often they added it
+        // when the AI hadn't. Place and boss: how often the AI's pick (including "none") survived
+        // review, was changed, was cleared, or was filled in where the AI had nothing.
+        group.MapGet("/tag-stats", async (HttpContext ctx, SessionTokenService tokens) =>
+        {
+            var (_, error) = ctx.RequireOfficer(tokens);
+            if (error is not null) return error;
+            var db = ctx.RequestServices.GetService<AppDbContext>();
+            if (db is null) return DbUnavailable();
+
+            var rows = await db.Photos.AsNoTracking()
+                .Where(p => p.AiTagged)
+                .Select(p => new { p.TagsConfirmed, p.Tags, p.AiTags, p.Place, p.AiPlace, p.AiPlaceEvidence, p.Boss, p.AiBoss })
+                .ToListAsync();
+            var reviewed = rows.Where(r => r.TagsConfirmed).ToList();
+
+            var counts = PhotoTags.All.ToDictionary(t => t.Id, _ => new int[3], StringComparer.Ordinal); // kept, removed, added
+            foreach (var r in reviewed)
+            {
+                var ai = Deserialize<List<string>>(r.AiTags).ToHashSet(StringComparer.Ordinal);
+                var final = Deserialize<List<string>>(r.Tags).ToHashSet(StringComparer.Ordinal);
+                foreach (var t in ai.Union(final))
+                {
+                    if (!counts.TryGetValue(t, out var c)) continue;
+                    if (ai.Contains(t) && final.Contains(t)) c[0]++;
+                    else if (ai.Contains(t)) c[1]++;
+                    else c[2]++;
+                }
+            }
+
+            return Results.Json(new
+            {
+                aiTagged = rows.Count,
+                reviewed = reviewed.Count,
+                awaitingReview = rows.Count - reviewed.Count,
+                tags = PhotoTags.All.Select(t => new
+                {
+                    id = t.Id,
+                    label = t.Label,
+                    kept = counts[t.Id][0],
+                    removed = counts[t.Id][1],
+                    added = counts[t.Id][2]
+                }),
+                place = Score(reviewed.Select(r => new PickRow(r.AiPlace, r.Place))),
+                // The AI's place picks split by the clue it says it used: does a guess from the scene
+                // alone hold up as well as a name read off the screen?
+                placeByEvidence = reviewed.Where(r => r.AiPlace is not null)
+                    .GroupBy(r => r.AiPlaceEvidence ?? PhotoAiService.PlaceEvidence.Unknown)
+                    .Select(g => new { evidence = g.Key, judged = g.Count(), right = g.Count(r => r.AiPlace == r.Place) })
+                    .OrderByDescending(x => x.judged),
+                boss = Score(reviewed.Select(r => new PickRow(r.AiBoss, r.Boss)))
             });
         });
 
@@ -148,12 +221,21 @@ public static class PhotoEndpoints
             var held = !verdict.Checked || verdict.Reason is not null;
             var suggestion = await ai.SuggestTagsAsync(full, caption, ctx.RequestAborted);
 
+            var aiTags = JsonSerializer.Serialize(suggestion.Tags);
             var photo = new Photo
             {
                 UploaderUid = session!.Uid,
                 UploaderName = session.Name,
                 Caption = caption,
-                Tags = JsonSerializer.Serialize(suggestion.Tags),
+                // The AI's picks start as the photo's own, and are kept apart, unchanged, to score.
+                Tags = aiTags,
+                Place = suggestion.Place,
+                Boss = suggestion.Boss,
+                AiTagged = suggestion.Ran,
+                AiTags = aiTags,
+                AiPlace = suggestion.Place,
+                AiPlaceEvidence = suggestion.PlaceEvidence,
+                AiBoss = suggestion.Boss,
                 AltText = suggestion.AltText,
                 Status = held ? PhotoStatus.Pending : PhotoStatus.Approved,
                 Moderation = JsonSerializer.Serialize(new
@@ -173,7 +255,8 @@ public static class PhotoEndpoints
             return Results.Json(Dto(photo));
         });
 
-        // Correct the caption or tags. A new caption goes back through moderation on its own.
+        // Correct the caption, tags, place or boss, or confirm the AI's picks as they stand. A new
+        // caption goes back through moderation on its own.
         group.MapPut("/{id:guid}", async (HttpContext ctx, SessionTokenService tokens, PhotoAiService ai, Guid id, PhotoEdit input) =>
         {
             var (session, error) = ctx.RequireOfficer(tokens);
@@ -203,6 +286,22 @@ public static class PhotoEndpoints
             }
             if (input.Tags is not null)
                 photo.Tags = JsonSerializer.Serialize(PhotoTags.Clean(input.Tags));
+            if (input.Place is not null || input.Boss is not null)
+            {
+                // A new place without a new boss drops a boss that isn't fought there, so the old
+                // boss can't drag its own place back in.
+                string? keepBoss;
+                if (input.Boss is not null) keepBoss = input.Boss;
+                else if (input.Place is null) keepBoss = photo.Boss;
+                else keepBoss = photo.Boss is not null
+                    && PhotoPlaces.BossById.TryGetValue(photo.Boss, out var old)
+                    && old.Place.Id == input.Place ? photo.Boss : null;
+                var (place, boss) = PhotoPlaces.Clean(input.Place ?? photo.Place, keepBoss);
+                photo.Place = place;
+                photo.Boss = boss;
+            }
+            if (input.Tags is not null || input.Place is not null || input.Boss is not null || input.Confirm == true)
+                photo.TagsConfirmed = true;
 
             await db.SaveChangesAsync();
             return Results.Json(Dto(photo));
@@ -232,6 +331,21 @@ public static class PhotoEndpoints
             var deleted = await db.Photos.Where(p => p.Id == id).ExecuteDeleteAsync();
             return deleted == 0 ? NotFound() : Results.Json(new { ok = true });
         });
+    }
+
+    // One AI pick (place or boss) against what review settled on. "None" on both sides is right.
+    private static object Score(IEnumerable<PickRow> rows)
+    {
+        int judged = 0, right = 0, changed = 0, filledIn = 0, cleared = 0;
+        foreach (var (ai, final) in rows)
+        {
+            judged++;
+            if (ai == final) right++;
+            else if (ai is null) filledIn++;
+            else if (final is null) cleared++;
+            else changed++;
+        }
+        return new { judged, right, changed, filledIn, cleared };
     }
 
     // Logged before the 422 goes back. A failure to log never changes what the uploader is told.
@@ -291,6 +405,14 @@ public static class PhotoEndpoints
         uploaderName = p.UploaderName,
         caption = p.Caption,
         tags = Deserialize<List<string>>(p.Tags),
+        place = p.Place,
+        boss = p.Boss,
+        aiTagged = p.AiTagged,
+        aiTags = Deserialize<List<string>>(p.AiTags),
+        aiPlace = p.AiPlace,
+        aiPlaceEvidence = p.AiPlaceEvidence,
+        aiBoss = p.AiBoss,
+        tagsConfirmed = p.TagsConfirmed,
         altText = p.AltText,
         status = p.Status,
         moderation = Deserialize<Dictionary<string, JsonElement>>(p.Moderation),

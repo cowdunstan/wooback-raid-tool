@@ -674,7 +674,9 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   ≤ 512 KB, checked by magic bytes), caption ≤ 300 chars — sends the image and caption to
   OpenAI moderation (`Photobook:ModerationModel`). Flagged → **422**, the image is not stored,
   and a `PhotoRejection` records who tried and why;
-  any category at or above `Photobook:ReviewThreshold` (0.2), or no verdict at all (no API key,
+  any category at or above `Photobook:ReviewThreshold` (0.2) — or its own number in
+  `Photobook:CategoryReviewThresholds`, where `violence` is 0.7 because WoW screenshots are full
+  of skulls and weapons (`violence/graphic` stays at 0.2) — or no verdict at all (no API key,
   OpenAI unreachable) → stored as `pending`; otherwise `approved`. A stored photo is then tagged
   by `Photobook:TaggingModel` (`gpt-5-nano`, at `Photobook:TaggingImageDetail` — `high` by
   default, since a low-detail image is too small to read the minimap — and

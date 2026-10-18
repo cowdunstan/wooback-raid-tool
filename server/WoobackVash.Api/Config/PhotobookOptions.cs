@@ -37,9 +37,23 @@ public class PhotobookOptions
 
     /// <summary>
     /// Any moderation category scoring at or above this — without being flagged outright —
-    /// holds the photo for officer review instead of publishing it.
+    /// holds the photo for officer review instead of publishing it. A category listed in
+    /// <see cref="CategoryReviewThresholds"/> uses its own number instead.
     /// </summary>
     public double ReviewThreshold { get; set; } = 0.2;
+
+    /// <summary>
+    /// Per-category overrides of <see cref="ReviewThreshold"/>, keyed by OpenAI's category name
+    /// ("violence", "violence/graphic", "sexual", …). Set in appsettings.json, where "violence" is
+    /// raised: WoW screenshots are full of skulls, weapons and fights, and a harmless group shot by
+    /// some giant skull props scored 0.42 and sat in the review queue. "violence/graphic" (gore)
+    /// is a separate category and isn't loosened by it. OpenAI's own "flagged" verdict still
+    /// refuses an upload whatever these say.
+    /// </summary>
+    public Dictionary<string, double> CategoryReviewThresholds { get; set; } = new();
+
+    public double ReviewThresholdFor(string category) =>
+        CategoryReviewThresholds.TryGetValue(category, out var t) ? t : ReviewThreshold;
 
     public int RequestTimeoutSeconds { get; set; } = 30;
 }

@@ -152,7 +152,7 @@ session.
   a 480px thumbnail) and re-encodes it as JPEG before sending, which also strips EXIF, phone
   GPS included. The API runs it past OpenAI moderation and either refuses it (nothing is
   kept), holds it in the **Review queue** tab, or publishes it, then a small vision model
-  picks tags from a fixed list. The book is grouped by month, in justified rows that keep
+  picks tags from a fixed list. The book runs newest upload first, in justified rows that keep
   every photo's own shape (`justify()`, sized from each photo's stored width and height, never
   taller than the target row height); the caption and uploader show on hover, or always on a
   touch screen. Filter it by tag. A photo opens in a full-screen lightbox that steps through

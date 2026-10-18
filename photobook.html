@@ -68,17 +68,10 @@
   .photo-wrap #status{margin:-8px 0 14px;}
   .photo-wrap #status:empty{display:none;}
   .photo-tabs{display:flex;gap:8px;margin:0 0 12px;}
-  /* The book: one justified block per month. justify() in the script sizes every tile so
-     each row fills the width exactly while every photo keeps its own shape; until it runs,
-     the --r aspect ratio gives each tile a sensible fallback size. */
-  .photo-month{
-    display:flex;align-items:baseline;gap:10px;margin:26px 0 12px;
-    font-family:'Cinzel',serif;font-size:17px;color:var(--heading);
-  }
-  .photo-month:first-child{margin-top:6px;}
-  .photo-month span{font-family:'Inter',sans-serif;font-size:12px;color:var(--text-dim);}
-  .photo-month::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--panel-line),transparent);align-self:center;}
-  .photo-justify{display:flex;flex-wrap:wrap;gap:8px;}
+  /* The book: one justified block, newest upload first. justify() in the script sizes every
+     tile so each row fills the width exactly while every photo keeps its own shape; until it
+     runs, the --r aspect ratio gives each tile a sensible fallback size. */
+  .photo-justify{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
   .photo-tile{
     position:relative;flex:none;height:200px;aspect-ratio:var(--r);max-width:100%;
     border:0;padding:0;margin:0;border-radius:10px;overflow:hidden;cursor:zoom-in;color:inherit;font:inherit;
@@ -642,22 +635,6 @@ new ResizeObserver(function(entries){
   justifyFrame = requestAnimationFrame(justify);
 }).observe(document.getElementById('grid'));
 
-// Newest first, grouped under a heading per month.
-function monthGroups(list){
-  const groups = [];
-  list.forEach(function(p){
-    const d = new Date(p.createdAt);
-    const key = isNaN(d) ? '' : d.getFullYear() + '-' + d.getMonth();
-    let g = groups[groups.length - 1];
-    if(!g || g.key !== key){
-      g = { key, label: isNaN(d) ? 'Undated' : d.toLocaleDateString(undefined, { month:'long', year:'numeric' }), items: [] };
-      groups.push(g);
-    }
-    g.items.push(p);
-  });
-  return groups;
-}
-
 // ── Rejected: what the content check refused, and who tried ─────────────────────────────────
 // OpenAI's category ids are things like "violence/graphic"; spaced out, they read well enough.
 const catLabel = c => String(c).replace(/\//g, ' / ').replace(/-/g, ' ');
@@ -708,9 +685,8 @@ function render(){
   shownList = shown;
   const grid = document.getElementById('grid');
   grid.innerHTML = shown.length
-    ? monthGroups(shown).map(g =>
-        '<h3 class="photo-month">' + esc(g.label) + ' <span>' + g.items.length + (g.items.length === 1 ? ' photo' : ' photos') + '</span></h3>' +
-        '<div class="photo-justify">' + g.items.map(tile).join('') + '</div>').join('')
+    // The API already returns them newest upload first.
+    ? '<div class="photo-justify">' + shown.map(tile).join('') + '</div>'
     : (tab === 'pending'
         ? '<div class="photo-empty"><b>All clear</b>Nothing is waiting for review.</div>'
         : '<div class="photo-empty"><b>No photos yet</b>Be the first — drop a screenshot anywhere on this page.</div>');

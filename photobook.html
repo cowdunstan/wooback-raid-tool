@@ -33,17 +33,18 @@
 <style>
   .wrap.photo-wrap{max-width:1100px;}
   .photo-wrap [hidden]{display:none !important;}
-  .photo-upload{
-    background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
-    padding:14px 16px;margin:0 0 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
-  }
+  .photo-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;}
+  .photo-head .btn-primary{flex:none;margin-top:6px;white-space:nowrap;}
+  @media (max-width:560px){ .photo-head{flex-direction:column;gap:0;} .photo-head .btn-primary{margin:0 0 16px;} }
+  /* The upload dialog: one column, narrower than the lightbox it shares the overlay with. */
+  .photo-modal-box.upload-box{display:block;max-width:520px;}
+  .photo-upload{display:flex;flex-direction:column;gap:12px;padding:18px;}
+  .photo-upload h2{font-family:'Cinzel',serif;font-size:16px;color:var(--heading);margin:0;}
   .photo-upload input[type=text]{
-    flex:1 1 240px;min-width:0;background:var(--well);border:1px solid var(--panel-line);border-radius:7px;
+    min-width:0;background:var(--well);border:1px solid var(--panel-line);border-radius:7px;
     color:var(--text);padding:9px 11px;font:inherit;font-size:13px;
   }
-  .photo-upload{flex-direction:column;align-items:stretch;}
-  .photo-upload-row{display:flex;gap:10px;}
-  .photo-upload-row input[type=text]{flex:1 1 0;}
+  .photo-upload .apply-status:empty{display:none;}
   /* The whole box is the file picker's label, so a click anywhere in it browses. */
   .photo-drop{
     display:flex;align-items:center;justify-content:center;gap:14px;min-height:110px;padding:14px;
@@ -61,9 +62,11 @@
     border-radius:4px;padding:0 4px;background:var(--chip-bg);color:var(--text);
   }
   .photo-drop-preview{max-height:90px;max-width:140px;border-radius:6px;object-fit:cover;}
+  .photo-drop-preview{max-height:160px;max-width:220px;}
   /* While a file is dragged anywhere over the page, say where to let go. */
   body.dragging .photo-drop{border-color:var(--accent);}
-  .photo-wrap #status{margin:-8px 0 14px;min-height:1em;}
+  .photo-wrap #status{margin:-8px 0 14px;}
+  .photo-wrap #status:empty{display:none;}
   .photo-tabs{display:flex;gap:8px;margin:0 0 12px;}
   .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
   .photo-tile{
@@ -99,7 +102,11 @@
   .photo-modal{
     position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:50;display:flex;align-items:center;
     justify-content:center;padding:16px;
+    /* Outside .app, so it doesn't inherit the page font. */
+    font-family:'Inter',sans-serif;color:var(--text);
   }
+  .photo-modal button,.photo-modal input,.photo-modal textarea{font-family:inherit;}
+  .photo-modal .btn-primary:disabled{opacity:.45;cursor:default;filter:none;}
   .photo-modal[hidden]{display:none;}
   .photo-modal-box{
     background:var(--panel);border:1px solid var(--panel-line);border-radius:12px;max-width:1000px;width:100%;
@@ -138,23 +145,13 @@
       </span>
     </div>
 
-    <h1>Photobook</h1>
-    <p class="subtitle">Screenshots and photos from the journey. Each upload is checked by a content filter and tagged automatically; fix the tags if it got them wrong.</p>
-
-    <form id="upload" class="photo-upload">
-      <label class="photo-drop" id="drop">
-        <input type="file" id="file" accept="image/*">
-        <img id="dropPreview" class="photo-drop-preview" alt="" hidden>
-        <span class="photo-drop-text">
-          <b id="dropTitle">Drop an image here</b>
-          <span id="dropHint">or paste one (<kbd>Ctrl</kbd>+<kbd>V</kbd>), or <u>browse</u></span>
-        </span>
-      </label>
-      <div class="photo-upload-row">
-        <input type="text" id="caption" maxlength="300" placeholder="Caption (optional)">
-        <button type="submit" class="btn-primary" id="uploadBtn" disabled>Upload</button>
+    <div class="photo-head">
+      <div>
+        <h1>Photobook</h1>
+        <p class="subtitle">Screenshots and photos from the journey. Each upload is checked by a content filter and tagged automatically; fix the tags if it got them wrong.</p>
       </div>
-    </form>
+      <button type="button" class="btn-primary" id="openUpload">+ Upload a photo</button>
+    </div>
     <p id="status" class="apply-status"></p>
 
     <div class="photo-tabs launch-filters" id="tabs">
@@ -165,6 +162,28 @@
     <div id="tagFilters" class="launch-filters"></div>
     <div id="grid" class="photo-grid"></div>
     <div id="rejections" hidden></div>
+  </div>
+</div>
+
+<div id="uploadModal" class="photo-modal" hidden>
+  <div class="photo-modal-box upload-box" role="dialog" aria-modal="true" aria-labelledby="uTitle">
+    <form id="upload" class="photo-upload">
+      <h2 id="uTitle">Upload a photo</h2>
+      <label class="photo-drop" id="drop">
+        <input type="file" id="file" accept="image/*">
+        <img id="dropPreview" class="photo-drop-preview" alt="" hidden>
+        <span class="photo-drop-text">
+          <b id="dropTitle">Drop an image here</b>
+          <span id="dropHint">or paste one (<kbd>Ctrl</kbd>+<kbd>V</kbd>), or <u>browse</u></span>
+        </span>
+      </label>
+      <input type="text" id="caption" maxlength="300" placeholder="Caption (optional)">
+      <p id="uStatus" class="apply-status"></p>
+      <div class="photo-actions">
+        <button type="submit" class="btn-primary" id="uploadBtn" disabled>Upload</button>
+        <button type="button" class="btn-ghost" id="uCancel">Cancel</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -256,15 +275,42 @@ const toBase64 = blob => new Promise((ok, bad) => {
   r.readAsDataURL(blob);
 });
 
-// ── Picking the image: browse, drop it anywhere on the page, or paste it ────────────────────
-// Whichever way it arrives, it lands in pendingFile and shows as a preview in the drop box, so
-// the caption can be written before uploading.
-let pendingFile = null, previewUrl = null;
+// ── The upload dialog ───────────────────────────────────────────────────────────────────────
+// Opened by the button, or by dropping or pasting an image anywhere on the page, which opens it
+// with that image already chosen. It lands in pendingFile and shows as a preview in the drop
+// box, so the caption can be written before uploading.
+let pendingFile = null, previewUrl = null, uploading = false, openedByDrag = false;
 const drop = document.getElementById('drop');
+const uploadModal = document.getElementById('uploadModal');
+const uStatus = (msg, kind) => setStatus(msg, kind, 'uStatus');
+
+function openUpload(){
+  openedByDrag = false;
+  if(!uploadModal.hidden) return;
+  if(!modal.hidden) closeModal();   // one dialog at a time
+  uStatus('');
+  uploadModal.hidden = false;
+}
+
+function closeUpload(){
+  if(uploading) return;             // the request is in flight; let it land
+  uploadModal.hidden = true;
+  openedByDrag = false;
+  document.getElementById('upload').reset();
+  clearChosen();
+  uStatus('');
+  document.getElementById('openUpload').focus();
+}
+
+document.getElementById('openUpload').addEventListener('click', openUpload);
+document.getElementById('uCancel').addEventListener('click', closeUpload);
+uploadModal.addEventListener('click', e => { if(e.target === uploadModal) closeUpload(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && !uploadModal.hidden) closeUpload(); });
 
 function choose(file){
   if(!file) return;
-  if(!/^image\//.test(file.type)){ setStatus("That isn't an image.", 'err'); return; }
+  openUpload();
+  if(!/^image\//.test(file.type)){ uStatus("That isn't an image.", 'err'); return; }
   pendingFile = file;
   if(previewUrl) URL.revokeObjectURL(previewUrl);
   previewUrl = URL.createObjectURL(file);
@@ -276,7 +322,7 @@ function choose(file){
     ? 'Ready to upload · tap to swap it'
     : 'Ready to upload · drop, paste or <u>browse</u> to swap it';
   document.getElementById('uploadBtn').disabled = false;
-  setStatus('');
+  uStatus('');
   document.getElementById('caption').focus();
 }
 
@@ -310,16 +356,26 @@ document.getElementById('file').addEventListener('change', function(){
 });
 
 // The whole page is a drop target, so a near miss doesn't open the image in the tab instead.
-// dragenter/leave fire for every child crossed, hence the depth count.
+// Dragging a file in opens the dialog, so the drop box is there to aim at; dragging back out
+// without letting go closes it again, unless it was already open. dragenter/leave fire for
+// every child crossed, hence the depth count.
 let dragDepth = 0;
 window.addEventListener('dragenter', function(e){
   if(!hasFiles(e)) return;
   e.preventDefault();
-  if(dragDepth++ === 0) document.body.classList.add('dragging');
+  if(dragDepth++ === 0){
+    document.body.classList.add('dragging');
+    if(uploadModal.hidden && !uploading){ openUpload(); openedByDrag = true; }
+  }
 });
 window.addEventListener('dragleave', function(e){
   if(!hasFiles(e)) return;
-  if(--dragDepth <= 0){ dragDepth = 0; document.body.classList.remove('dragging'); drop.classList.remove('over'); }
+  if(--dragDepth <= 0){
+    dragDepth = 0;
+    document.body.classList.remove('dragging');
+    drop.classList.remove('over');
+    if(openedByDrag && !pendingFile) closeUpload();
+  }
 });
 window.addEventListener('dragover', function(e){
   if(!hasFiles(e)) return;
@@ -334,12 +390,14 @@ window.addEventListener('drop', function(e){
   document.body.classList.remove('dragging');
   drop.classList.remove('over');
   const file = firstImage(e.dataTransfer.files);
-  file ? choose(file) : setStatus("That isn't an image.", 'err');
+  if(file) choose(file);
+  else { openUpload(); uStatus("That isn't an image.", 'err'); }
 });
 
-// Paste: only an image on the clipboard is taken, so pasting text into the caption still works.
+// Paste: only an image on the clipboard is taken, so pasting text into a caption still works.
+// Ignored while the lightbox is open, where a paste is meant for its caption box.
 document.addEventListener('paste', function(e){
-  if(!modal.hidden) return;
+  if(!modal.hidden || uploading) return;
   const file = firstImage(e.clipboardData && e.clipboardData.files);
   if(!file) return;
   e.preventDefault();
@@ -349,14 +407,15 @@ document.addEventListener('paste', function(e){
 document.getElementById('upload').addEventListener('submit', async function(e){
   e.preventDefault();
   const file = pendingFile;
-  if(!file){ setStatus('Drop, paste or browse for an image first.', 'err'); return; }
-  const btn = document.getElementById('uploadBtn');
-  btn.disabled = true;
+  if(!file){ uStatus('Drop, paste or browse for an image first.', 'err'); return; }
+  const btn = document.getElementById('uploadBtn'), cancel = document.getElementById('uCancel');
+  btn.disabled = cancel.disabled = true;
+  uploading = true;
   try{
-    setStatus('Preparing…');
+    uStatus('Preparing…');
     let bitmap;
     try{ bitmap = await createImageBitmap(file, { imageOrientation:'from-image' }); }
-    catch(err){ setStatus("That file couldn't be read as an image.", 'err'); return; }
+    catch(err){ uStatus("That file couldn't be read as an image.", 'err'); return; }
     const full = drawScaled(bitmap, FULL_MAX), thumb = drawScaled(bitmap, THUMB_MAX);
     const body = {
       image: await toBase64(await toJpeg(full, 0.85)),
@@ -364,27 +423,30 @@ document.getElementById('upload').addEventListener('submit', async function(e){
       caption: document.getElementById('caption').value.trim(),
       width: full.width, height: full.height
     };
-    setStatus('Checking and tagging…');
+    uStatus('Checking and tagging…');
     const res = await api('/api/photos', {
       method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body)
     });
     if(!res.ok){
-      setStatus(await errorDetail(res), 'err');
+      // The dialog stays open on a refusal, so the uploader reads why and can pick another.
+      uStatus(await errorDetail(res), 'err');
       if(res.status === 422) load();
       return;
     }
     const p = await res.json();
-    document.getElementById('upload').reset();
-    clearChosen();
+    uploading = false;
+    closeUpload();
     setStatus(p.status === 'pending'
       ? 'Uploaded, but held for review: ' + ((p.moderation && p.moderation.reason) || 'needs an officer to look.')
       : 'Uploaded' + (p.tags.length ? ' and tagged ' + p.tags.map(tagLabel).join(', ') + '.' : '.'), 'ok');
     tab = p.status;
     await load();
   }catch(err){
-    if(String(err.message) !== '401') setStatus('Upload failed — could not reach the guild database.', 'err');
+    if(String(err.message) !== '401') uStatus('Upload failed — could not reach the guild database.', 'err');
   }finally{
+    uploading = false;
     btn.disabled = !pendingFile;
+    cancel.disabled = false;
   }
 });
 

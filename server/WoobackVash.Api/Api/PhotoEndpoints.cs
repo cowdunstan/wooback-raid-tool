@@ -17,9 +17,10 @@ namespace WoobackVash.Api.Api;
 /// re-encoded it as JPEG — which also strips its EXIF, phone GPS included — so the API takes
 /// the full image and its thumbnail as base64 JPEG. The image and caption then go to OpenAI
 /// moderation together: flagged outright, the upload is refused and the image is not kept — only
-/// a <see cref="PhotoRejection"/> saying who tried and why, for the officers' Rejected tab; borderline,
-/// or unchecked because moderation couldn't run, it's stored as pending for an officer to
-/// approve; otherwise it's published. A photo that gets through is then tagged from
+/// a <see cref="PhotoRejection"/> saying who tried and why, for the officers' Rejected tab —
+/// unless every flagged category is one we hold instead (<c>Photobook:HoldInsteadOfRefuse</c>,
+/// just violence); flagged that way, borderline, or unchecked because moderation couldn't run,
+/// it's stored as pending for an officer to approve; otherwise it's published. A photo that gets through is then tagged from
 /// <see cref="PhotoTags"/>, with a place and boss from <see cref="PhotoPlaces"/>, by a small
 /// vision model. Those picks show as suggestions until a person saves or accepts them; what the
 /// model said is kept beside what people settled on, and <c>/tag-stats</c> scores one against
@@ -208,7 +209,9 @@ public static class PhotoEndpoints
                 return BadRequest($"The caption is too long (the limit is {MaxCaptionLength} characters).");
 
             var verdict = await ai.ModerateAsync(full, caption, ctx.RequestAborted);
-            if (verdict.Flagged)
+            // Flagged only for a category we hold rather than refuse (violence): stored as pending,
+            // so an officer decides. Anything else flagged is refused and never stored.
+            if (verdict.Flagged && !verdict.Holdable)
             {
                 await RecordRejectionAsync(db, session!, PhotoRejectionKind.Upload, null, caption, verdict);
                 return Results.Json(new
@@ -219,6 +222,9 @@ public static class PhotoEndpoints
             }
 
             var held = !verdict.Checked || verdict.Reason is not null;
+            var reason = verdict.Holdable
+                ? $"Flagged for {string.Join(", ", verdict.Hit)} by the content check — held for an officer instead of refused."
+                : verdict.Reason;
             var suggestion = await ai.SuggestTagsAsync(full, caption, ctx.RequestAborted);
 
             var aiTags = JsonSerializer.Serialize(suggestion.Tags);
@@ -241,8 +247,8 @@ public static class PhotoEndpoints
                 Moderation = JsonSerializer.Serialize(new
                 {
                     @checked = verdict.Checked,
-                    flagged = false,
-                    reason = verdict.Reason,
+                    flagged = verdict.Flagged,
+                    reason,
                     top = verdict.Top.Select(s => new { category = s.Category, score = Math.Round(s.Score, 4) })
                 }),
                 Width = input.Width,

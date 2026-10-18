@@ -52,6 +52,17 @@ public class PhotobookOptions
     /// </summary>
     public Dictionary<string, double> CategoryReviewThresholds { get; set; } = new();
 
+    /// <summary>
+    /// OpenAI categories whose outright "flagged" verdict holds a new upload for an officer instead
+    /// of refusing it — but only when every flagged category is in this list. Set in
+    /// appsettings.json to just "violence": fantasy-combat screenshots trip it (a guild group shot
+    /// by some giant skull props was flagged and refused), while gore ("violence/graphic"), sexual
+    /// content, self-harm, hate and harassment are still refused, as is a photo flagged for
+    /// violence plus anything else. A held photo is stored, so an officer sees it before it's
+    /// published. Caption edits aren't affected: a flagged caption is always refused.
+    /// </summary>
+    public string[] HoldInsteadOfRefuse { get; set; } = [];
+
     public double ReviewThresholdFor(string category) =>
         CategoryReviewThresholds.TryGetValue(category, out var t) ? t : ReviewThreshold;
 

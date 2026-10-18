@@ -151,7 +151,8 @@ session.
   prompt instead. A refused upload keeps the dialog open with the reason. The page resizes it to 1600px (plus
   a 480px thumbnail) and re-encodes it as JPEG before sending, which also strips EXIF, phone
   GPS included. The API runs it past OpenAI moderation and either refuses it (nothing is
-  kept), holds it in the **Review queue** tab, or publishes it, then a small vision model
+  kept), holds it in the **Review queue** tab (borderline scores, or flagged only for
+  violence), or publishes it, then a small vision model
   picks tags from a fixed list, plus where it was taken and which boss it shows (from
   `PhotoPlaces`: raids and their bosses, world bosses, dungeons, battlegrounds, cities and
   zones — Classic's dungeons, battlegrounds, cities and zones, which Forever keeps, plus
@@ -673,7 +674,11 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   `POST /api/photos` with `{ image, thumb, caption, width, height }` — base64 JPEGs (≤ 5 MB and
   ≤ 512 KB, checked by magic bytes), caption ≤ 300 chars — sends the image and caption to
   OpenAI moderation (`Photobook:ModerationModel`). Flagged → **422**, the image is not stored,
-  and a `PhotoRejection` records who tried and why;
+  and a `PhotoRejection` records who tried and why — unless every flagged category is in
+  `Photobook:HoldInsteadOfRefuse` (just `violence`, which fantasy-combat screenshots trip), when
+  it's stored as `pending` with `moderation.flagged` true for an officer to decide. Gore
+  (`violence/graphic`), sexual, self-harm and the rest, or violence plus anything else, are
+  still refused. Caption edits aren't affected: a flagged caption is always a 422;
   any category at or above `Photobook:ReviewThreshold` (0.2) — or its own number in
   `Photobook:CategoryReviewThresholds`, where `violence` is 0.7 because WoW screenshots are full
   of skulls and weapons (`violence/graphic` stays at 0.2) — or no verdict at all (no API key,

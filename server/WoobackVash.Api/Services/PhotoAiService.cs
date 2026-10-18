@@ -36,7 +36,10 @@ public class PhotoAiService
     /// <param name="Reason">Why it's unchecked, or why it's held — for the officer looking at it.</param>
     /// <param name="Top">The highest-scoring categories, highest first.</param>
     /// <param name="Hit">The categories OpenAI flagged; empty unless <paramref name="Flagged"/>.</param>
-    public record ModerationVerdict(bool Checked, bool Flagged, string? Reason, List<CategoryScore> Top, List<string> Hit)
+    /// <param name="Holdable">Flagged, but only for categories in <c>Photobook:HoldInsteadOfRefuse</c>,
+    /// so a new upload may be held for an officer rather than refused. Caption edits ignore it.</param>
+    public record ModerationVerdict(bool Checked, bool Flagged, string? Reason, List<CategoryScore> Top, List<string> Hit,
+        bool Holdable = false)
     {
         public double MaxScore => Top.Count == 0 ? 0 : Top[0].Score;
     }
@@ -112,7 +115,8 @@ public class PhotoAiService
             {
                 reason = $"Borderline: {over.Category} scored {over.Score:0.00}.";
             }
-            return new ModerationVerdict(true, flagged, reason, scores, hit);
+            var holdable = flagged && hit.Count > 0 && hit.All(_opts.HoldInsteadOfRefuse.Contains);
+            return new ModerationVerdict(true, flagged, reason, scores, hit, holdable);
         }
         catch (Exception ex)
         {

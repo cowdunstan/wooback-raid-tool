@@ -98,7 +98,7 @@ public static class PhotoEndpoints
 
             var rows = await db.Photos.AsNoTracking()
                 .Where(p => p.AiTagged)
-                .Select(p => new { p.TagsConfirmed, p.Tags, p.AiTags, p.Place, p.AiPlace, p.Boss, p.AiBoss })
+                .Select(p => new { p.TagsConfirmed, p.Tags, p.AiTags, p.Place, p.AiPlace, p.AiPlaceEvidence, p.Boss, p.AiBoss })
                 .ToListAsync();
             var reviewed = rows.Where(r => r.TagsConfirmed).ToList();
 
@@ -130,6 +130,12 @@ public static class PhotoEndpoints
                     added = counts[t.Id][2]
                 }),
                 place = Score(reviewed.Select(r => new PickRow(r.AiPlace, r.Place))),
+                // The AI's place picks split by the clue it says it used: does a guess from the scene
+                // alone hold up as well as a name read off the screen?
+                placeByEvidence = reviewed.Where(r => r.AiPlace is not null)
+                    .GroupBy(r => r.AiPlaceEvidence ?? PhotoAiService.PlaceEvidence.Unknown)
+                    .Select(g => new { evidence = g.Key, judged = g.Count(), right = g.Count(r => r.AiPlace == r.Place) })
+                    .OrderByDescending(x => x.judged),
                 boss = Score(reviewed.Select(r => new PickRow(r.AiBoss, r.Boss)))
             });
         });
@@ -228,6 +234,7 @@ public static class PhotoEndpoints
                 AiTagged = suggestion.Ran,
                 AiTags = aiTags,
                 AiPlace = suggestion.Place,
+                AiPlaceEvidence = suggestion.PlaceEvidence,
                 AiBoss = suggestion.Boss,
                 AltText = suggestion.AltText,
                 Status = held ? PhotoStatus.Pending : PhotoStatus.Approved,
@@ -403,6 +410,7 @@ public static class PhotoEndpoints
         aiTagged = p.AiTagged,
         aiTags = Deserialize<List<string>>(p.AiTags),
         aiPlace = p.AiPlace,
+        aiPlaceEvidence = p.AiPlaceEvidence,
         aiBoss = p.AiBoss,
         tagsConfirmed = p.TagsConfirmed,
         altText = p.AltText,

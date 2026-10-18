@@ -153,8 +153,11 @@ session.
   GPS included. The API runs it past OpenAI moderation and either refuses it (nothing is
   kept), holds it in the **Review queue** tab, or publishes it, then a small vision model
   picks tags from a fixed list, plus where it was taken and which boss it shows (from
-  `PhotoPlaces`: Classic raids and their bosses, world bosses, dungeons, battlegrounds,
-  cities, zones), reading the minimap, boss frames and caption. Those AI picks show dashed
+  `PhotoPlaces`: raids and their bosses, world bosses, dungeons, battlegrounds, cities and
+  zones — Classic's places for now, since Forever keeps most of them, with Forever's own still
+  to add). It uses the strongest clue there is, and says which: a place name on screen (the
+  minimap), a name floating over an NPC ("Stormwind City Guard"), a landmark it recognises, or
+  the caption — so it works on screenshots taken with the interface hidden. Those AI picks show dashed
   with a ✦ until someone reviews them — **Looks right** confirms them, **Fix them** opens the
   editor — and a **✦ Needs tag review** chip over the grid finds the ones nobody has. The book runs newest upload first, in justified rows that keep
   every photo's own shape (`justify()`, sized from each photo's stored width and height, never
@@ -169,7 +172,8 @@ session.
   accuracy** tab scores the AI against review, on reviewed photos only: tag precision (of the
   tags it suggested, how many were kept) and recall (of the tags photos ended up with, how many
   it had suggested), per tag and overall, and how often its place and boss picks — "none"
-  included — survived review, were changed, cleared, or filled in where it had nothing. A **Rejected** tab lists everything the content check refused — refused
+  included — survived review, were changed, cleared, or filled in where it had nothing, with the
+  place picks also split by the clue the AI used, to show whether scene-only guesses hold up. A **Rejected** tab lists everything the content check refused — refused
   uploads and refused caption edits — with who tried, when, the caption, the flagged
   categories and the top scores, newest first, each with **Dismiss**. There's no image there:
   a refused one is never kept. Images are fetched with the session and shown as object URLs, since an
@@ -662,7 +666,7 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   bosses[] = { id, label } }, pending, rejected, photos[] }`: the tag vocabulary (`PhotoTags`),
   the place list (`PhotoPlaces`), the review-queue and rejection counts, and the approved photos newest first, or the queue itself with
   `?status=pending`. Each photo is `{ id, uploaderUid, uploaderName, caption, tags, place, boss,
-  aiTagged, aiTags, aiPlace, aiBoss, tagsConfirmed, altText, status, moderation: { checked,
+  aiTagged, aiTags, aiPlace, aiPlaceEvidence, aiBoss, tagsConfirmed, altText, status, moderation: { checked,
   flagged, reason, top[] = { category, score } }, width, height, createdAt }` — the `ai*` fields
   are what the model suggested at upload, never edited, and `tagsConfirmed` whether a person has
   reviewed them since. `GET /api/photos/{id}/thumb` and `/full` return the JPEG bytes.
@@ -683,7 +687,9 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   there. Touching tags, place or boss, or sending `confirm: true` alone, marks the AI's picks
   reviewed. `GET /api/photos/tag-stats` returns `{ aiTagged, reviewed, awaitingReview, tags[] =
   { id, label, kept, removed, added }, place, boss }`, counted over reviewed AI-tagged photos only,
-  where `place` and `boss` are `{ judged, right, changed, cleared, filledIn }`.
+  where `place` and `boss` are `{ judged, right, changed, cleared, filledIn }`, plus
+  `placeByEvidence[] = { evidence, judged, right }` — the AI's place picks split by
+  `aiPlaceEvidence` (`screen-text`, `npc-name`, `landmark`, `caption`, or `unknown`).
   `GET /api/photos/rejections` returns `{ total, rejections[] = { id, uploaderUid, uploaderName,
   kind: "upload"|"caption", photoId, caption, categories[], scores[] = { category, score },
   createdAt } }`, newest first; `DELETE /api/photos/rejections/{id}` dismisses one. Rejections

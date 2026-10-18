@@ -45,7 +45,25 @@ public class PhotoAiService
     /// photo has no AI tags to confirm and is left out of the accuracy numbers.</param>
     /// <param name="Place">A <see cref="PhotoPlaces"/> id, or null for "none".</param>
     /// <param name="Boss">A boss id, or null; when set, <paramref name="Place"/> is its place.</param>
-    public record TagSuggestion(bool Ran, List<string> Tags, string AltText, string? Place, string? Boss);
+    /// <param name="PlaceEvidence">Which clue the place came from (<see cref="PlaceEvidence"/>), or null with no place.</param>
+    public record TagSuggestion(bool Ran, List<string> Tags, string AltText, string? Place, string? Boss, string? PlaceEvidence);
+
+    /// <summary>
+    /// The clue a place pick was read from, strongest first. Kept with the photo so the accuracy
+    /// numbers can be split by it — the point being to see whether guesses made from the scene
+    /// alone, on screenshots with the interface hidden, are as good as ones read off the screen.
+    /// </summary>
+    public static class PlaceEvidence
+    {
+        public const string ScreenText = "screen-text";
+        public const string NpcName = "npc-name";
+        public const string Landmark = "landmark";
+        public const string Caption = "caption";
+        /// <summary>The model gave a place but no recognisable reason.</summary>
+        public const string Unknown = "unknown";
+
+        public static readonly string[] All = [ScreenText, NpcName, Landmark, Caption];
+    }
 
     private bool Configured => !string.IsNullOrWhiteSpace(_opts.OpenAiApiKey);
 
@@ -102,23 +120,38 @@ public class PhotoAiService
 
     public async Task<TagSuggestion> SuggestTagsAsync(byte[] jpeg, string caption, CancellationToken ct = default)
     {
-        var none = new TagSuggestion(false, [], "", null, null);
+        var none = new TagSuggestion(false, [], "", null, null, null);
         if (!Configured || string.IsNullOrWhiteSpace(_opts.TaggingModel)) return none;
 
         var vocabulary = string.Join("\n", PhotoTags.All.Select(t => $"- {t.Id}: {t.Label}"));
         var places = string.Join("\n", PhotoPlaces.All.Select(p => $"- {p.Id}: {p.Label} ({p.Kind})"));
         var bosses = string.Join("\n", PhotoPlaces.All.Where(p => p.Bosses.Length > 0)
             .Select(p => $"{p.Label}: " + string.Join(", ", p.Bosses.Select(b => $"{b.Id} = {b.Label}"))));
+        // Many screenshots are taken with the interface hidden — no minimap, no frames — so the
+        // place prompt ranks every kind of clue rather than leaning on the minimap, and asks which
+        // one it used. That lands in AiPlaceEvidence, so the accuracy tab can show whether the
+        // landmark-only guesses hold up as well as the ones read off the screen.
         var prompt =
-            "This is a screenshot or photo a member of a World of Warcraft Classic guild uploaded to the guild's photobook." +
+            "This is a screenshot or photo a member of the guild <Wooback> uploaded to the guild's photobook. " +
+            "The game is World of Warcraft: Forever, a new expansion that keeps most of Classic's world." +
             (string.IsNullOrWhiteSpace(caption) ? "" : $" Their caption: \"{caption}\".") +
-            $"\n\nPick between 1 and {PhotoTags.MaxPerPhoto} tags that clearly apply, from this list only:\n{vocabulary}\n\n" +
-            "Then say where it was taken, as one place id from the list below, or \"none\". Read the zone name " +
-            "shown above the minimap, an instance or battleground name, or a landmark you clearly recognise; the " +
-            "caption counts too. Choose \"none\" unless you're fairly sure — a wrong place is worse than none.\n" +
+            "\n\nThe interface is often hidden, so there may be no minimap, frames or chat — only the scene and the " +
+            "names floating over characters. Player names with <Wooback> under them are guild members; a name with " +
+            "\"'s Pet\" or \"'s Minion\" under it is a player's pet.\n\n" +
+            $"Pick between 1 and {PhotoTags.MaxPerPhoto} tags that clearly apply, from this list only. Several guild " +
+            $"members posing together is a group shot.\n{vocabulary}\n\n" +
+            "Then say where it was taken, as one place id from the list below, or \"none\". Use the strongest clue there is:\n" +
+            "1. screen-text: a zone, instance or battleground name shown on screen, such as above the minimap;\n" +
+            "2. npc-name: a name floating over a non-player character that gives the place away — \"Stormwind City Guard\" " +
+            "means Stormwind City, \"Orgrimmar Grunt\" means Orgrimmar;\n" +
+            "3. landmark: a building, statue, gate or scene you clearly recognise as that place;\n" +
+            "4. caption: the caption names it.\n" +
+            "Forever may have places that aren't in the list; answer \"none\" for those rather than the nearest match. " +
+            "Choose \"none\" unless you're fairly sure — a wrong place is worse than none. Say which clue you used as " +
+            "place_evidence, or \"none\" if you chose no place.\n" +
             $"{places}\n\n" +
-            "And which boss it shows, as one boss id or \"none\": only if a boss is plainly being fought, its name is " +
-            "in a target, boss or nameplate frame, or the caption names it.\n" +
+            "And which boss it shows, as one boss id or \"none\": only if a boss is plainly being fought, its name " +
+            "floats over it or is in a target or boss frame, or the caption names it.\n" +
             $"{bosses}\n\n" +
             "Finally, write one plain sentence describing what's in the picture, for use as alt text.";
 
@@ -139,8 +172,9 @@ public class PhotoAiService
                     {
                         ["type"] = "image_url",
                         // High detail by default: low is one 512px tile, too small to read the
-                        // minimap's zone name or a boss frame, which is what the place and boss
-                        // picks lean on. On a nano model it still costs a fraction of a cent.
+                        // minimap's zone name, a boss frame or the names floating over characters,
+                        // which the place and boss picks lean on. On a nano model it still costs
+                        // a fraction of a cent.
                         ["image_url"] = new JsonObject { ["url"] = DataUrl(jpeg), ["detail"] = _opts.TaggingImageDetail }
                     })
             }),
@@ -162,10 +196,11 @@ public class PhotoAiService
                                 ["items"] = new JsonObject { ["type"] = "string", ["enum"] = enumValues }
                             },
                             ["place"] = new JsonObject { ["type"] = "string", ["enum"] = placeValues },
+                            ["place_evidence"] = new JsonObject { ["type"] = "string", ["enum"] = Enum(PlaceEvidence.All.Append("none")) },
                             ["boss"] = new JsonObject { ["type"] = "string", ["enum"] = bossValues },
                             ["description"] = new JsonObject { ["type"] = "string" }
                         },
-                        ["required"] = new JsonArray("tags", "place", "boss", "description"),
+                        ["required"] = new JsonArray("tags", "place", "place_evidence", "boss", "description"),
                         ["additionalProperties"] = false
                     }
                 }
@@ -185,7 +220,10 @@ public class PhotoAiService
             var tags = parsed["tags"]!.AsArray().Select(t => t?.GetValue<string>() ?? "");
             var alt = parsed["description"]?.GetValue<string>()?.Trim() ?? "";
             var (place, boss) = PhotoPlaces.Clean(parsed["place"]?.GetValue<string>(), parsed["boss"]?.GetValue<string>());
-            return new TagSuggestion(true, PhotoTags.Clean(tags), alt.Length > 300 ? alt[..300] : alt, place, boss);
+            // Evidence only means something alongside a place; a boss-implied place came from the boss.
+            var evidence = parsed["place_evidence"]?.GetValue<string>();
+            if (place is null || !PlaceEvidence.All.Contains(evidence)) evidence = place is null ? null : PlaceEvidence.Unknown;
+            return new TagSuggestion(true, PhotoTags.Clean(tags), alt.Length > 300 ? alt[..300] : alt, place, boss, evidence);
         }
         catch (Exception ex)
         {

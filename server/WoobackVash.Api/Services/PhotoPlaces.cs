@@ -1,14 +1,19 @@
 namespace WoobackVash.Api.Services;
 
 /// <summary>
-/// Where a photobook photo was taken, and which boss it shows: a fixed list of Classic (WoW
-/// Forever) raids with their bosses, dungeons, battlegrounds, cities, zones and world bosses.
-/// Like <see cref="PhotoTags"/>, the tagging model may only pick from these (they're enums in
-/// its JSON schema), so "Molten Core" never fragments into "MC" or "molten core".
+/// Where a photobook photo was taken, and which boss it shows: a fixed list of raids with their
+/// bosses, dungeons, battlegrounds, cities, zones and world bosses. Like <see cref="PhotoTags"/>,
+/// the tagging model may only pick from these (they're enums in its JSON schema), so "Molten
+/// Core" never fragments into "MC" or "molten core".
 ///
-/// This tracks the current expansion. When the guild moves on, replace it along with
-/// <c>WOWHEAD_DOMAIN</c> and <c>LEVEL_CAP</c> (see CLAUDE.md). An id that disappears is kept
-/// raw on photos already tagged with it, and the page shows it as-is.
+/// The guild plays World of Warcraft: Forever, a new expansion that keeps most of Classic's
+/// world. For now this is Classic's places; Forever's new zones, dungeons and raids still need
+/// adding, and any Classic place Forever dropped taking out. A place missing from here comes
+/// back from the model as "none", never as the nearest match, so a gap costs a filter, not a
+/// wrong label. Use each name exactly as the game shows it on screen — the model matches on it.
+///
+/// It tracks the current expansion (see CLAUDE.md). An id that disappears is kept raw on photos
+/// already tagged with it, and the page shows it as-is.
 /// </summary>
 public static class PhotoPlaces
 {

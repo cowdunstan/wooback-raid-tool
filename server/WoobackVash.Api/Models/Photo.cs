@@ -38,6 +38,13 @@ public class Photo
     public string AiTags { get; set; } = "[]";
 
     public string? AiPlace { get; set; }
+
+    /// <summary>
+    /// The clue <see cref="AiPlace"/> was read from — screen-text, npc-name, landmark, caption, or
+    /// unknown (see <c>PhotoAiService.PlaceEvidence</c>); null with no AI place.
+    /// </summary>
+    public string? AiPlaceEvidence { get; set; }
+
     public string? AiBoss { get; set; }
 
     /// <summary>

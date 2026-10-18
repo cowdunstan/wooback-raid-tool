@@ -444,6 +444,9 @@ namespace WoobackVash.Api.Data.Migrations
                     b.Property<string>("AiPlace")
                         .HasColumnType("text");
 
+                    b.Property<string>("AiPlaceEvidence")
+                        .HasColumnType("text");
+
                     b.Property<bool>("AiTagged")
                         .HasColumnType("boolean");
 

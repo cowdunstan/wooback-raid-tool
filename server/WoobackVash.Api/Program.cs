@@ -60,6 +60,10 @@ builder.Services.AddRateLimiter(o =>
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 3, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
 });
 
+// The photobook: OpenAI moderation + tag suggestion on each upload.
+builder.Services.Configure<PhotobookOptions>(builder.Configuration.GetSection(PhotobookOptions.SectionName));
+builder.Services.AddSingleton<PhotoAiService>();
+
 // CORS: only the app's own origins may call the API from a browser. Kept in sync
 // with the origins the old Worker allowed (see raidhelper-proxy.worker.js).
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
@@ -178,6 +182,9 @@ app.MapApplicationEndpoints();
 
 // The WoW Forever launch poll (launch.html) and its officer review (launch-responses.html).
 app.MapLaunchPollEndpoints();
+
+// The guild photobook (photobook.html) — officers only while it is tried out.
+app.MapPhotoEndpoints();
 
 app.Run();
 

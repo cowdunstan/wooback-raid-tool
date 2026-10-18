@@ -438,8 +438,24 @@ namespace WoobackVash.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AiBoss")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AiPlace")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("AiTagged")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("AiTags")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("AltText")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Boss")
                         .HasColumnType("text");
 
                     b.Property<string>("Caption")
@@ -456,6 +472,9 @@ namespace WoobackVash.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("Place")
+                        .HasColumnType("text");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
@@ -463,6 +482,9 @@ namespace WoobackVash.Api.Data.Migrations
                     b.Property<string>("Tags")
                         .IsRequired()
                         .HasColumnType("jsonb");
+
+                    b.Property<bool>("TagsConfirmed")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("UploaderName")
                         .IsRequired()

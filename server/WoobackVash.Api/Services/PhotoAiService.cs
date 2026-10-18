@@ -9,7 +9,8 @@ namespace WoobackVash.Api.Services;
 /// <summary>
 /// The photobook's two OpenAI calls. <see cref="ModerateAsync"/> uses the free moderation
 /// endpoint on the image and caption together; <see cref="SuggestTagsAsync"/> asks a small
-/// vision model to pick tags from <see cref="PhotoTags"/> and write a line of alt text.
+/// vision model to pick tags from <see cref="PhotoTags"/>, a place and boss from
+/// <see cref="PhotoPlaces"/>, and write a line of alt text.
 ///
 /// Neither ever throws to the caller. A moderation call that can't be made comes back
 /// unchecked (<see cref="ModerationVerdict.Checked"/> false), which holds the photo for an
@@ -40,7 +41,11 @@ public class PhotoAiService
         public double MaxScore => Top.Count == 0 ? 0 : Top[0].Score;
     }
 
-    public record TagSuggestion(List<string> Tags, string AltText);
+    /// <param name="Ran">Whether the model actually answered. False → nothing was suggested, so the
+    /// photo has no AI tags to confirm and is left out of the accuracy numbers.</param>
+    /// <param name="Place">A <see cref="PhotoPlaces"/> id, or null for "none".</param>
+    /// <param name="Boss">A boss id, or null; when set, <paramref name="Place"/> is its place.</param>
+    public record TagSuggestion(bool Ran, List<string> Tags, string AltText, string? Place, string? Boss);
 
     private bool Configured => !string.IsNullOrWhiteSpace(_opts.OpenAiApiKey);
 
@@ -97,17 +102,30 @@ public class PhotoAiService
 
     public async Task<TagSuggestion> SuggestTagsAsync(byte[] jpeg, string caption, CancellationToken ct = default)
     {
-        var none = new TagSuggestion([], "");
+        var none = new TagSuggestion(false, [], "", null, null);
         if (!Configured || string.IsNullOrWhiteSpace(_opts.TaggingModel)) return none;
 
         var vocabulary = string.Join("\n", PhotoTags.All.Select(t => $"- {t.Id}: {t.Label}"));
+        var places = string.Join("\n", PhotoPlaces.All.Select(p => $"- {p.Id}: {p.Label} ({p.Kind})"));
+        var bosses = string.Join("\n", PhotoPlaces.All.Where(p => p.Bosses.Length > 0)
+            .Select(p => $"{p.Label}: " + string.Join(", ", p.Bosses.Select(b => $"{b.Id} = {b.Label}"))));
         var prompt =
             "This is a screenshot or photo a member of a World of Warcraft Classic guild uploaded to the guild's photobook." +
             (string.IsNullOrWhiteSpace(caption) ? "" : $" Their caption: \"{caption}\".") +
             $"\n\nPick between 1 and {PhotoTags.MaxPerPhoto} tags that clearly apply, from this list only:\n{vocabulary}\n\n" +
-            "Also write one plain sentence describing what's in the picture, for use as alt text.";
+            "Then say where it was taken, as one place id from the list below, or \"none\". Read the zone name " +
+            "shown above the minimap, an instance or battleground name, or a landmark you clearly recognise; the " +
+            "caption counts too. Choose \"none\" unless you're fairly sure — a wrong place is worse than none.\n" +
+            $"{places}\n\n" +
+            "And which boss it shows, as one boss id or \"none\": only if a boss is plainly being fought, its name is " +
+            "in a target, boss or nameplate frame, or the caption names it.\n" +
+            $"{bosses}\n\n" +
+            "Finally, write one plain sentence describing what's in the picture, for use as alt text.";
 
-        var enumValues = new JsonArray(PhotoTags.All.Select(t => (JsonNode)JsonValue.Create(t.Id)!).ToArray());
+        static JsonArray Enum(IEnumerable<string> ids) => new(ids.Select(id => (JsonNode)JsonValue.Create(id)!).ToArray());
+        var enumValues = Enum(PhotoTags.All.Select(t => t.Id));
+        var placeValues = Enum(PhotoPlaces.All.Select(p => p.Id).Append("none"));
+        var bossValues = Enum(PhotoPlaces.BossById.Keys.Append("none"));
         var body = new JsonObject
         {
             ["model"] = _opts.TaggingModel,
@@ -120,8 +138,10 @@ public class PhotoAiService
                     new JsonObject
                     {
                         ["type"] = "image_url",
-                        // Low detail: one small tile, a fraction of the tokens, and plenty to tag by.
-                        ["image_url"] = new JsonObject { ["url"] = DataUrl(jpeg), ["detail"] = "low" }
+                        // High detail by default: low is one 512px tile, too small to read the
+                        // minimap's zone name or a boss frame, which is what the place and boss
+                        // picks lean on. On a nano model it still costs a fraction of a cent.
+                        ["image_url"] = new JsonObject { ["url"] = DataUrl(jpeg), ["detail"] = _opts.TaggingImageDetail }
                     })
             }),
             ["response_format"] = new JsonObject
@@ -141,9 +161,11 @@ public class PhotoAiService
                                 ["type"] = "array",
                                 ["items"] = new JsonObject { ["type"] = "string", ["enum"] = enumValues }
                             },
+                            ["place"] = new JsonObject { ["type"] = "string", ["enum"] = placeValues },
+                            ["boss"] = new JsonObject { ["type"] = "string", ["enum"] = bossValues },
                             ["description"] = new JsonObject { ["type"] = "string" }
                         },
-                        ["required"] = new JsonArray("tags", "description"),
+                        ["required"] = new JsonArray("tags", "place", "boss", "description"),
                         ["additionalProperties"] = false
                     }
                 }
@@ -162,7 +184,8 @@ public class PhotoAiService
             var parsed = JsonNode.Parse(content)!;
             var tags = parsed["tags"]!.AsArray().Select(t => t?.GetValue<string>() ?? "");
             var alt = parsed["description"]?.GetValue<string>()?.Trim() ?? "";
-            return new TagSuggestion(PhotoTags.Clean(tags), alt.Length > 300 ? alt[..300] : alt);
+            var (place, boss) = PhotoPlaces.Clean(parsed["place"]?.GetValue<string>(), parsed["boss"]?.GetValue<string>());
+            return new TagSuggestion(true, PhotoTags.Clean(tags), alt.Length > 300 ? alt[..300] : alt, place, boss);
         }
         catch (Exception ex)
         {

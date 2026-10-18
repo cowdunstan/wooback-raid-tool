@@ -23,6 +23,30 @@ public class Photo
     /// <summary>Tag ids from <c>PhotoTags</c>, as a jsonb array. AI-suggested, then hand-edited.</summary>
     public string Tags { get; set; } = "[]";
 
+    /// <summary>Where it was taken: a <c>PhotoPlaces</c> id, or null.</summary>
+    public string? Place { get; set; }
+
+    /// <summary>The boss it shows: a <c>PhotoPlaces</c> boss id, or null. When set, <see cref="Place"/> is its place.</summary>
+    public string? Boss { get; set; }
+
+    // ── What the AI suggested, kept unchanged so it can be scored against what people settle on ──
+
+    /// <summary>Whether the tagging model actually answered for this photo. False → nothing to confirm or score.</summary>
+    public bool AiTagged { get; set; }
+
+    /// <summary>The tags the model suggested at upload, as a jsonb array. Never edited afterwards.</summary>
+    public string AiTags { get; set; } = "[]";
+
+    public string? AiPlace { get; set; }
+    public string? AiBoss { get; set; }
+
+    /// <summary>
+    /// Whether a person has looked at the tags, place and boss and saved or accepted them. Until
+    /// then the AI's picks show as suggestions; afterwards the photo counts towards the accuracy
+    /// numbers, comparing <see cref="AiTags"/> with <see cref="Tags"/> and so on.
+    /// </summary>
+    public bool TagsConfirmed { get; set; }
+
     /// <summary>The tagging model's one-sentence description, used as the image's alt text.</summary>
     public string AltText { get; set; } = "";
 

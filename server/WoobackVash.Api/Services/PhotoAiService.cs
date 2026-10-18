@@ -90,11 +90,14 @@ public class PhotoAiService
         {
             var result = json["results"]![0]!;
             var flagged = result["flagged"]!.GetValue<bool>();
-            var scores = result["category_scores"]!.AsObject()
+            var all = result["category_scores"]!.AsObject()
                 .Select(kv => new CategoryScore(kv.Key, kv.Value?.GetValue<double>() ?? 0))
                 .OrderByDescending(s => s.Score)
-                .Take(3)
                 .ToList();
+            var scores = all.Take(3).ToList();
+            // Each category against its own threshold, so the one that holds the photo may not be
+            // the top scorer — a 0.42 violence passes while a 0.25 self-harm doesn't.
+            var over = all.FirstOrDefault(s => s.Score >= _opts.ReviewThresholdFor(s.Category));
             string? reason = null;
             var hit = new List<string>();
             if (flagged)
@@ -105,9 +108,9 @@ public class PhotoAiService
                     .ToList();
                 reason = "Flagged: " + string.Join(", ", hit);
             }
-            else if (scores.Count > 0 && scores[0].Score >= _opts.ReviewThreshold)
+            else if (over is not null)
             {
-                reason = $"Borderline: {scores[0].Category} scored {scores[0].Score:0.00}.";
+                reason = $"Borderline: {over.Category} scored {over.Score:0.00}.";
             }
             return new ModerationVerdict(true, flagged, reason, scores, hit);
         }

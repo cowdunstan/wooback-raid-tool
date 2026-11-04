@@ -28,7 +28,7 @@ under **`/legacy/`**.
 /forever-home.html   any signed-in member — the WoW Forever hub, an app card per Forever page
 /launch.html         any signed-in member — the WoW Forever launch poll
 /launch-responses.html  officers — review of the launch poll
-/photobook.html      officers (for now) — the guild photobook, moderated and AI-tagged
+/photobook.html      any signed-in member — the guild photobook, moderated and AI-tagged
 /styles.css /menu.js /app.js /groups.js /loot-prio.js /my-priority.js /loot-sheet.js
 /apply-questions.js  the application's question list, shared by apply, applications, application-stats
 /launch-questions.js the launch poll's question list, shared by launch + launch-responses
@@ -144,7 +144,7 @@ session.
   60 by 9 Dec · group · who they raid with, every answer behind a toggle, their linked TBC main if any, and
   Delete). A member who opens it is sent to `launch.html`. The gate is cosmetic; the routes
   are `RequireOfficer`.
-- **`photobook.html`** *(root, officers only while it's trialled)* — the guild photobook.
+- **`photobook.html`** *(root, any signed-in member)* — the guild photobook.
   **Upload a photo** opens a dialog for a screenshot or photo and an optional caption. Dropping
   or pasting (Ctrl+V) an image anywhere on the page opens it with that image already in; dragging
   a file in opens it to aim at, and dragging back out closes it again. A touch screen gets a tap
@@ -181,8 +181,11 @@ session.
   uploads and refused caption edits — with who tried, when, the caption, the flagged
   categories and the top scores, newest first, each with **Dismiss**. There's no image there:
   a refused one is never kept. Images are fetched with the session and shown as object URLs, since an
-  `<img src>` can't carry the Bearer token. A member who opens it is sent to
-  `forever-home.html`; the gate is cosmetic, every `/api/photos` route is `RequireOfficer`.
+  `<img src>` can't carry the Bearer token. Every member can browse the book and upload, but a
+  member's **Edit**, **Delete**, **Looks right** and **Fix them** show only on their own photos;
+  their queue tab is **Your held photos** (just their own, and only when there are some), and
+  **Approve and publish**, **✦ Re-tag with AI**, and the **Rejected** and **Tag accuracy** tabs
+  are officers'. Hiding those is cosmetic; the API enforces it (see *Photobook* under the routes).
 - **`home.html`** — the TBC tools hub: a welcome hub with a hamburger, a **Switch to WoW Forever tools** button,
   menu and app cards. Open to any signed-in tier.
 - **`logs.html`** — the **Warcraft Logs** app: the guild's uploaded reports
@@ -665,11 +668,15 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   name, mainName, mainId, choices, text, updatedAt } }`, most recently updated first, with
   each member's linked TBC main resolved as `/api/poll/detail` does.
   `DELETE /api/launch-poll/responses/{id}` (**officer only**) removes one.
-- **Photobook** (**officer only**, every route, while it's trialled) — `GET /api/photos`
+- **Photobook** (any session; `tag-stats`, `rejections`, `retag` and `approve` are **officer
+  only**) — `GET /api/photos`
   returns `{ tags[] = { id, label }, kinds[] = { id, label }, places[] = { id, label, kind,
   bosses[] = { id, label } }, pending, rejected, photos[] }`: the tag vocabulary (`PhotoTags`),
   the place list (`PhotoPlaces`), the review-queue and rejection counts, and the approved photos newest first, or the queue itself with
-  `?status=pending`. Each photo is `{ id, uploaderUid, uploaderName, caption, tags, place, boss,
+  `?status=pending`. For a member the queue and its count are only their own held photos, and
+  `rejected` is null. A held photo is invisible to anyone but officers and its uploader — its
+  images, `PUT` and `DELETE` are a 404 to them — and `PUT` and `DELETE` on someone else's
+  published photo are a **403** unless the caller is an officer. Each photo is `{ id, uploaderUid, uploaderName, caption, tags, place, boss,
   aiTagged, aiTags, aiPlace, aiPlaceEvidence, aiBoss, tagsConfirmed, altText, status, moderation: { checked,
   flagged, reason, top[] = { category, score } }, width, height, createdAt }` — the `ai*` fields
   are what the model suggested at upload, never edited, and `tagsConfirmed` whether a person has
@@ -715,8 +722,9 @@ A .NET 8 Minimal-API app (EF Core + Npgsql). Routes:
   can't be reached it's a **502** and nothing changes.
   `POST /api/photos/{id}/approve` publishes a held
   photo; `DELETE /api/photos/{id}` removes it with its bytes. The images live in Postgres
-  (`PhotoImages`, `bytea`, kept apart from `Photos` so listing never reads them) — fine for a
-  trial; object storage such as Cloudflare R2 is the move if it's opened to everyone.
+  (`PhotoImages`, `bytea`, kept apart from `Photos` so listing never reads them). Now that every
+  member can upload, object storage such as Cloudflare R2 is the move if the database grows
+  uncomfortably.
 - **Health** — `/healthz` (liveness), `/readyz` (DB reachability + error detail).
 
 Non-secret config (Discord client id, guild id, role ids, WCL guild identity)

@@ -517,7 +517,7 @@ const FOREVER_NAV_LINKS = [
   { href:'apply.html',             label:'Apply to wooback' },
   { href:'applications.html',      label:'Applications',          officer:true },
   { href:'application-stats.html', label:'Application stats',     officer:true },
-  { href:'photobook.html',         label:'Photobook',             officer:true },
+  { href:'photobook.html',         label:'Photobook' },
   { href:'legacy/home.html',       label:'Switch to TBC tools →' }
 ];
 

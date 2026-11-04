@@ -1,9 +1,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>
-/* Officer gate while the photobook is tried out. Hiding the page is only cosmetic: every
-   /api/photos route is officer-gated on the API regardless. A member who lands here is sent
-   to the WoW Forever home. */
+/* Any signed-in member. Without a live session, back to the landing page. What a member may
+   do here (their own photos only; no review queue, Rejected or accuracy tabs) is enforced by
+   the API; the page only hides what they can't use. */
 (function(){
   function payload(tok){
     if(!tok) return null;
@@ -19,8 +19,6 @@
   if(!p || !p.exp || p.exp <= Math.floor(Date.now()/1000)){
     try{ localStorage.removeItem('vashj_session'); }catch(e){}
     location.replace('index.html');
-  }else if(!p.officer){
-    location.replace('forever-home.html');
   }
 })();
 </script>
@@ -282,7 +280,7 @@
           <nav class="nav-drawer" id="navDrawer" data-nav="forever"></nav>
         </div>
         <a href="forever-home.html"><img src="logo.png" alt="WoW Forever home" width="36" height="36" style="display:block"></a>
-        <span class="eyebrow">Photobook · officers only (trial)</span>
+        <span class="eyebrow">Photobook</span>
       </span>
       <span class="authbar-right">
         <span id="authWho" class="auth-who"></span>
@@ -301,9 +299,9 @@
 
     <div class="photo-tabs launch-filters" id="tabs">
       <button type="button" class="launch-filter active" data-tab="approved">Photos</button>
-      <button type="button" class="launch-filter" data-tab="pending">Review queue <b id="pendingCount">0</b></button>
-      <button type="button" class="launch-filter" data-tab="rejected">Rejected <b id="rejectedCount">0</b></button>
-      <button type="button" class="launch-filter" data-tab="accuracy">Tag accuracy</button>
+      <button type="button" class="launch-filter" data-tab="pending" id="pendingTab"><span id="pendingLabel">Review queue</span> <b id="pendingCount">0</b></button>
+      <button type="button" class="launch-filter" data-tab="rejected" data-officer-only>Rejected <b id="rejectedCount">0</b></button>
+      <button type="button" class="launch-filter" data-tab="accuracy" data-officer-only>Tag accuracy</button>
     </div>
     <div id="placeFilters" class="place-filters"></div>
     <div id="tagFilters" class="launch-filters"></div>
@@ -442,6 +440,12 @@ const whereText = p => [p.place && placeLabel(p.place), p.boss && bossLabel(p.bo
 const imageUrls = {};   // "id:thumb" → object URL, so re-renders don't refetch
 
 const tagLabel = id => (vocab.find(t => t.id === id) || { label:id }).label;
+
+// Who may do what, mirroring the API (which is what actually enforces it): a member edits and
+// deletes only their own photos; approving and re-tagging are officers'.
+const OFFICER = isOfficer();
+const MY_UID = (sessionPayload() || {}).uid;
+const canChange = p => OFFICER || p.uploaderUid === MY_UID;
 
 async function imageUrl(id, kind){
   const key = id + ':' + kind;
@@ -777,7 +781,7 @@ function render(){
     // The API already returns them newest upload first.
     ? '<div class="photo-justify">' + shown.map(tile).join('') + '</div>'
     : (tab === 'pending'
-        ? '<div class="photo-empty"><b>All clear</b>Nothing is waiting for review.</div>'
+        ? '<div class="photo-empty"><b>All clear</b>' + (OFFICER ? 'Nothing is waiting for review.' : 'None of your photos are waiting for an officer.') + '</div>'
         : '<div class="photo-empty"><b>No photos yet</b>Be the first — drop a screenshot anywhere on this page.</div>');
   justify();
   grid.querySelectorAll('img[data-thumb]').forEach(async img => {
@@ -793,7 +797,7 @@ async function load(){
       api('/api/photos' + (tab === 'pending' ? '?status=pending' : '')),
       tab === 'rejected' ? api('/api/photos/rejections') : tab === 'accuracy' ? api('/api/photos/tag-stats') : null
     ]);
-    if(res.status === 403){ setStatus('Officers only.', 'err'); return; }
+    if(res.status === 403){ setStatus('That needs an officer.', 'err'); return; }
     if(!res.ok){ setStatus('Could not load the photobook (' + await errorDetail(res) + ').', 'err'); return; }
     if(rej && !rej.ok){ setStatus('Could not load (' + await errorDetail(rej) + ').', 'err'); return; }
     const data = await res.json();
@@ -803,8 +807,12 @@ async function load(){
     photos = tab === 'rejected' || tab === 'accuracy' ? [] : (data.photos || []);
     if(rej && tab === 'rejected') rejections = (await rej.json()).rejections || [];
     if(rej && tab === 'accuracy') stats = await rej.json();
+    // A member's queue is just their own held uploads, so it's named so, and only shown when
+    // there are some (or they're on it). The rejection count is null for a member.
     document.getElementById('pendingCount').textContent = data.pending;
-    document.getElementById('rejectedCount').textContent = data.rejected;
+    document.getElementById('pendingLabel').textContent = OFFICER ? 'Review queue' : 'Your held photos';
+    document.getElementById('pendingTab').hidden = !OFFICER && !data.pending && tab !== 'pending';
+    document.getElementById('rejectedCount').textContent = data.rejected == null ? '' : data.rejected;
     render();
   }catch(err){
     if(String(err.message) !== '401') setStatus('Could not reach the guild database.', 'err');
@@ -1014,9 +1022,12 @@ function renderModalTags(){
 function setEditing(on){
   $('mView').hidden = on;
   $('mEdit').hidden = !on;
-  $('mEditBtn').hidden = $('mRetag').hidden = on;
+  const mine = canChange(current);
+  $('mEditBtn').hidden = on || !mine;
+  $('mRetag').hidden = on || !OFFICER;
+  $('mDelete').hidden = !mine;
   $('mSave').hidden = $('mCancelEdit').hidden = !on;
-  $('mReview').hidden = on || !needsReview(current);
+  $('mReview').hidden = on || !mine || !needsReview(current);
   if(on){
     editTags = current.tags.slice();
     $('mCaption').value = current.caption || '';
@@ -1044,6 +1055,7 @@ function fillPanel(p){
   $('mWhen').textContent = when(p.createdAt);
   $('mHeld').hidden = p.status !== 'pending';
   $('mHeldWhy').textContent = (p.moderation && p.moderation.reason) || 'Waiting for an officer.';
+  $('mApprove').hidden = !OFFICER;
   // Tags, place and boss link back into the grid's filters. Until someone reviews them, the
   // AI's picks show dashed with a spark.
   const fresh = needsReview(p);
@@ -1058,7 +1070,7 @@ function fillPanel(p){
   const why = fresh && p.place === p.aiPlace && EVIDENCE[p.aiPlaceEvidence];
   $('mWhereWhy').textContent = why ? '✦ The AI went by ' + why.charAt(0).toLowerCase() + why.slice(1) + '.' : '';
   $('mWhereWhy').hidden = !why;
-  $('mReview').hidden = !fresh;
+  $('mReview').hidden = !fresh || !canChange(p);
   $('mAlt').textContent = p.altText || '';
   $('mAltBlock').hidden = !p.altText;
   const m = p.moderation || {}, top = (m.top || [])[0];

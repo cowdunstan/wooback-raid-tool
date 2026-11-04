@@ -8,10 +8,11 @@ using WoobackVash.Api.Services;
 namespace WoobackVash.Api.Api;
 
 /// <summary>
-/// The guild photobook behind <c>photobook.html</c>. <b>Officers only for now</b>, every route
-/// included, while it's being tried out; opening it to members means swapping
-/// <c>RequireOfficer</c> for <c>RequireSession</c> on the reads and the upload, and keeping the
-/// review routes (approve, and deleting someone else's photo) on officers.
+/// The guild photobook behind <c>photobook.html</c>, open to every signed-in member. Any member
+/// can browse the published book and upload; a member can edit or delete only their own photos,
+/// and sees only their own held ones. Officers keep the review side: the whole review queue and
+/// approving from it, the Rejected log, the tag-accuracy stats, re-tagging, and editing or
+/// deleting anyone's photo.
 ///
 /// An upload is checked before it's stored. The page has already resized the image and
 /// re-encoded it as JPEG — which also strips its EXIF, phone GPS included — so the API takes
@@ -52,22 +53,27 @@ public static class PhotoEndpoints
 
         // The book, newest first: approved photos, or the review queue with ?status=pending.
         // Carries the tag vocabulary so the page never keeps its own copy.
+        // A member's queue is only their own held photos, so an upload that was held doesn't just
+        // vanish on them. The rejection count is officers' alone (null for a member).
         group.MapGet("", async (HttpContext ctx, SessionTokenService tokens, string? status) =>
         {
-            var (_, error) = ctx.RequireOfficer(tokens);
+            var (session, error) = ctx.RequireSession(tokens);
             if (error is not null) return error;
             var db = ctx.RequestServices.GetService<AppDbContext>();
             if (db is null) return DbUnavailable();
 
+            var queue = db.Photos.Where(p => p.Status == PhotoStatus.Pending);
+            if (!session!.Officer) queue = queue.Where(p => p.UploaderUid == session.Uid);
+
             var want = status == PhotoStatus.Pending ? PhotoStatus.Pending : PhotoStatus.Approved;
-            var rows = await db.Photos.AsNoTracking()
-                .Where(p => p.Status == want)
-                .OrderByDescending(p => p.CreatedAt)
-                .ToListAsync();
-            var pending = want == PhotoStatus.Pending
-                ? rows.Count
-                : await db.Photos.CountAsync(p => p.Status == PhotoStatus.Pending);
-            var rejected = await db.PhotoRejections.CountAsync();
+            var rows = want == PhotoStatus.Pending
+                ? await queue.AsNoTracking().OrderByDescending(p => p.CreatedAt).ToListAsync()
+                : await db.Photos.AsNoTracking()
+                    .Where(p => p.Status == PhotoStatus.Approved)
+                    .OrderByDescending(p => p.CreatedAt)
+                    .ToListAsync();
+            var pending = want == PhotoStatus.Pending ? rows.Count : await queue.CountAsync();
+            int? rejected = session.Officer ? await db.PhotoRejections.CountAsync() : null;
 
             return Results.Json(new
             {
@@ -193,7 +199,7 @@ public static class PhotoEndpoints
         // Upload: validate, moderate, store (unless flagged), tag.
         group.MapPost("", async (HttpContext ctx, SessionTokenService tokens, PhotoAiService ai, PhotoUpload input) =>
         {
-            var (session, error) = ctx.RequireOfficer(tokens);
+            var (session, error) = ctx.RequireSession(tokens);
             if (error is not null) return error;
             var db = ctx.RequestServices.GetService<AppDbContext>();
             if (db is null) return DbUnavailable();
@@ -261,17 +267,18 @@ public static class PhotoEndpoints
             return Results.Json(Dto(photo));
         });
 
-        // Correct the caption, tags, place or boss, or confirm the AI's picks as they stand. A new
-        // caption goes back through moderation on its own.
+        // Correct the caption, tags, place or boss, or confirm the AI's picks as they stand — the
+        // uploader or an officer. A new caption goes back through moderation on its own.
         group.MapPut("/{id:guid}", async (HttpContext ctx, SessionTokenService tokens, PhotoAiService ai, Guid id, PhotoEdit input) =>
         {
-            var (session, error) = ctx.RequireOfficer(tokens);
+            var (session, error) = ctx.RequireSession(tokens);
             if (error is not null) return error;
             var db = ctx.RequestServices.GetService<AppDbContext>();
             if (db is null) return DbUnavailable();
 
             var photo = await db.Photos.FirstOrDefaultAsync(p => p.Id == id);
-            if (photo is null) return NotFound();
+            if (photo is null || !CanSee(session!, photo.Status, photo.UploaderUid)) return NotFound();
+            if (!CanChange(session!, photo.UploaderUid)) return NotYours();
 
             if (input.Caption is not null)
             {
@@ -371,13 +378,18 @@ public static class PhotoEndpoints
             return updated == 0 ? NotFound() : Results.Json(new { ok = true });
         });
 
-        // Remove a photo and its bytes (the image row cascades).
+        // Remove a photo and its bytes (the image row cascades) — the uploader or an officer.
         group.MapDelete("/{id:guid}", async (HttpContext ctx, SessionTokenService tokens, Guid id) =>
         {
-            var (_, error) = ctx.RequireOfficer(tokens);
+            var (session, error) = ctx.RequireSession(tokens);
             if (error is not null) return error;
             var db = ctx.RequestServices.GetService<AppDbContext>();
             if (db is null) return DbUnavailable();
+
+            var owner = await db.Photos.Where(p => p.Id == id)
+                .Select(p => new { p.Status, p.UploaderUid }).FirstOrDefaultAsync();
+            if (owner is null || !CanSee(session!, owner.Status, owner.UploaderUid)) return NotFound();
+            if (!CanChange(session!, owner.UploaderUid)) return NotYours();
 
             var deleted = await db.Photos.Where(p => p.Id == id).ExecuteDeleteAsync();
             return deleted == 0 ? NotFound() : Results.Json(new { ok = true });
@@ -418,12 +430,23 @@ public static class PhotoEndpoints
         catch (DbUpdateException) { db.ChangeTracker.Clear(); }
     }
 
+    // A held photo is visible only to officers and its uploader; to anyone else it doesn't exist.
+    private static bool CanSee(SessionPayload s, string status, string uploaderUid) =>
+        status == PhotoStatus.Approved || s.Officer || s.Uid == uploaderUid;
+
+    private static bool CanChange(SessionPayload s, string uploaderUid) =>
+        s.Officer || s.Uid == uploaderUid;
+
     private static async Task<IResult> ImageAsync(HttpContext ctx, SessionTokenService tokens, Guid id, bool thumb)
     {
-        var (_, error) = ctx.RequireOfficer(tokens);
+        var (session, error) = ctx.RequireSession(tokens);
         if (error is not null) return error;
         var db = ctx.RequestServices.GetService<AppDbContext>();
         if (db is null) return DbUnavailable();
+
+        var owner = await db.Photos.Where(p => p.Id == id)
+            .Select(p => new { p.Status, p.UploaderUid }).FirstOrDefaultAsync();
+        if (owner is null || !CanSee(session!, owner.Status, owner.UploaderUid)) return NotFound();
 
         var bytes = thumb
             ? await db.PhotoImages.Where(i => i.PhotoId == id).Select(i => i.Thumb).FirstOrDefaultAsync()
@@ -491,6 +514,9 @@ public static class PhotoEndpoints
 
     private static IResult NotFound() =>
         Results.Json(new { error = "not_found", detail = "No such photo." }, statusCode: 404);
+
+    private static IResult NotYours() =>
+        Results.Json(new { error = "forbidden", detail = "Only the uploader or an officer can change this photo." }, statusCode: 403);
 
     private static IResult DbUnavailable() =>
         Results.Json(new { error = "unavailable", detail = "Persistence is not configured." }, statusCode: 503);
